@@ -25,28 +25,41 @@ catkin_make -DCMAKE_BUILD_TYPE=Release
 source devel/setup.bash
 ```
 
-### 测试方法（Docker 容器内，3 个终端）
 
-**终端 1** — 启动 deploy + monitor：
+### Docker 容器内重新编译
 
 ```bash
+cd /root/catkin_ws
 source /opt/ros/noetic/setup.bash
-source /root/catkin_ws/devel/setup.bash
-export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+catkin_make -DCMAKE_BUILD_TYPE=Release
+source devel/setup.bash
+```
+
+编译成功后应该看到 3 个可执行文件：
+
+```bash
+ls /root/catkin_ws/devel/lib/aliengo_deploy/
+# aliengo_deploy  fake_low_state_publisher  low_cmd_monitor
+```
+
+### 然后运行测试
+
+终端 1：
+
+```bash
 roslaunch aliengo_deploy test_deploy.launch \
     policy_path:=/work/AliengoSim2Real/policy/aliengo/
 ```
 
-**终端 2** — 启动 fake state publisher（带键盘控制）：
+终端 2（`docker exec -it noetic-gpu bash`）：
 
 ```bash
-docker exec -it noetic-gpu bash
-source /opt/ros/noetic/setup.bash
-source /root/catkin_ws/devel/setup.bash
+source /opt/ros/noetic/setup.bash && source /root/catkin_ws/devel/setup.bash
 rosrun aliengo_deploy fake_low_state_publisher
 ```
 
-**终端 2 键盘操作**：
+在终端 2 中按 `a` 使能策略，按 `w` 发速度指令，按 `b` 停止。把编译和运行结果发给我。
 
 | 按键        | 动作                       |
 | ----------- | -------------------------- |
