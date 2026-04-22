@@ -79,20 +79,25 @@ include_directories(
   ${JSONCPP_INCLUDE_DIR}
 )
 
+# Resolve symlinks so that ../utils works correctly when this package
+# is symlinked into a catkin workspace (ln -s ... catkin_ws/src/aliengo_deploy)
+get_filename_component(REAL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
+message(STATUS "aliengo_deploy real source dir: ${REAL_SOURCE_DIR}")
+
 # Reusable inference core from utils/
-set(CPP_MANAGER_ENV_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/cpp_manager_env)
+set(CPP_MANAGER_ENV_PATH ${REAL_SOURCE_DIR}/../utils/cpp_manager_env)
 include_directories(${CPP_MANAGER_ENV_PATH})
 file(GLOB CPP_MANAGER_ENV_SRC ${CPP_MANAGER_ENV_PATH}/*.cpp)
 
 # Optional: local gamepad support
-set(CPP_GAMEPAD_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/cpp_gamepad)
+set(CPP_GAMEPAD_PATH ${REAL_SOURCE_DIR}/../utils/cpp_gamepad)
 include_directories(${CPP_GAMEPAD_PATH})
 file(GLOB CPP_GAMEPAD_SRC ${CPP_GAMEPAD_PATH}/*.cpp)
 
 # ============================================================
 # Policy path defaults (can be overridden at runtime)
 # ============================================================
-set(DEFAULT_ALIENGO_POLICY_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../policy/aliengo/"
+set(DEFAULT_ALIENGO_POLICY_PATH "${REAL_SOURCE_DIR}/../policy/aliengo/"
     CACHE STRING "Default path to Aliengo policy directory")
 add_definitions(-DDEFAULT_ALIENGO_POLICY_PATH="${DEFAULT_ALIENGO_POLICY_PATH}")
 
