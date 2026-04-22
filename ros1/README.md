@@ -44,6 +44,7 @@ ros1/
 │   ├── gait_clock.cpp                 # (header-only placeholder)
 │   └── wireless_remote_decoder.cpp    # 遥控器解码实现
 └── scripts/
+    ├── setup_and_build.sh             # 完整搭建步骤参考
     └── start_aliengo_deploy.sh        # 一键启动脚本
 ```
 
@@ -53,98 +54,135 @@ ros1/
 - `unitree_legged_msgs` (来自 `unitree_ros_to_real`)
 - `unitree_legged_real` (来自 `unitree_ros_to_real`，提供 `ros_udp`)
 - `unitree_legged_sdk` (Aliengo 固件对应版本的 SDK)
-- LibTorch ≥ 2.0 (或 ONNX Runtime，通过 `USE_ONNX=ON` 切换)
+- LibTorch ≥ 2.0 CPU 版（或 ONNX Runtime，通过 `USE_ONNX=ON` 切换）
 - OpenCV, Eigen3, jsoncpp, libudev
 
 ## 环境搭建 (远程机 Docker)
 
-### 方案 A（推荐）: 在已有 noetic-gpu 容器内追加 LibTorch
+### 前提
 
-如果你已按 `scripts/ros1ENV.MD` 成功构建了 `noetic-gpu:2026-04`，
-只需在容器内安装 LibTorch：
+- 已按 `scripts/ros1ENV.MD` 构建了 `noetic-gpu:2026-04` Docker 镜像
+- 远程机宿主机 `~/Downloads/WorkSpace/` 目录下有以下仓库：
+
+```
+~/Downloads/WorkSpace/
+├── AliengoSim2Real/        ← 本仓库（含 ros1/ 代码和 policy/）
+│   ├── ros1/
+│   ├── policy/aliengo/     ← 放 policy.pt
+│   └── utils/              ← 推理核心 (cpp_manager_env 等)
+└── unitree_ros_to_real/    ← Unitree 官方 ROS1 包
+    ├── unitree_legged_msgs/
+    ├── unitree_legged_real/
+    └── unitree_legged_sdk/
+```
+
+Docker 启动时 `-v $HOME/Downloads/WorkSpace:/work` 映射后，
+容器内路径对应为 `/work/AliengoSim2Real/` 和 `/work/unitree_ros_to_real/`。
+
+### 步骤 1: 宿主机 — 启动容器
 
 ```bash
-# 启动已有容器
-docker run -it --rm \
-  --name noetic-gpu \
-  --gpus all --network host --ipc host \
+docker run -it --name noetic-gpu --gpus all --network host \
   -v $HOME/Downloads/WorkSpace:/work \
-  --device /dev/input:/dev/input \
   noetic-gpu:2026-04
+```
 
-# 容器内安装 LibTorch
+> 不加 `--rm`，这样容器内安装的 LibTorch 不会丢失。后续用 `docker start -i noetic-gpu` 重新进入。
+
+### 步骤 2: 容器内 — 安装 LibTorch CPU 版（只需做一次）
+
+```bash
 cd /opt
-wget -q "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu118.zip" -O libtorch.zip
-unzip libtorch.zip && rm libtorch.zip
+wget -q "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip" -O libtorch.zip
+unzip -q libtorch.zip && rm libtorch.zip
 echo 'export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"' >> /root/.bashrc
 echo 'export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"' >> /root/.bashrc
 source /root/.bashrc
 ```
 
-### 方案 B: 从头构建完整镜像
+### 步骤 3: 宿主机 — 初始化 unitree_legged_sdk
+
+在**宿主机**终端执行（避免容器内 git safe.directory 问题）：
 
 ```bash
-cd ros1/docker
-docker build -t aliengo-deploy:latest .
-docker run -it --rm --name aliengo-deploy \
-  --gpus all --network host --ipc host \
-  -v $HOME/Downloads/WorkSpace:/work \
-  --device /dev/input:/dev/input \
-  aliengo-deploy:latest
-```
-
-### 3. 初始化 unitree_legged_sdk
-
-```bash
-cd /work/projects/unitree_ros_to_real
+cd ~/Downloads/WorkSpace/unitree_ros_to_real
 git submodule update --init --recursive
+# 如果失败：
+#   rm -rf unitree_legged_sdk
+#   git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
 ```
 
-### 4. 构建 catkin workspace
+### 步骤 4: 容器内 — 构建 catkin workspace
 
 ```bash
 source /opt/ros/noetic/setup.bash
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+
 mkdir -p /root/catkin_ws/src
 
-# 软链接所有包
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
-ln -s /work/projects/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
+# 软链接所有包（注意路径：/work/ 下直接是仓库名，没有 projects/ 子目录）
+ln -sf /work/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
+ln -sf /work/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
+ln -sf /work/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
+ln -sf /work/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
 
 # 编译
 cd /root/catkin_ws
 catkin_make -DCMAKE_BUILD_TYPE=Release
+
+# Source 工作区（每次新开 shell 都需要）
 source devel/setup.bash
 ```
 
+### 步骤 5: 容器内 — 验证
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+
+rospack find aliengo_deploy        # 应输出: /root/catkin_ws/src/aliengo_deploy
+rospack find unitree_legged_real   # 应输出: /root/catkin_ws/src/unitree_legged_real
+```
+
+## 放置 Policy 文件
+
+将 `policy.pt` 放到远程机宿主机上：
+
+```
+~/Downloads/WorkSpace/AliengoSim2Real/policy/aliengo/policy.pt
+```
+
+容器内对应路径为：`/work/AliengoSim2Real/policy/aliengo/policy.pt`
+
 ## 使用
+
+> 以下所有命令均在 **Docker 容器内**执行。
 
 ### 方式 1: Launch 文件 (推荐)
 
 ```bash
+source /opt/ros/noetic/setup.bash
 source /root/catkin_ws/devel/setup.bash
+
 roslaunch aliengo_deploy aliengo_deploy.launch \
-    policy_path:=/path/to/your/policy/directory/
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/
 ```
 
-### 方式 2: 启动脚本
-
-```bash
-chmod +x ros1/scripts/start_aliengo_deploy.sh
-./ros1/scripts/start_aliengo_deploy.sh /path/to/your/policy/directory/
-```
-
-### 方式 3: 分步启动
+### 方式 2: 分步启动
 
 终端 1 — 启动 ros_udp bridge:
 ```bash
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
 roslaunch unitree_legged_real real.launch ctrl_level:=lowlevel
 ```
 
 终端 2 — 启动策略节点:
 ```bash
-rosrun aliengo_deploy aliengo_deploy policy_path=/path/to/policy/
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+rosrun aliengo_deploy aliengo_deploy \
+    policy_path=/work/AliengoSim2Real/policy/aliengo/
 ```
 
 ## 遥控器操作
@@ -186,3 +224,4 @@ rosrun aliengo_deploy aliengo_deploy policy_path=/path/to/policy/
 3. 任何时候按 B 键可安全趴下，L2+B 可紧急制动
 4. PD 增益值来自 MuJoCo 仿真导出，实机可能需要调整
 5. 确保以太网连接稳定 (192.168.123.x 网段)
+6. 每次新开容器 shell，都必须执行 `source /opt/ros/noetic/setup.bash && source /root/catkin_ws/devel/setup.bash`
