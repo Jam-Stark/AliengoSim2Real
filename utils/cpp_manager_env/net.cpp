@@ -1787,13 +1787,44 @@ torch::Tensor Policy::get_action(torch::Tensor obs) {
             std::vector<torch::jit::IValue> inputs;
             inputs.push_back(obs_tensor);
             auto output_ivalue = module.forward(inputs);
+
+            if (output_ivalue.isTensor()) {
+                // Single tensor return (most common case)
+                output = output_ivalue.toTensor();
+                std::cout << "[Policy] forward() returned Tensor, shape: "
+                          << output.sizes() << std::endl;
+            } else if (output_ivalue.isTuple()) {
+                // Tuple return, e.g. (action[12], pred_est[6])
+                // Extract first element as the action tensor
+                auto tuple = output_ivalue.toTuple();
+                auto &elements = tuple->elements();
+                std::cout << "[Policy] forward() returned Tuple with "
+                          << elements.size() << " elements." << std::endl;
+                if (elements.empty() || !elements[0].isTensor()) {
+                    throw std::runtime_error(
+                        "Model forward() returned a Tuple, but the first element "
+                        "is not a Tensor. Cannot extract action.");
+                }
+                output = elements[0].toTensor();
+                std::cout << "[Policy] Extracted action from tuple[0], shape: "
+                          << output.sizes() << std::endl;
+            } else {
+                // Unsupported return type
+                std::string type_str = "unknown";
+                if (output_ivalue.isGenericDict()) type_str = "Dict";
+                else if (output_ivalue.isList()) type_str = "List";
+                else if (output_ivalue.isNone()) type_str = "None";
+                throw std::runtime_error(
+                    "Model forward() returned unsupported type: " + type_str +
+                    ". Expected Tensor or Tuple(Tensor, ...).");
+            }
+
             if (spec_.architecture == PolicyArchitecture::SRU &&
-                !output_ivalue.isTensor()) {
+                output.dim() == 0) {
                 throw std::runtime_error(
                     "SRU TorchScript model must follow the new stateful exporter "
-                    "format and return a single action tensor.");
+                    "format and return a valid action tensor.");
             }
-            output = output_ivalue.toTensor();
         }
 
         if (output.dim() == 2 && output.size(0) == 1) {
