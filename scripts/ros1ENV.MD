@@ -135,42 +135,84 @@ source devel/setup.bash
 
 
 
+已创建 [`ros1/scripts/setup_and_build.sh`](ros1/scripts/setup_and_build.sh) 完整搭建指南。以下是你在远程机上要执行的操作，按顺序来：
 
-## Aliengo ROS1 部署链路 — 完成
+---
 
-[`ros1/docker/Dockerfile`](ros1/docker/Dockerfile) 已更新，与你之前成功构建的 `scripts/ros1ENV.MD` 方案保持一致，仅追加 LibTorch 下载。
+### 步骤 1: 启动你已有的 Docker 容器
 
-### 最快上手路径（使用已有 noetic-gpu:2026-04 镜像）
+在远程机宿主机上运行：
 
-**容器内安装 LibTorch（一次性操作）：**
+```bash
+docker run -it \
+  --name noetic-gpu \
+  --hostname noetic-gpu \
+  --gpus all \
+  --network host \
+  --ipc host \
+  -v $HOME/Downloads/WorkSpace:/work \
+  --device /dev/input:/dev/input \
+  noetic-gpu:2026-04
+```
+
+> ⚠️ 注意去掉了 `--rm`，这样容器内安装的 LibTorch 不会丢失。后续用 `docker start -i noetic-gpu` 重新进入。
+
+---
+
+### 步骤 2: 容器内安装 LibTorch
+
+进入容器后执行：
 
 ```bash
 cd /opt
 wget -q "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu118.zip" -O libtorch.zip
-unzip libtorch.zip && rm libtorch.zip
+unzip -q libtorch.zip && rm libtorch.zip
 echo 'export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"' >> /root/.bashrc
 echo 'export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"' >> /root/.bashrc
 source /root/.bashrc
 ```
 
-**编译 catkin workspace：**
+---
+
+### 步骤 3: 初始化 unitree_legged_sdk
+
+```bash
+cd /work/projects/unitree_ros_to_real
+git submodule update --init --recursive
+# 如果失败则手动 clone:
+# rm -rf unitree_legged_sdk
+# git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
+```
+
+---
+
+### 步骤 4: 创建 catkin workspace 并编译
 
 ```bash
 source /opt/ros/noetic/setup.bash
+
 mkdir -p /root/catkin_ws/src
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
-ln -s /work/projects/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
-ln -s /work/projects/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
+ln -sf /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
+ln -sf /work/projects/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
+ln -sf /work/projects/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
+ln -sf /work/projects/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
+
 cd /root/catkin_ws
 catkin_make -DCMAKE_BUILD_TYPE=Release
 source devel/setup.bash
 ```
 
-**运行：**
+---
+
+### 步骤 5: 验证
 
 ```bash
-roslaunch aliengo_deploy aliengo_deploy.launch policy_path:=/path/to/your/policy/
+rospack find aliengo_deploy
+rospack find unitree_legged_real
 ```
 
-如果编译遇到 `unitree_legged_sdk` 缺失，先在 `unitree_ros_to_real` 目录执行 `git submodule update --init --recursive`。
+两个命令都应输出包路径。编译产物在 `/root/catkin_ws/devel/lib/` 下。
+
+---
+
+如果编译出错，把错误信息发给我，我来定位修复。
