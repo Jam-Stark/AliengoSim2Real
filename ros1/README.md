@@ -58,24 +58,39 @@ ros1/
 
 ## 环境搭建 (远程机 Docker)
 
-### 1. 构建 Docker 镜像
+### 方案 A（推荐）: 在已有 noetic-gpu 容器内追加 LibTorch
+
+如果你已按 `scripts/ros1ENV.MD` 成功构建了 `noetic-gpu:2026-04`，
+只需在容器内安装 LibTorch：
+
+```bash
+# 启动已有容器
+docker run -it --rm \
+  --name noetic-gpu \
+  --gpus all --network host --ipc host \
+  -v $HOME/Downloads/WorkSpace:/work \
+  --device /dev/input:/dev/input \
+  noetic-gpu:2026-04
+
+# 容器内安装 LibTorch
+cd /opt
+wget -q "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu118.zip" -O libtorch.zip
+unzip libtorch.zip && rm libtorch.zip
+echo 'export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"' >> /root/.bashrc
+echo 'export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"' >> /root/.bashrc
+source /root/.bashrc
+```
+
+### 方案 B: 从头构建完整镜像
 
 ```bash
 cd ros1/docker
-docker build -t aliengo-noetic-gpu:latest .
-```
-
-### 2. 启动容器
-
-```bash
-docker run -it --rm \
-  --name aliengo-deploy \
-  --gpus all \
-  --network host \
-  --ipc host \
+docker build -t aliengo-deploy:latest .
+docker run -it --rm --name aliengo-deploy \
+  --gpus all --network host --ipc host \
   -v $HOME/Downloads/WorkSpace:/work \
   --device /dev/input:/dev/input \
-  aliengo-noetic-gpu:latest
+  aliengo-deploy:latest
 ```
 
 ### 3. 初始化 unitree_legged_sdk
