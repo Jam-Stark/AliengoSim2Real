@@ -1,62 +1,70 @@
 
-从错误日志中看出两个问题：
-
-### 问题 1: 远程机上只有 `unitree_legged_sdk`，没有 `unitree_ros_to_real`
-
-从日志第 2 行看到 `/work/` 下是：
-
-```
-AliengoSim2Real/
-unitree_legged_sdk/     ← 这只是 SDK 库，不是完整的 ROS 包
-```
-
-但我们需要的是 `unitree_ros_to_real` 这个**完整仓库**，它里面包含：
-
-- `unitree_legged_msgs/` — ROS 消息定义（必须）
-- `unitree_legged_real/` — ros_udp bridge 节点（必须）
-- `unitree_legged_sdk/` — SDK 库
-
-**修复**：在远程机**宿主机**上执行：
+### 📍 远程机宿主机 terminal（提示符类似 `dreams@dreams-ROG:~$`）
 
 ```bash
+# 1. 进入 WorkSpace 目录
 cd ~/Downloads/WorkSpace
+
+# 2. clone unitree_ros_to_real（如果之前已 clone 可跳过）
 git clone https://github.com/unitreerobotics/unitree_ros_to_real.git
+
+# 3. 初始化 SDK submodule (在宿主机做不会有 safe.directory 问题)
 cd unitree_ros_to_real
 git submodule update --init --recursive
+# 如果这步也失败，用方案B:
+#   rm -rf unitree_legged_sdk
+#   git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
+cd ..
+
+# 4. 如果 SDK 之前已经独立 clone 在 ~/Downloads/WorkSpace/unitree_legged_sdk，
+#    直接拷贝到 unitree_ros_to_real 里面:
+#    cp -r unitree_legged_sdk unitree_ros_to_real/unitree_legged_sdk
+
+# 5. 验证
+ls unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg
+ls unitree_ros_to_real/unitree_legged_real/src/exe/ros_udp.cpp
+ls unitree_ros_to_real/unitree_legged_sdk/CMakeLists.txt
+ls AliengoSim2Real/ros1/CMakeLists.txt
+# 以上四个 ls 都应该有输出
+
+# 6. 启动容器（去掉 --rm 以便保持安装的 LibTorch）
+docker run -it --name noetic-gpu --gpus all --network host \
+  -v $HOME/Downloads/WorkSpace:/work \
+  noetic-gpu:2026-04
 ```
 
-### 问题 2: 软链接路径错误
+---
 
-你用了 `/work/projects/...`（带 projects），但实际路径是 `/work/...`。
-
-**修复**：重新进入容器后，**先清理旧的坏链接**，再用正确路径：
+### 📍 Docker 容器内（提示符 `root@noetic-gpu:/work#`）
 
 ```bash
-# 清理
-rm -f /root/catkin_ws/src/unitree_legged_msgs
-rm -f /root/catkin_ws/src/unitree_legged_real
-rm -f /root/catkin_ws/src/unitree_legged_sdk
-rm -f /root/catkin_ws/src/aliengo_deploy
+# 7. 验证挂载
+ls /work/
+# 应该看到: AliengoSim2Real  unitree_ros_to_real  (和其他文件)
 
-# 添加 git safe directory（解决 dubious ownership 问题）
-git config --global --add safe.directory '*'
+# 8. 安装 LibTorch（只做一次）
+cd /opt
+wget -q "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu118.zip" -O libtorch.zip
+unzip -q libtorch.zip && rm libtorch.zip
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
-# 用正确路径重新链接
+# 9. 创建 catkin workspace + 软链接
+source /opt/ros/noetic/setup.bash
+mkdir -p /root/catkin_ws/src
 ln -sf /work/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
 ln -sf /work/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
 ln -sf /work/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
 ln -sf /work/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
 
-# 验证链接是否有效
-ls -la /root/catkin_ws/src/
-ls /root/catkin_ws/src/unitree_legged_msgs/msg/   # 应能看到 LowCmd.msg 等
-ls /root/catkin_ws/src/aliengo_deploy/CMakeLists.txt  # 应能看到文件
-
-# 重新编译
+# 10. 编译
 cd /root/catkin_ws
-rm -rf build devel   # 清除上次空编译的产物
-source /opt/ros/noetic/setup.bash
 catkin_make -DCMAKE_BUILD_TYPE=Release
+
+# 11. 验证
+source devel/setup.bash
+rospack find aliengo_deploy
+rospack find unitree_legged_real
 ```
 
-### 总结：先在宿主机 clone `unitree_ros_to_real`，再进容器用正确路径链接和编译。
+代码准备好在宿主机上、submodule 初始化在宿主机上（避免权限问题），其他全在容器里。
