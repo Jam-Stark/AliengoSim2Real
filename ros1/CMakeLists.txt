@@ -20,6 +20,7 @@ set(ONNXRUNTIME_ROOT "" CACHE PATH "Root directory of ONNX Runtime")
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  geometry_msgs
   unitree_legged_msgs
   sensor_msgs
 )

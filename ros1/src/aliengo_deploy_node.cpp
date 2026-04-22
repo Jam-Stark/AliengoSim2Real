@@ -16,8 +16,20 @@ AliengoDeployNode::AliengoDeployNode(
     InferenceDevice device)
     : ManagerBasedEnv(policy_specs, device),
       nh_(nh),
-      gait_clock_(kGaitFrequencyHz, kControlDt) {
+      gait_clock_(kGaitFrequencyHz, kControlDt),
+      force_gate_(kControlDt) {
     gravity_ = SimpleTensor::wrap({0.0f, 0.0f, -1.0f});
+
+    // Read gate_enabled and brake_enabled params
+    nh_.param("gate_enabled", gate_enabled_, true);
+    nh_.param("brake_enabled", brake_enabled_, true);
+    // Read CSV logging param
+    std::string csv_path;
+    nh_.param<std::string>("force_log_csv", csv_path, "");
+    if (!csv_path.empty()) {
+        initCsvLog(csv_path);
+    }
+
     initInterfaces();
 }
 
@@ -36,6 +48,9 @@ void AliengoDeployNode::initInterfaces() {
 
     // Publisher: low_cmd (to ros_udp bridge)
     low_cmd_pub_ = nh_.advertise<unitree_legged_msgs::LowCmd>("low_cmd", 1);
+
+    // Publisher: force estimator output
+    force_est_pub_ = nh_.advertise<geometry_msgs::WrenchStamped>("force_estimator", 10);
 
     // Subscriber: low_state (from ros_udp bridge)
     low_state_sub_ = nh_.subscribe("low_state", 1,
@@ -122,9 +137,6 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
         return;
     }
 
-    // Advance gait clock every tick (even when stopped, for warm-start)
-    gait_clock_.step();
-
     if (is_stop_.load(std::memory_order_relaxed)) {
         bool has_stop_posture = false;
         {
@@ -135,6 +147,10 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
             writeStopPostureCmd();
             return;
         }
+
+        // Even when stopped, keep gait clock running for warm-start
+        gait_clock_.setStanding(true);
+        gait_clock_.step();
 
         zeroLowCmd();
         low_cmd_pub_.publish(low_cmd_);
@@ -153,7 +169,70 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
         return;
     }
 
-    writeActionToCmd(act);
+    // ---- Extract pred_est (force estimator) from policy auxiliary output ----
+    SimpleTensor aux = policys[0].get_last_aux_output();
+    last_pred_est_ = aux.defined() ? toVector<float>(aux) : std::vector<float>();
+
+    // ---- Standing / Walking gate ----
+    auto cmd = getCommandVector();
+    if (gate_enabled_ && last_pred_est_.size() >= 3) {
+        float force_local[3] = {last_pred_est_[3], last_pred_est_[4], last_pred_est_[5]};
+        // pred_est layout: [base_lin_vel(3), base_forces_local(3)]
+        // forces are indices 3,4,5
+        if (last_pred_est_.size() >= 6) {
+            force_local[0] = last_pred_est_[3];
+            force_local[1] = last_pred_est_[4];
+            force_local[2] = last_pred_est_[5];
+        }
+        float cmd_arr[3] = {cmd[0], cmd[1], cmd[2]};
+        current_gait_mode_ = force_gate_.update(cmd_arr, force_local);
+    } else {
+        // No gate: always walking when enabled
+        float cmd_arr[3] = {cmd[0], cmd[1], cmd[2]};
+        bool cmd_zero = std::abs(cmd[0]) < kCmdDeadzoneVx &&
+                        std::abs(cmd[1]) < kCmdDeadzoneVy &&
+                        std::abs(cmd[2]) < kCmdDeadzoneWz;
+        current_gait_mode_ = cmd_zero ? aliengo::MODE_STANDING
+                                      : aliengo::MODE_COMMAND_WALKING;
+    }
+
+    // ---- Update gait clock based on mode ----
+    gait_clock_.setStanding(current_gait_mode_ == aliengo::MODE_STANDING);
+    gait_clock_.step();
+
+    // ---- Brake command gate ----
+    bool brake_active = false;
+    if (brake_enabled_ && last_pred_est_.size() >= 6) {
+        float force_local[3] = {last_pred_est_[3], last_pred_est_[4], last_pred_est_[5]};
+        float cmd_arr[3] = {cmd[0], cmd[1], cmd[2]};
+        bool is_walking = (current_gait_mode_ != aliengo::MODE_STANDING);
+        const auto &bs = brake_gate_.update(cmd_arr, force_local, is_walking);
+        brake_active = bs.active;
+
+        if (brake_active) {
+            // Zero out command sent to observation (affects next step)
+            {
+                std::lock_guard<std::mutex> lock(cmd_mutex_);
+                std::fill(cmd_.begin(), cmd_.end(), 0.0f);
+            }
+            ROS_WARN_THROTTLE(2.0, "BRAKE ACTIVE: est_force_x=%.1f N, zeroing command",
+                              bs.est_force_x_n);
+        }
+    }
+
+    // ---- Publish force estimator + CSV log ----
+    if (!last_pred_est_.empty()) {
+        publishForceEstimator(last_pred_est_);
+    }
+    logCsvRow(cmd, last_pred_est_, current_gait_mode_);
+
+    // ---- Write motor commands ----
+    if (brake_active) {
+        // When braking, hold current default pose instead of policy output
+        zeroLowCmd();
+    } else {
+        writeActionToCmd(act);
+    }
     low_cmd_pub_.publish(low_cmd_);
 }
 
@@ -625,4 +704,86 @@ void AliengoDeployNode::initGamepad(bool enable) {
 
     pad_->readGamePad();
     ROS_INFO("Local gamepad [%s] initialized.", gp_id.c_str());
+}
+
+// ============================================================
+// Force Estimator Publishing + CSV Logging
+// ============================================================
+
+void AliengoDeployNode::publishForceEstimator(const std::vector<float> &pred_est) {
+    geometry_msgs::WrenchStamped msg;
+    msg.header.stamp = ros::Time::now();
+    msg.header.frame_id = "base_link";
+
+    // pred_est layout: [base_lin_vel(3), base_forces_local(3)]
+    if (pred_est.size() >= 6) {
+        msg.wrench.force.x = pred_est[3];
+        msg.wrench.force.y = pred_est[4];
+        msg.wrench.force.z = pred_est[5];
+        // Also publish estimated velocity in torque fields (repurposed)
+        msg.wrench.torque.x = pred_est[0];
+        msg.wrench.torque.y = pred_est[1];
+        msg.wrench.torque.z = pred_est[2];
+    } else if (pred_est.size() >= 3) {
+        msg.wrench.force.x = pred_est[0];
+        msg.wrench.force.y = pred_est[1];
+        msg.wrench.force.z = pred_est[2];
+    }
+
+    force_est_pub_.publish(msg);
+}
+
+void AliengoDeployNode::initCsvLog(const std::string &path) {
+    csv_log_.open(path, std::ios::out | std::ios::trunc);
+    if (!csv_log_.is_open()) {
+        ROS_WARN("Failed to open CSV log file: %s", path.c_str());
+        return;
+    }
+    csv_logging_enabled_ = true;
+    // Write header
+    csv_log_ << "step,time_s,"
+             << "cmd_vx,cmd_vy,cmd_wz,"
+             << "pred_lin_vel_x,pred_lin_vel_y,pred_lin_vel_z,"
+             << "pred_force_x,pred_force_y,pred_force_z,"
+             << "mode,mode_name,"
+             << "force_xy_raw,force_excess,force_baseline,"
+             << "enter_score,exit_score,dir_consistency,"
+             << "brake_eligible,brake_active,brake_hold,brake_est_fx"
+             << std::endl;
+    ROS_INFO("CSV force estimator log opened: %s", path.c_str());
+}
+
+void AliengoDeployNode::logCsvRow(const std::vector<float> &cmd,
+                                   const std::vector<float> &pred_est,
+                                   aliengo::GaitMode mode) {
+    if (!csv_logging_enabled_ || !csv_log_.is_open()) return;
+
+    ++log_step_count_;
+    double time_s = log_step_count_ * static_cast<double>(aliengo::kControlDt);
+
+    // Command
+    float cx = cmd.size() > 0 ? cmd[0] : 0.0f;
+    float cy = cmd.size() > 1 ? cmd[1] : 0.0f;
+    float cz = cmd.size() > 2 ? cmd[2] : 0.0f;
+
+    // Pred est
+    float lv0 = 0.f, lv1 = 0.f, lv2 = 0.f;
+    float f0 = 0.f, f1 = 0.f, f2 = 0.f;
+    if (pred_est.size() >= 3) { lv0 = pred_est[0]; lv1 = pred_est[1]; lv2 = pred_est[2]; }
+    if (pred_est.size() >= 6) { f0 = pred_est[3]; f1 = pred_est[4]; f2 = pred_est[5]; }
+
+    // Gate state
+    const auto &gs = force_gate_.state();
+    const auto &bs = brake_gate_.state();
+
+    csv_log_ << log_step_count_ << "," << time_s << ","
+             << cx << "," << cy << "," << cz << ","
+             << lv0 << "," << lv1 << "," << lv2 << ","
+             << f0 << "," << f1 << "," << f2 << ","
+             << static_cast<int>(mode) << "," << aliengo::gaitModeName(mode) << ","
+             << gs.force_xy_raw << "," << gs.force_excess << "," << gs.force_baseline << ","
+             << gs.enter_score << "," << gs.exit_score << "," << gs.dir_consistency << ","
+             << (bs.eligible ? 1 : 0) << "," << (bs.active ? 1 : 0) << ","
+             << bs.hold_counter << "," << bs.est_force_x_n
+             << std::endl;
 }

@@ -1788,12 +1788,14 @@ torch::Tensor Policy::get_action(torch::Tensor obs) {
             inputs.push_back(obs_tensor);
             auto output_ivalue = module.forward(inputs);
 
+            last_aux_output_ = SimpleTensor();  // clear previous aux output
+
             if (output_ivalue.isTensor()) {
                 // Single tensor return (most common case)
                 output = output_ivalue.toTensor();
             } else if (output_ivalue.isTuple()) {
                 // Tuple return, e.g. (action[12], pred_est[6])
-                // Extract first element as the action tensor
+                // Extract first element as action, second as auxiliary output
                 auto tuple = output_ivalue.toTuple();
                 auto &elements = tuple->elements();
                 if (elements.empty() || !elements[0].isTensor()) {
@@ -1802,6 +1804,15 @@ torch::Tensor Policy::get_action(torch::Tensor obs) {
                         "is not a Tensor. Cannot extract action.");
                 }
                 output = elements[0].toTensor();
+
+                // Store auxiliary output (pred_est) if available
+                if (elements.size() > 1 && elements[1].isTensor()) {
+                    torch::Tensor aux = elements[1].toTensor()
+                        .to(torch::kFloat32).cpu().contiguous().flatten();
+                    std::vector<float> aux_data(aux.data_ptr<float>(),
+                                                aux.data_ptr<float>() + aux.numel());
+                    last_aux_output_ = SimpleTensor::wrap(aux_data);
+                }
             } else {
                 // Unsupported return type
                 std::string type_str = "unknown";

@@ -8,17 +8,24 @@
 
 namespace aliengo {
 
-/// Free-running gait phase clock that produces sin/cos observations.
-/// The phase advances at a fixed frequency each control tick.
+/// Gait phase clock that produces sin/cos observations.
+/// Supports mode-controlled stepping:
+///   - standing mode:  phase frozen at 0
+///   - walking mode:   phase advances at the configured frequency
 class GaitClock {
 public:
     /// @param frequency_hz  Gait frequency in Hz (e.g. 2.0)
     /// @param dt            Control period in seconds (e.g. 0.02 for 50 Hz)
     explicit GaitClock(float frequency_hz = 2.0f, float dt = 0.02f)
-        : freq_(frequency_hz), dt_(dt), phase_(0.0f) {}
+        : freq_(frequency_hz), dt_(dt), phase_(0.0f), standing_(false) {}
 
-    /// Advance the phase by one control tick
+    /// Advance the phase by one control tick.
+    /// If standing mode is active, phase is frozen at 0.
     void step() {
+        if (standing_) {
+            phase_ = 0.0f;
+            return;
+        }
         phase_ += freq_ * dt_;
         // Keep phase in [0, 1) to avoid floating precision loss over time
         phase_ -= static_cast<float>(static_cast<int>(phase_));
@@ -26,6 +33,12 @@ public:
 
     /// Reset phase to zero
     void reset() { phase_ = 0.0f; }
+
+    /// Set standing mode (phase frozen at 0)
+    void setStanding(bool is_standing) { standing_ = is_standing; }
+
+    /// Query standing mode
+    bool isStanding() const { return standing_; }
 
     /// Current phase in [0, 1)
     float phase() const { return phase_; }
@@ -50,6 +63,7 @@ private:
     float freq_;
     float dt_;
     float phase_;
+    bool standing_;
 };
 
 } // namespace aliengo

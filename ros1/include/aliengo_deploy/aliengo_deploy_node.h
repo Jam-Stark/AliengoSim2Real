@@ -1,6 +1,8 @@
 #pragma once
 
 #include "aliengo_deploy/aliengo_constants.h"
+#include "aliengo_deploy/brake_command_gate.h"
+#include "aliengo_deploy/force_mode_switcher.h"
 #include "aliengo_deploy/gait_clock.h"
 #include "aliengo_deploy/wireless_remote_decoder.h"
 
@@ -10,12 +12,14 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include <ros/ros.h>
+#include <geometry_msgs/WrenchStamped.h>
 #include <unitree_legged_msgs/LowCmd.h>
 #include <unitree_legged_msgs/LowState.h>
 
@@ -104,6 +108,7 @@ private:
     // ---- ROS handles ----
     ros::NodeHandle &nh_;
     ros::Publisher low_cmd_pub_;
+    ros::Publisher force_est_pub_;          // publish pred_est as WrenchStamped
     ros::Subscriber low_state_sub_;
     ros::Timer control_timer_;
 
@@ -119,6 +124,15 @@ private:
     // ---- Gait clock ----
     aliengo::GaitClock gait_clock_;
 
+    // ---- Standing / Walking gate ----
+    aliengo::ForceModeSwitcher force_gate_;
+    aliengo::GaitMode current_gait_mode_ = aliengo::MODE_STANDING;
+    bool gate_enabled_ = true;              // can be toggled via param
+
+    // ---- Brake gate ----
+    aliengo::BrakeCommandGate brake_gate_;
+    bool brake_enabled_ = true;             // can be toggled via param
+
     // ---- Wireless remote ----
     aliengo::WirelessRemoteDecoder remote_decoder_;
     aliengo::WirelessRemoteState prev_remote_state_;
@@ -132,9 +146,22 @@ private:
     // ---- Gravity constant ----
     SimpleTensor gravity_;
 
+    // ---- Force estimator logging ----
+    std::vector<float> last_pred_est_;      // last pred_est from policy
+    std::ofstream csv_log_;                 // CSV file for force estimator
+    bool csv_logging_enabled_ = false;
+    uint64_t log_step_count_ = 0;
+
     // ---- Stop posture ----
     StopState stop_state_ = StopState::Idle;
     int stop_step_ = 0;
     std::array<float, aliengo::kNumJoints> stop_start_pos_{};
     mutable std::mutex stop_mutex_;
+
+    // ---- Helpers ----
+    void publishForceEstimator(const std::vector<float> &pred_est);
+    void logCsvRow(const std::vector<float> &cmd,
+                   const std::vector<float> &pred_est,
+                   aliengo::GaitMode mode);
+    void initCsvLog(const std::string &path);
 };

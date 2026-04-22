@@ -189,6 +189,11 @@ public:
     std::optional<SplitDebugSnapshot> get_last_split_debug_snapshot() const;
     void clear_last_split_debug_snapshot();
 
+    /// Get the auxiliary output from the last forward() call.
+    /// For models returning Tuple(action, pred_est), this holds pred_est.
+    /// Returns an empty SimpleTensor if the model returned a single Tensor.
+    SimpleTensor get_last_aux_output() const { return last_aux_output_; }
+
 #ifdef USE_ONNX
     std::string load(const PolicySpec& spec, InferenceDevice device = InferenceDevice::CPU);
     std::string load(std::string filename, InferenceDevice device = InferenceDevice::CPU);
@@ -206,6 +211,7 @@ public:
     InferenceDevice device_ = InferenceDevice::CPU;
 
 private:
+    SimpleTensor last_aux_output_;  // stores tuple[1] (e.g. pred_est) from last forward()
     PolicySpec spec_;
     std::optional<StudentTeacherSruDeploySpec> split_deploy_spec_;
     bool use_split_sru_pipeline_ = false;
