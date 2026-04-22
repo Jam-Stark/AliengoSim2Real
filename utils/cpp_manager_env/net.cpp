@@ -1791,23 +1791,17 @@ torch::Tensor Policy::get_action(torch::Tensor obs) {
             if (output_ivalue.isTensor()) {
                 // Single tensor return (most common case)
                 output = output_ivalue.toTensor();
-                std::cout << "[Policy] forward() returned Tensor, shape: "
-                          << output.sizes() << std::endl;
             } else if (output_ivalue.isTuple()) {
                 // Tuple return, e.g. (action[12], pred_est[6])
                 // Extract first element as the action tensor
                 auto tuple = output_ivalue.toTuple();
                 auto &elements = tuple->elements();
-                std::cout << "[Policy] forward() returned Tuple with "
-                          << elements.size() << " elements." << std::endl;
                 if (elements.empty() || !elements[0].isTensor()) {
                     throw std::runtime_error(
                         "Model forward() returned a Tuple, but the first element "
                         "is not a Tensor. Cannot extract action.");
                 }
                 output = elements[0].toTensor();
-                std::cout << "[Policy] Extracted action from tuple[0], shape: "
-                          << output.sizes() << std::endl;
             } else {
                 // Unsupported return type
                 std::string type_str = "unknown";
