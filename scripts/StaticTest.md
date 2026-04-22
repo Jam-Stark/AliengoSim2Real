@@ -82,3 +82,57 @@ rosrun aliengo_deploy fake_low_state_publisher
 5. **按 `b`**：deploy 打印 `Controlled STOP`，monitor 看到 Kp=60/Kd=5 的趴下过程
 6. **按 `e`**：deploy 打印 `EMERGENCY DAMPING STOP`，monitor 看到 Kp=0/Kd=3
 7. **全程**：monitor 的 NaN 计数维持为 0，无关节超限
+
+当前 shell 的**临时修复命令**如下，直接在容器里执行即可。
+
+我现在收敛到 2 个最可能原因：
+
+1. 主机名 `noetic-gpu` 不能自解析（你的 `/etc/hosts` 里没有它）
+2. ROS1 启动时优先拿主机名做回连地址，而不是 localhost
+
+这和 [`test_deploy.launch`](ros1/launch/test_deploy.launch) 或 [`AliengoDeployNode::start()`](ros1/src/aliengo_deploy_node.cpp:64) 无关，问题发生在 ROS 网络初始化阶段。
+
+先在**当前容器 shell**里执行这组命令：
+
+```bash
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+unset ROS_IP
+
+echo "127.0.0.1 $(hostname)" >> /etc/hosts
+
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+
+env | grep '^ROS_' | sort
+roslaunch aliengo_deploy test_deploy.launch \
+  policy_path:=/work/AliengoSim2Real/policy/aliengo/
+```
+
+如果你想更稳一点，也可以先单独验证 ROS master：
+
+```bash
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+unset ROS_IP
+
+echo "127.0.0.1 $(hostname)" >> /etc/hosts
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+
+roscore
+```
+
+然后开第二个容器 shell，再执行：
+
+```bash
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+unset ROS_IP
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+roslaunch aliengo_deploy test_deploy.launch \
+  policy_path:=/work/AliengoSim2Real/policy/aliengo/
+```
+
+如果这组命令能跑通，就说明诊断成立：**根因就是主机名回解析/ROS 网络变量问题**。下一步再把这个临时修复固化进 [`ros1/README.md`](ros1/README.md) 和 [`ros1/scripts/setup_and_build.sh`](ros1/scripts/setup_and_build.sh) 就行。
