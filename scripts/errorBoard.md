@@ -1,72 +1,62 @@
-root@noetic-gpu:/work# ls
-AliengoSim2Real  unitree_legged_sdk
-root@noetic-gpu:/work# cd unitree_legged_sdk/
-root@noetic-gpu:/work/unitree_legged_sdk# git submodule update --init --recursive
-fatal: detected dubious ownership in repository at '/work/unitree_legged_sdk'
-To add an exception for this directory, call:
 
-        git config --global --add safe.directory /work/unitree_legged_sdk
-root@noetic-gpu:/work/unitree_legged_sdk# git config --global --add safe.directory /work/unitree_legged_sdk
-root@noetic-gpu:/work/unitree_legged_sdk# git submodule update --init --recursive
-root@noetic-gpu:/work/unitree_legged_sdk# git submodule update --init --recursive
-root@noetic-gpu:/work/unitree_legged_sdk# source /opt/ros/noetic/setup.bash
-root@noetic-gpu:/work/unitree_legged_sdk# mkdir -p /root/catkin_ws/src
-root@noetic-gpu:/work/unitree_legged_sdk# ln -sf /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
-root@noetic-gpu:/work/unitree_legged_sdk# ln -sf /work/projects/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
-root@noetic-gpu:/work/unitree_legged_sdk# ln -sf /work/projects/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
-root@noetic-gpu:/work/unitree_legged_sdk# ln -sf /work/projects/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
-root@noetic-gpu:/work/unitree_legged_sdk# cd /root/catkin_ws
-root@noetic-gpu:~/catkin_ws# catkin_make -DCMAKE_BUILD_TYPE=Release
-Base path: /root/catkin_ws
-Source space: /root/catkin_ws/src
-Build space: /root/catkin_ws/build
-Devel space: /root/catkin_ws/devel
-Install space: /root/catkin_ws/install
-Creating symlink "/root/catkin_ws/src/CMakeLists.txt" pointing to "/opt/ros/noetic/share/catkin/cmake/toplevel.cmake"
-####
-#### Running command: "cmake /root/catkin_ws/src -DCMAKE_BUILD_TYPE=Release -DCATKIN_DEVEL_PREFIX=/root/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/root/catkin_ws/install -G Unix Makefiles" in "/root/catkin_ws/build"
-####
--- The C compiler identification is GNU 9.4.0
--- The CXX compiler identification is GNU 9.4.0
--- Check for working C compiler: /usr/bin/cc
--- Check for working C compiler: /usr/bin/cc -- works
--- Detecting C compiler ABI info
--- Detecting C compiler ABI info - done
--- Detecting C compile features
--- Detecting C compile features - done
--- Check for working CXX compiler: /usr/bin/c++
--- Check for working CXX compiler: /usr/bin/c++ -- works
--- Detecting CXX compiler ABI info
--- Detecting CXX compiler ABI info - done
--- Detecting CXX compile features
--- Detecting CXX compile features - done
--- Using CATKIN_DEVEL_PREFIX: /root/catkin_ws/devel
--- Using CMAKE_PREFIX_PATH: /opt/ros/noetic
--- This workspace overlays: /opt/ros/noetic
--- Found PythonInterp: /usr/bin/python3 (found suitable version "3.8.10", minimum required is "3") 
--- Using PYTHON_EXECUTABLE: /usr/bin/python3
--- Using Debian Python package layout
--- Found PY_em: /usr/lib/python3/dist-packages/em.py  
--- Using empy: /usr/lib/python3/dist-packages/em.py
--- Using CATKIN_ENABLE_TESTING: ON
--- Call enable_testing()
--- Using CATKIN_TEST_RESULTS_DIR: /root/catkin_ws/build/test_results
--- Forcing gtest/gmock from source, though one was otherwise available.
--- Found gtest sources under '/usr/src/googletest': gtests will be built
--- Found gmock sources under '/usr/src/googletest': gmock will be built
--- Found PythonInterp: /usr/bin/python3 (found version "3.8.10") 
--- Found Threads: TRUE  
--- Using Python nosetests: /usr/bin/nosetests3
--- catkin 0.8.12
--- BUILD_SHARED_LIBS is on
--- BUILD_SHARED_LIBS is on
--- Configuring done
--- Generating done
--- Build files have been written to: /root/catkin_ws/build
-####
-#### Running command: "make -j32 -l32" in "/root/catkin_ws/build"
-####
-root@noetic-gpu:~/catkin_ws# source devel/setup.bashrospack find aliengo_deploy
-bash: devel/setup.bashrospack: No such file or directory
-root@noetic-gpu:~/catkin_ws# rospack find unitree_legged_real
-[rospack] Error: package 'unitree_legged_real' not found
+从错误日志中看出两个问题：
+
+### 问题 1: 远程机上只有 `unitree_legged_sdk`，没有 `unitree_ros_to_real`
+
+从日志第 2 行看到 `/work/` 下是：
+
+```
+AliengoSim2Real/
+unitree_legged_sdk/     ← 这只是 SDK 库，不是完整的 ROS 包
+```
+
+但我们需要的是 `unitree_ros_to_real` 这个**完整仓库**，它里面包含：
+
+- `unitree_legged_msgs/` — ROS 消息定义（必须）
+- `unitree_legged_real/` — ros_udp bridge 节点（必须）
+- `unitree_legged_sdk/` — SDK 库
+
+**修复**：在远程机**宿主机**上执行：
+
+```bash
+cd ~/Downloads/WorkSpace
+git clone https://github.com/unitreerobotics/unitree_ros_to_real.git
+cd unitree_ros_to_real
+git submodule update --init --recursive
+```
+
+### 问题 2: 软链接路径错误
+
+你用了 `/work/projects/...`（带 projects），但实际路径是 `/work/...`。
+
+**修复**：重新进入容器后，**先清理旧的坏链接**，再用正确路径：
+
+```bash
+# 清理
+rm -f /root/catkin_ws/src/unitree_legged_msgs
+rm -f /root/catkin_ws/src/unitree_legged_real
+rm -f /root/catkin_ws/src/unitree_legged_sdk
+rm -f /root/catkin_ws/src/aliengo_deploy
+
+# 添加 git safe directory（解决 dubious ownership 问题）
+git config --global --add safe.directory '*'
+
+# 用正确路径重新链接
+ln -sf /work/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
+ln -sf /work/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
+ln -sf /work/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
+ln -sf /work/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
+
+# 验证链接是否有效
+ls -la /root/catkin_ws/src/
+ls /root/catkin_ws/src/unitree_legged_msgs/msg/   # 应能看到 LowCmd.msg 等
+ls /root/catkin_ws/src/aliengo_deploy/CMakeLists.txt  # 应能看到文件
+
+# 重新编译
+cd /root/catkin_ws
+rm -rf build devel   # 清除上次空编译的产物
+source /opt/ros/noetic/setup.bash
+catkin_make -DCMAKE_BUILD_TYPE=Release
+```
+
+### 总结：先在宿主机 clone `unitree_ros_to_real`，再进容器用正确路径链接和编译。
