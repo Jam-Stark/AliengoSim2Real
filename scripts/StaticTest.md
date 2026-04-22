@@ -1,0 +1,71 @@
+测试框架已创建完成。新增 3 个文件，修改 1 个文件：
+
+| 文件                                                                                      | 功能                                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`ros1/src/test/fake_low_state_publisher.cpp`](ros1/src/test/fake_low_state_publisher.cpp) | 500Hz 合成 LowState 发布器，带键盘按键模拟遥控器                    |
+| [`ros1/src/test/low_cmd_monitor.cpp`](ros1/src/test/low_cmd_monitor.cpp)                   | low_cmd 订阅监视器，验证 NaN/超限/频率/对称性                       |
+| [`ros1/launch/test_deploy.launch`](ros1/launch/test_deploy.launch)                         | 测试 launch 文件（deploy + monitor）                                |
+| [`ros1/CMakeLists.txt`](ros1/CMakeLists.txt:125)                                           | 添加了 `fake_low_state_publisher` 和 `low_cmd_monitor` 编译目标 |
+
+### 同步到远程机后重新编译
+
+macOS 上：
+
+```bash
+rsync -avz ros1/ dreams@<IP>:~/Downloads/WorkSpace/AliengoSim2Real/ros1/
+```
+
+Docker 容器内：
+
+```bash
+cd /root/catkin_ws
+source /opt/ros/noetic/setup.bash
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+catkin_make -DCMAKE_BUILD_TYPE=Release
+source devel/setup.bash
+```
+
+### 测试方法（Docker 容器内，3 个终端）
+
+**终端 1** — 启动 deploy + monitor：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
+roslaunch aliengo_deploy test_deploy.launch \
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/
+```
+
+**终端 2** — 启动 fake state publisher（带键盘控制）：
+
+```bash
+docker exec -it noetic-gpu bash
+source /opt/ros/noetic/setup.bash
+source /root/catkin_ws/devel/setup.bash
+rosrun aliengo_deploy fake_low_state_publisher
+```
+
+**终端 2 键盘操作**：
+
+| 按键        | 动作                       |
+| ----------- | -------------------------- |
+| `a`       | 使能策略（模拟遥控 A 键）  |
+| `b`       | 受控停止（模拟遥控 B 键）  |
+| `e`       | 紧急制动（模拟 L2+B）      |
+| `w`/`x` | 增加/减少 vx 命令          |
+| `d`/`c` | 增加/减少 wz 命令          |
+| `s`       | 清零速度指令（模拟 Start） |
+| `r`       | 重置策略（模拟 Select）    |
+| `0`       | 摇杆归零                   |
+| `q`       | 退出                       |
+
+### 预期验证结果
+
+1. **启动时**：deploy 节点显示 `Waiting for low_state...`，monitor 显示 `Waiting for messages...`
+2. **fake publisher 启动后**：deploy 打印 `First low_state received.`，monitor 开始显示 12 电机数据（全部 Kp=0，零力矩模式）
+3. **按 `a`**：deploy 打印 `Policy ENABLED`，monitor 看到 12 电机 Kp 变非零、q 值开始变化
+4. **按 `w`**：给前进速度指令，动作输出应变化
+5. **按 `b`**：deploy 打印 `Controlled STOP`，monitor 看到 Kp=60/Kd=5 的趴下过程
+6. **按 `e`**：deploy 打印 `EMERGENCY DAMPING STOP`，monitor 看到 Kp=0/Kd=3
+7. **全程**：monitor 的 NaN 计数维持为 0，无关节超限

@@ -123,9 +123,27 @@ target_link_libraries(aliengo_deploy
 )
 
 # ============================================================
+# Test tools (fake state publisher + cmd monitor)
+# ============================================================
+add_executable(fake_low_state_publisher
+  src/test/fake_low_state_publisher.cpp
+)
+target_link_libraries(fake_low_state_publisher
+  ${catkin_LIBRARIES}
+  pthread
+)
+
+add_executable(low_cmd_monitor
+  src/test/low_cmd_monitor.cpp
+)
+target_link_libraries(low_cmd_monitor
+  ${catkin_LIBRARIES}
+)
+
+# ============================================================
 # Install
 # ============================================================
-install(TARGETS aliengo_deploy
+install(TARGETS aliengo_deploy fake_low_state_publisher low_cmd_monitor
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
