@@ -177,7 +177,7 @@ source /root/.bashrc
 ### 步骤 3: 初始化 unitree_legged_sdk
 
 ```bash
-cd /work/projects/unitree_ros_to_real
+cd /work/unitree_ros_to_real
 git submodule update --init --recursive
 # 如果失败则手动 clone:
 # rm -rf unitree_legged_sdk
