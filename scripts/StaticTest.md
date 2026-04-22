@@ -136,3 +136,52 @@ roslaunch aliengo_deploy test_deploy.launch \
 ```
 
 如果这组命令能跑通，就说明诊断成立：**根因就是主机名回解析/ROS 网络变量问题**。下一步再把这个临时修复固化进 [`ros1/README.md`](ros1/README.md) 和 [`ros1/scripts/setup_and_build.sh`](ros1/scripts/setup_and_build.sh) 就行。
+
+
+
+
+
+
+已修复 [`utils/cpp_manager_env/net.cpp`](utils/cpp_manager_env/net.cpp:1786)。改动内容：
+
+- `forward()` 返回 `Tensor` → 保持原逻辑
+- `forward()` 返回 `Tuple` → 自动提取 `tuple[0]` 作为 action 张量（你的 policy 返回 `(action[12], pred_est[6])`，只取第一个）
+- 其他类型 → 给出清晰错误信息
+- 每次推理打印一行类型日志（确认后可去掉）
+
+### 同步到远程机并重新编译
+
+macOS 上：
+
+```bash
+rsync -avz /Users/caobaoquan/Downloads/python/projects/AliengoSim2Real/utils/cpp_manager_env/net.cpp \
+  dreams@<IP>:~/Downloads/WorkSpace/AliengoSim2Real/utils/cpp_manager_env/net.cpp
+```
+
+Docker 容器内：
+
+```bash
+cd /root/catkin_ws
+source /opt/ros/noetic/setup.bash
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+catkin_make -DCMAKE_BUILD_TYPE=Release
+source devel/setup.bash
+```
+
+然后重新运行测试：
+
+```bash
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+roslaunch aliengo_deploy test_deploy.launch \
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/
+```
+
+预期日志应变为：
+
+```
+[Policy] forward() returned Tuple with 2 elements.
+[Policy] Extracted action from tuple[0], shape: [1, 12]
+[SUCCESS] Inference passed.
+Policy Output (Action) Dimension: 12
+```
