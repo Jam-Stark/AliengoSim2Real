@@ -38,6 +38,7 @@ struct RuntimeOptions {
     InferenceDevice device = InferenceDevice::CPU;
     bool use_local_gamepad = false;
     float gait_frequency = aliengo::kGaitFrequencyHz;
+    std::string gate_preset = "v2";
 };
 
 RuntimeOptions parseArgs(int argc, char **argv) {
@@ -74,6 +75,9 @@ RuntimeOptions parseArgs(int argc, char **argv) {
             } catch (...) {
                 std::cerr << "[Warn] Invalid gait_frequency: " << val << std::endl;
             }
+        } else if (key == "gate_preset") {
+            opts.gate_preset = val;
+            std::cout << "[Info] Gate preset: " << opts.gate_preset << std::endl;
         }
     }
 
@@ -116,6 +120,21 @@ int main(int argc, char **argv) {
         parseDevice(param_device, opts.device);
     }
 
+    std::string param_gate_preset;
+    if (nh.getParam("gate_preset", param_gate_preset)) {
+        opts.gate_preset = param_gate_preset;
+    }
+
+    aliengo::ForceGatePreset gate_preset_enum = aliengo::ForceGatePreset::V2;
+    aliengo::ForceGateParams gate_params = aliengo::makeForceGatePresetV2();
+    if (!aliengo::forceGatePresetFromName(opts.gate_preset, gate_preset_enum, gate_params)) {
+        std::cerr << "[Warn] Unknown gate_preset: " << opts.gate_preset
+                  << ", fallback to v2" << std::endl;
+        opts.gate_preset = "v2";
+        gate_preset_enum = aliengo::ForceGatePreset::V2;
+        gate_params = aliengo::makeForceGatePresetV2();
+    }
+
     // Build policy spec
     std::vector<PolicySpec> policy_list;
     policy_list.push_back(PolicySpec::MLP(opts.policy_path, "aliengo_locomotion"));
@@ -129,6 +148,7 @@ int main(int argc, char **argv) {
               << (opts.device == InferenceDevice::CUDA ? "CUDA" : "CPU")
               << std::endl;
     std::cout << "  Gait frequency:   " << opts.gait_frequency << " Hz" << std::endl;
+    std::cout << "  Gate preset:      " << opts.gate_preset << std::endl;
     std::cout << "  Local gamepad:    "
               << (opts.use_local_gamepad ? "enabled" : "disabled") << std::endl;
     std::cout << "  Control freq:     " << (1.0f / aliengo::kControlDt) << " Hz"
@@ -137,7 +157,8 @@ int main(int argc, char **argv) {
     std::cout << "  Action dim:       " << aliengo::kActionDim << std::endl;
     std::cout << "============================================\n" << std::endl;
 
-    AliengoDeployNode node(nh, policy_list, opts.device);
+    nh.setParam("gate_preset", opts.gate_preset);
+    AliengoDeployNode node(nh, policy_list, gate_params, opts.device);
 
     // Initialize ManagerBasedEnv (loads model, tests inference)
     node.init_manager();

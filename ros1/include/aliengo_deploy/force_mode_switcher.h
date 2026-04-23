@@ -23,6 +23,11 @@ enum GaitMode {
     MODE_COMMAND_WALKING = 2,
 };
 
+enum class ForceGatePreset {
+    V2,
+    V2_ROBUST,
+};
+
 inline const char* gaitModeName(GaitMode m) {
     switch (m) {
         case MODE_STANDING:        return "standing";
@@ -57,6 +62,71 @@ struct ForceGateParams {
     float cmd_deadzone_vy        = 0.1f;
     float cmd_deadzone_wz        = 0.2f;
 };
+
+inline ForceGateParams makeForceGatePresetV2() {
+    ForceGateParams p;
+    p.evidence_cap_n = 10.0f;
+    p.baseline_tau_s = 1.0f;
+    p.baseline_margin_n = 0.34f;
+    p.baseline_update_max_n = 1.00f;
+    p.enter_threshold_n = 8.00f;
+    p.exit_threshold_n = 0.15f;
+    p.enter_tau_on_s = 0.08f;
+    p.enter_tau_off_s = 0.22f;
+    p.exit_tau_on_s = 0.04f;
+    p.exit_tau_off_s = 0.10f;
+    p.enter_score_threshold = 0.90f;
+    p.exit_score_threshold = 0.60f;
+    p.dir_consistency_min_force_n = 1.00f;
+    p.dir_consistency_tau_s = 0.16f;
+    p.dir_consistency_threshold = 0.72f;
+    p.switch_cooldown_s = 1.00f;
+    p.enter_hold_s = 0.12f;
+    p.exit_hold_s = 0.04f;
+    return p;
+}
+
+inline ForceGateParams makeForceGatePresetV2Robust() {
+    ForceGateParams p;
+    p.evidence_cap_n = 10.0f;
+    p.baseline_tau_s = 1.2f;
+    p.baseline_margin_n = 0.50f;
+    p.baseline_update_max_n = 1.20f;
+    p.enter_threshold_n = 8.50f;
+    p.exit_threshold_n = 0.15f;
+    p.enter_tau_on_s = 0.12f;
+    p.enter_tau_off_s = 0.22f;
+    p.exit_tau_on_s = 0.04f;
+    p.exit_tau_off_s = 0.10f;
+    p.enter_score_threshold = 0.90f;
+    p.exit_score_threshold = 0.60f;
+    p.dir_consistency_min_force_n = 1.00f;
+    p.dir_consistency_tau_s = 0.18f;
+    p.dir_consistency_threshold = 0.72f;
+    p.switch_cooldown_s = 1.20f;
+    p.enter_hold_s = 0.20f;
+    p.exit_hold_s = 0.04f;
+    return p;
+}
+
+inline bool forceGatePresetFromName(const std::string &name,
+                                    ForceGatePreset &preset_out,
+                                    ForceGateParams &params_out) {
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower == "v2") {
+        preset_out = ForceGatePreset::V2;
+        params_out = makeForceGatePresetV2();
+        return true;
+    }
+    if (lower == "v2_robust" || lower == "v2-robust" || lower == "robust") {
+        preset_out = ForceGatePreset::V2_ROBUST;
+        params_out = makeForceGatePresetV2Robust();
+        return true;
+    }
+    return false;
+}
 
 struct ForceGateState {
     GaitMode mode               = MODE_STANDING;

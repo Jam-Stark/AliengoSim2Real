@@ -13,16 +13,24 @@ using namespace aliengo;
 AliengoDeployNode::AliengoDeployNode(
     ros::NodeHandle &nh,
     const std::vector<PolicySpec> &policy_specs,
+    const aliengo::ForceGateParams &force_gate_params,
     InferenceDevice device)
     : ManagerBasedEnv(policy_specs, device),
       nh_(nh),
       gait_clock_(kGaitFrequencyHz, kControlDt),
-      force_gate_(kControlDt) {
+      force_gate_(kControlDt, force_gate_params) {
     gravity_ = SimpleTensor::wrap({0.0f, 0.0f, -1.0f});
 
     // Read gate_enabled and brake_enabled params
     nh_.param("gate_enabled", gate_enabled_, true);
     nh_.param("brake_enabled", brake_enabled_, true);
+    std::string gate_preset_name;
+    nh_.param<std::string>("gate_preset", gate_preset_name, "v2");
+    aliengo::ForceGateParams ignored_params;
+    aliengo::ForceGatePreset preset_tmp;
+    if (aliengo::forceGatePresetFromName(gate_preset_name, preset_tmp, ignored_params)) {
+        force_gate_preset_ = preset_tmp;
+    }
     // Read CSV logging param
     std::string csv_path;
     nh_.param<std::string>("force_log_csv", csv_path, "");
@@ -31,6 +39,8 @@ AliengoDeployNode::AliengoDeployNode(
     }
 
     initInterfaces();
+    ROS_INFO("Force gate preset: %s",
+             force_gate_preset_ == aliengo::ForceGatePreset::V2_ROBUST ? "v2_robust" : "v2");
 }
 
 AliengoDeployNode::~AliengoDeployNode() {

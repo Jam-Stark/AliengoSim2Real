@@ -35,6 +35,7 @@ public:
     explicit AliengoDeployNode(
         ros::NodeHandle &nh,
         const std::vector<PolicySpec> &policy_specs,
+        const aliengo::ForceGateParams &force_gate_params = aliengo::ForceGateParams(),
         InferenceDevice device = InferenceDevice::CPU);
     ~AliengoDeployNode();
 
@@ -126,6 +127,7 @@ private:
 
     // ---- Standing / Walking gate ----
     aliengo::ForceModeSwitcher force_gate_;
+    aliengo::ForceGatePreset force_gate_preset_ = aliengo::ForceGatePreset::V2;
     aliengo::GaitMode current_gait_mode_ = aliengo::MODE_STANDING;
     bool gate_enabled_ = true;              // can be toggled via param
 

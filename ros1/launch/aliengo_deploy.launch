@@ -12,6 +12,7 @@
     <arg name="policy_path" default=""/>
     <arg name="inference_device" default="cpu"/>
     <arg name="gait_frequency" default="2.0"/>
+    <arg name="gate_preset" default="v2"/>
     <arg name="use_local_gamepad" default="false"/>
 
     <!-- 1. Unitree ROS1 UDP Bridge (low-level) -->
@@ -25,6 +26,7 @@
                if="$(eval arg('policy_path') != '')"/>
         <param name="inference_device" value="$(arg inference_device)"/>
         <param name="gait_frequency" value="$(arg gait_frequency)"/>
+        <param name="gate_preset" value="$(arg gate_preset)"/>
         <param name="use_local_gamepad" value="$(arg use_local_gamepad)"/>
     </node>
 

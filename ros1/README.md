@@ -19,6 +19,10 @@ ros_udp bridge  <-- UDP -->  Aliengo Robot (192.168.123.10)
 aliengo_deploy node
     ├── 订阅 low_state → 提取 IMU / 关节观测
     ├── 运行 policy inference (50 Hz)
+    ├── standing / walking gate
+    ├── brake gate
+    ├── 发布 /force_estimator
+    ├── 记录 CSV 日志
     └── 发布 low_cmd → 关节位置 PD 指令
 ```
 
@@ -35,14 +39,20 @@ ros1/
 │   └── aliengo_deploy.launch          # 同时启动 ros_udp + deploy 节点
 ├── include/aliengo_deploy/
 │   ├── aliengo_constants.h            # 关节映射/默认位姿/PD增益/obs规格
+│   ├── brake_command_gate.h           # brake gate
 │   ├── aliengo_deploy_node.h          # 主节点头文件
+│   ├── force_mode_switcher.h          # standing / walking gate
 │   ├── gait_clock.h                   # 步态相位时钟
 │   └── wireless_remote_decoder.h      # 遥控器字节解码器
 ├── src/
 │   ├── aliengo_deploy_main.cpp        # main 入口
 │   ├── aliengo_deploy_node.cpp        # 主节点实现
 │   ├── gait_clock.cpp                 # (header-only placeholder)
-│   └── wireless_remote_decoder.cpp    # 遥控器解码实现
+│   ├── wireless_remote_decoder.cpp    # 遥控器解码实现
+│   └── test/                          # fake low_state + monitor 测试节点
+├── launch/
+│   ├── aliengo_deploy.launch          # 实机部署 launch
+│   └── test_deploy.launch             # 无实机接口级测试 launch
 └── scripts/
     ├── setup_and_build.sh             # 完整搭建步骤参考
     └── start_aliengo_deploy.sh        # 一键启动脚本
@@ -165,8 +175,16 @@ source /opt/ros/noetic/setup.bash
 source /root/catkin_ws/devel/setup.bash
 
 roslaunch aliengo_deploy aliengo_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo/
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
+    gate_preset:=v2 \
+    _gate_enabled:=true \
+    _brake_enabled:=true \
+    _force_log_csv:=/tmp/force_log.csv
 ```
+
+可用的 `gate_preset`：
+- `v2`
+- `v2_robust`
 
 ### 方式 2: 分步启动
 
@@ -182,8 +200,81 @@ roslaunch unitree_legged_real real.launch ctrl_level:=lowlevel
 source /opt/ros/noetic/setup.bash
 source /root/catkin_ws/devel/setup.bash
 rosrun aliengo_deploy aliengo_deploy \
-    policy_path=/work/AliengoSim2Real/policy/aliengo/
+    policy_path=/work/AliengoSim2Real/policy/aliengo/ \
+    gate_preset=v2_robust
 ```
+
+## Gate / Brake / Force Estimator
+
+### standing / walking gate
+
+当前 ROS1 部署链路已集成 standing / walking gate：
+- 有显式速度命令 → `command_walking`
+- 无显式速度命令 → 依据 `pred_est` 中的 `base_force_est_local` 决定 `standing` / `force_walking`
+- `standing` 时 gait phase 冻结为 `0`
+- `walking` 时 gait phase 正常推进
+
+默认支持两个 preset：
+
+| preset | 用途 |
+|------|------|
+| `v2` | 默认版本，接近 MuJoCo 配置 |
+| `v2_robust` | 更保守，适合实机 estimator 更 noisy 的情况 |
+
+### brake gate
+
+当前 ROS1 部署链路已集成 brake gate：
+- 仅在 walking 状态下生效
+- 当前向命令足够大且 `|wz|` 较小时，如果估计到底座局部 `x` 向力持续足够负，则触发 brake
+- brake 激活后会清零 command，并停止继续下发正常 walking command
+
+### Force Estimator 实时查看
+
+节点会发布：
+- `/force_estimator`，类型为 `geometry_msgs/WrenchStamped`
+
+其中：
+- `wrench.force.{x,y,z}` → 预测的 `base_force_est_local`
+- `wrench.torque.{x,y,z}` → 预测的 `base_lin_vel`
+
+查看方式：
+
+```bash
+rostopic echo /force_estimator
+```
+
+如需画图：
+
+```bash
+rqt_plot /force_estimator/wrench/force/x /force_estimator/wrench/force/y
+```
+
+### CSV 日志
+
+通过参数 `_force_log_csv:=/tmp/force_log.csv` 可开启每步记录，内容包括：
+- command
+- `pred_est`
+- gait mode
+- standing / walking gate 内部状态
+- brake gate 内部状态
+
+示例：
+
+```bash
+roslaunch aliengo_deploy aliengo_deploy.launch \
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
+    gate_preset:=v2_robust \
+    _force_log_csv:=/tmp/force_log.csv
+```
+
+## 无实机测试
+
+当前仓库还提供了接口级测试框架：
+- fake low_state 发布器
+- low_cmd monitor
+- 测试 launch
+
+启动方式见 [`scripts/StaticTest.md`](../scripts/StaticTest.md)。
 
 ## 遥控器操作
 
@@ -225,3 +316,4 @@ rosrun aliengo_deploy aliengo_deploy \
 4. PD 增益值来自 MuJoCo 仿真导出，实机可能需要调整
 5. 确保以太网连接稳定 (192.168.123.x 网段)
 6. 每次新开容器 shell，都必须执行 `source /opt/ros/noetic/setup.bash && source /root/catkin_ws/devel/setup.bash`
+7. standing / walking gate 与 brake gate 已接入，但实机上仍需根据 `pred_est` 噪声分布调 `gate_preset` 或后续阈值
