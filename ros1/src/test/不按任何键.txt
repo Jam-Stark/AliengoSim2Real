@@ -1,0 +1,273 @@
+不按任何键
+root@noetic-gpu:~/catkin_ws# python3 -c "
+import socket, struct
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+s.bind(('0.0.0.0', 8091))
+s.sendto(b'\x00'*730, ('192.168.123.10', 8007))
+data, _ = s.recvfrom(4096)
+s.close()
+
+# Print tail region (offset 700 to end) as hex
+print('Tail hex (700-820):')
+for i in range(700, len(data), 20):
+    chunk = data[i:min(i+20, len(data))]
+    hex_str = ' '.join(f'{b:02x}' for b in chunk)
+    ascii_str = ''.join(chr(b) if 32<=b<127 else '.' for b in chunk)
+    print(f'  [{i:4d}] {hex_str}  |{ascii_str}|')
+
+# Also check ENTIRE packet for 0x01 pattern at bytes 2-3 of any 40-byte block
+print()
+print('Scanning for possible wirelessRemote (looking for non-zero key bytes):')
+for off in range(0, len(data)-40):
+    keys = struct.unpack_from('<H', data, off+2)[0]
+    if keys != 0 and keys < 0xFFFF:
+        lx = struct.unpack_from('<f', data, off+4)[0]
+        ly = struct.unpack_from('<f', data, off+20)[0]
+        if abs(lx) <= 1.1 and abs(ly) <= 1.1:
+            print(f'  offset={off}: keys=0x{keys:04X} lx={lx:.3f} ly={ly:.3f}')
+"
+Tail hex (700-820):
+  [ 700] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+  [ 720] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+  [ 740] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+  [ 760] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+  [ 780] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+  [ 800] 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |....................|
+
+Scanning for possible wirelessRemote (looking for non-zero key bytes):
+  offset=3: keys=0x63BA lx=0.000 ly=-0.800
+  offset=11: keys=0x3F19 lx=-0.000 ly=-0.012
+  offset=15: keys=0xB856 lx=0.008 ly=-0.001
+  offset=16: keys=0x33B8 lx=-0.000 ly=-0.000
+  offset=19: keys=0x3C08 lx=-0.800 ly=-0.097
+  offset=22: keys=0x4CB6 lx=0.000 ly=0.000
+  offset=23: keys=0xBF4C lx=0.000 ly=-0.140
+  offset=31: keys=0xBC47 lx=-0.001 ly=-0.013
+  offset=32: keys=0x7ABC lx=-0.000 ly=0.000
+  offset=35: keys=0xBAC1 lx=-0.097 ly=0.010
+  offset=36: keys=0x9CBA lx=0.000 ly=-0.000
+  offset=48: keys=0x5241 lx=0.000 ly=-0.003
+  offset=52: keys=0x2ABC lx=-0.000 ly=-0.001
+  offset=60: keys=0x50BF lx=-0.008 ly=-0.005
+  offset=64: keys=0xBBF7 lx=-0.003 ly=0.002
+  offset=68: keys=0xBB55 lx=-0.001 ly=0.000
+  offset=71: keys=0xC179 lx=-0.000 ly=-0.000
+  offset=72: keys=0xBAC1 lx=0.065 ly=0.263
+  offset=74: keys=0x7933 lx=0.000 ly=-0.759
+  offset=75: keys=0x8579 lx=-0.000 ly=0.000
+  offset=76: keys=0x3D85 lx=-0.005 ly=-0.157
+  offset=78: keys=0x30DE lx=0.000 ly=-0.000
+  offset=79: keys=0x9730 lx=0.000 ly=-0.000
+  offset=80: keys=0xBB97 lx=0.002 ly=-0.067
+  offset=84: keys=0x3B10 lx=0.000 ly=0.259
+  offset=87: keys=0x52F4 lx=-0.000 ly=0.000
+  offset=88: keys=0x3952 lx=0.263 ly=0.152
+  offset=91: keys=0x86A1 lx=0.000 ly=-0.000
+  offset=92: keys=0x3E86 lx=-0.157 ly=-0.064
+  offset=95: keys=0x20BF lx=-0.000 ly=-0.000
+  offset=96: keys=0xBE20 lx=-0.067 ly=-0.252
+  offset=97: keys=0xE7BE lx=0.000 ly=-0.372
+  offset=98: keys=0x8EE7 lx=-0.000 ly=0.000
+  offset=99: keys=0x888E lx=-0.000 ly=0.000
+  offset=100: keys=0xBD88 lx=0.259 ly=-0.150
+  offset=101: keys=0x23BD lx=-0.000 ly=-0.000
+  offset=103: keys=0x84B4 lx=0.000 ly=-0.000
+  offset=104: keys=0x3E84 lx=0.152 ly=-0.067
+  offset=105: keys=0xAA3E lx=0.000 ly=-0.000
+  offset=108: keys=0x3E1B lx=-0.064 ly=-0.224
+  offset=111: keys=0x83F9 lx=-0.000 ly=0.000
+  offset=112: keys=0xBD83 lx=-0.252 ly=0.150
+  offset=115: keys=0x80FD lx=0.000 ly=-0.000
+  offset=116: keys=0xBE80 lx=-0.150 ly=-0.066
+  offset=117: keys=0xBEBE lx=-0.000 ly=0.000
+  offset=119: keys=0x1A05 lx=-0.000 ly=-0.000
+  offset=120: keys=0xBE1A lx=-0.067 ly=-0.001
+  offset=121: keys=0x9CBE lx=-0.000 ly=-0.000
+  offset=124: keys=0xBD88 lx=-0.224 ly=0.006
+  offset=127: keys=0x65E2 lx=0.000 ly=-0.163
+  offset=128: keys=0xBE65 lx=0.150 ly=0.023
+  offset=131: keys=0x1978 lx=-0.000 ly=0.000
+  offset=132: keys=0x3E19 lx=-0.066 ly=0.000
+  offset=133: keys=0xE23E lx=0.000 ly=0.000
+  offset=135: keys=0x875C lx=-0.000 ly=0.000
+  offset=136: keys=0xBD87 lx=-0.001 ly=0.000
+  offset=137: keys=0x25BD lx=-0.000 ly=0.000
+  offset=138: keys=0xDF25 lx=-0.000 ly=0.000
+  offset=140: keys=0xBAA6 lx=0.006 ly=0.000
+  offset=141: keys=0x8BBA lx=-0.000 ly=0.000
+  offset=143: keys=0xC690 lx=-0.163 ly=-0.000
+  offset=144: keys=0x3BC6 lx=0.023 ly=0.005
+  offset=145: keys=0x883B lx=0.000 ly=0.000
+  offset=147: keys=0xBE26 lx=0.000 ly=0.003
+  offset=148: keys=0x3CBE lx=0.000 ly=0.003
+  offset=149: keys=0x003C lx=0.000 ly=-0.183
+  offset=163: keys=0xA449 lx=0.003 ly=0.000
+  offset=164: keys=0x3BA4 lx=0.003 ly=-0.009
+  offset=165: keys=0x303B lx=-0.183 ly=0.000
+  offset=166: keys=0x5E30 lx=0.000 ly=0.000
+  offset=168: keys=0x3B3B lx=0.016 ly=0.000
+  offset=170: keys=0x08BE lx=0.000 ly=0.000
+  offset=172: keys=0x3C7F lx=0.000 ly=0.000
+  offset=174: keys=0x1C7A lx=-0.000 ly=0.000
+  offset=176: keys=0x395A lx=0.002 ly=0.000
+  offset=179: keys=0xDCB5 lx=0.000 ly=0.000
+  offset=180: keys=0x3ADC lx=-0.009 ly=0.000
+  offset=184: keys=0xBC1A lx=0.000 ly=0.000
+  offset=191: keys=0x0400 lx=0.000 ly=0.000
+  offset=192: keys=0x0004 lx=0.000 ly=0.000
+  offset=203: keys=0x797B lx=0.000 ly=0.000
+  offset=204: keys=0x0079 lx=0.000 ly=0.000
+  offset=206: keys=0x5155 lx=0.000 ly=0.000
+  offset=213: keys=0xDE00 lx=0.000 ly=0.000
+  offset=214: keys=0x73DE lx=0.000 ly=0.000
+  offset=215: keys=0x1E73 lx=0.000 ly=0.000
+  offset=216: keys=0x3B1E lx=0.000 ly=0.000
+  offset=217: keys=0x003B lx=0.000 ly=0.000
+  offset=225: keys=0xCD00 lx=0.000 ly=0.000
+  offset=226: keys=0x31CD lx=0.000 ly=0.000
+  offset=227: keys=0x5531 lx=0.000 ly=0.000
+  offset=228: keys=0xBA55 lx=0.000 ly=0.000
+  offset=229: keys=0x00BA lx=0.000 ly=0.000
+  offset=244: keys=0xB703 lx=0.000 ly=-0.000
+  offset=245: keys=0x00B7 lx=0.000 ly=0.000
+  offset=250: keys=0xB01E lx=0.000 ly=-0.000
+  offset=251: keys=0xBBB0 lx=0.000 ly=0.000
+  offset=252: keys=0x6CBB lx=0.000 ly=-0.000
+  offset=253: keys=0xFF6C lx=0.000 ly=0.000
+  offset=254: keys=0x00FF lx=0.000 ly=0.008
+  offset=266: keys=0x3F19 lx=-0.000 ly=-0.012
+  offset=270: keys=0xB856 lx=0.008 ly=-0.001
+  offset=271: keys=0x33B8 lx=-0.000 ly=-0.000
+  offset=274: keys=0x3C08 lx=-0.800 ly=-0.097
+  offset=277: keys=0x4CB6 lx=0.000 ly=0.000
+  offset=278: keys=0xBF4C lx=0.000 ly=-0.140
+  offset=286: keys=0xBC47 lx=-0.001 ly=-0.013
+  offset=287: keys=0x7ABC lx=-0.000 ly=0.000
+  offset=290: keys=0xBAC1 lx=-0.097 ly=0.010
+  offset=291: keys=0x9CBA lx=0.000 ly=-0.000
+  offset=296: keys=0x5C29 lx=-0.909 ly=0.000
+  offset=300: keys=0xBF68 lx=-0.000 ly=-0.255
+  offset=302: keys=0x411D lx=-0.013 ly=0.000
+  offset=303: keys=0x5241 lx=0.000 ly=0.000
+  offset=305: keys=0x5BA3 lx=0.000 ly=0.000
+  offset=306: keys=0xBC5B lx=0.010 ly=0.000
+  offset=312: keys=0x439B lx=0.000 ly=0.000
+  offset=314: keys=0xBFED lx=-0.467 ly=0.000
+  offset=315: keys=0x50BF lx=-0.000 ly=0.000
+  offset=316: keys=0x0A50 lx=-0.255 ly=0.000
+  offset=317: keys=0xEF0A lx=0.000 ly=0.000
+  offset=318: keys=0xBEEF lx=0.000 ly=0.000
+  offset=319: keys=0x82BE lx=0.000 ly=0.000
+  offset=320: keys=0xBE82 lx=0.000 ly=0.000
+  offset=321: keys=0x00BE lx=0.000 ly=0.000
+  offset=327: keys=0xEA00 lx=0.000 ly=0.000
+  offset=328: keys=0xFEEA lx=0.000 ly=0.000
+  offset=339: keys=0x2100 lx=0.000 ly=0.000
+  offset=340: keys=0x0021 lx=0.000 ly=0.000
+  offset=349: keys=0xC80A lx=0.000 ly=0.000
+  offset=350: keys=0xD7C8 lx=0.000 ly=0.000
+  offset=351: keys=0x91D7 lx=0.000 ly=0.000
+  offset=352: keys=0x3F91 lx=-0.000 ly=0.000
+  offset=353: keys=0x003F lx=0.000 ly=0.000
+  offset=356: keys=0x8000 lx=0.000 ly=0.000
+  offset=357: keys=0x0080 lx=0.000 ly=0.000
+  offset=359: keys=0x0C00 lx=0.000 ly=0.000
+  offset=360: keys=0x000C lx=0.000 ly=0.000
+  offset=371: keys=0x1B00 lx=0.000 ly=0.000
+  offset=372: keys=0x001B lx=0.000 ly=0.000
+  offset=384: keys=0xC030 lx=-0.096 ly=0.000
+  offset=385: keys=0xCDC0 lx=0.000 ly=0.000
+  offset=386: keys=0xCCCD lx=0.000 ly=0.000
+  offset=387: keys=0xC4CC lx=0.000 ly=0.000
+  offset=388: keys=0xBDC4 lx=0.000 ly=0.000
+  offset=389: keys=0x00BD lx=0.000 ly=0.000
+  offset=404: keys=0x001B lx=0.000 ly=0.000
+  offset=412: keys=0x0A00 lx=0.204 ly=0.000
+  offset=413: keys=0xE00A lx=0.000 ly=0.000
+  offset=414: keys=0x7DE0 lx=0.000 ly=0.000
+  offset=415: keys=0x507D lx=0.000 ly=0.000
+  offset=416: keys=0x3E50 lx=0.000 ly=0.000
+  offset=417: keys=0x003E lx=0.000 ly=0.000
+  offset=423: keys=0xF600 lx=0.000 ly=0.000
+  offset=424: keys=0x00F6 lx=0.000 ly=0.000
+  offset=445: keys=0x220A lx=0.000 ly=0.000
+  offset=446: keys=0xB722 lx=0.000 ly=0.000
+  offset=447: keys=0x96B7 lx=0.000 ly=0.000
+  offset=448: keys=0x3F96 lx=0.000 ly=0.000
+  offset=449: keys=0x003F lx=0.000 ly=0.000
+  offset=455: keys=0xE500 lx=0.000 ly=0.000
+  offset=456: keys=0xFFE5 lx=0.000 ly=0.000
+  offset=467: keys=0x1B00 lx=0.000 ly=0.000
+  offset=468: keys=0x001B lx=0.000 ly=0.000
+  offset=477: keys=0x7A0A lx=0.000 ly=0.000
+  offset=478: keys=0x0B7A lx=0.000 ly=0.000
+  offset=479: keys=0x330B lx=0.000 ly=0.000
+  offset=480: keys=0xC033 lx=0.000 ly=0.000
+  offset=481: keys=0x00C0 lx=0.000 ly=0.000
+  offset=499: keys=0x1A00 lx=0.000 ly=0.000
+  offset=508: keys=0x0A00 lx=-0.182 ly=0.000
+  offset=509: keys=0x220A lx=0.000 ly=0.000
+  offset=510: keys=0x0122 lx=0.000 ly=0.000
+  offset=511: keys=0x3A01 lx=0.000 ly=0.000
+  offset=512: keys=0xBE3A lx=-0.000 ly=0.000
+  offset=513: keys=0x00BE lx=0.000 ly=0.000
+  offset=517: keys=0x0080 lx=0.000 ly=0.000
+  offset=519: keys=0x0200 lx=0.000 ly=0.000
+  offset=520: keys=0xFF02 lx=0.000 ly=0.000
+  offset=521: keys=0x00FF lx=0.000 ly=0.000
+  offset=531: keys=0x2000 lx=0.000 ly=0.000
+  offset=532: keys=0x0020 lx=0.000 ly=0.000
+  offset=541: keys=0x120A lx=0.000 ly=0.000
+  offset=542: keys=0xDB12 lx=0.000 ly=0.000
+  offset=543: keys=0xC4DB lx=0.000 ly=0.000
+  offset=544: keys=0x3FC4 lx=-0.000 ly=0.000
+  offset=545: keys=0x003F lx=0.000 ly=0.000
+  offset=548: keys=0x8000 lx=0.000 ly=0.000
+  offset=549: keys=0x0080 lx=0.000 ly=0.000
+  offset=563: keys=0x1A00 lx=0.000 ly=0.008
+  offset=564: keys=0x001A lx=0.000 ly=0.000
+  offset=573: keys=0x1A0A lx=0.000 ly=0.000
+  offset=574: keys=0x531A lx=0.000 ly=0.000
+  offset=575: keys=0x3353 lx=-0.000 ly=0.000
+  offset=576: keys=0xC033 lx=-0.066 ly=0.000
+  offset=577: keys=0x00C0 lx=0.000 ly=0.000
+  offset=579: keys=0x8800 lx=0.008 ly=0.000
+  offset=580: keys=0xBD88 lx=0.000 ly=0.000
+  offset=581: keys=0x00BD lx=0.000 ly=0.000
+  offset=583: keys=0x3C00 lx=0.000 ly=0.000
+  offset=584: keys=0x003C lx=0.000 ly=0.000
+  offset=596: keys=0x001B lx=0.000 ly=0.000
+  offset=604: keys=0x0A00 lx=0.177 ly=0.000
+  offset=605: keys=0x580A lx=0.000 ly=0.000
+  offset=606: keys=0x2858 lx=0.000 ly=0.000
+  offset=607: keys=0x3528 lx=0.000 ly=0.000
+  offset=608: keys=0x3E35 lx=-0.000 ly=0.000
+  offset=609: keys=0x003E lx=0.000 ly=0.000
+  offset=612: keys=0x8000 lx=0.000 ly=0.000
+  offset=613: keys=0x0080 lx=0.000 ly=0.000
+  offset=615: keys=0xFE00 lx=0.000 ly=0.000
+  offset=616: keys=0x00FE lx=0.000 ly=0.000
+  offset=627: keys=0x2100 lx=0.000 ly=0.000
+  offset=628: keys=0x0021 lx=0.000 ly=0.000
+  offset=637: keys=0x380A lx=0.000 ly=0.000
+  offset=638: keys=0x1338 lx=0.000 ly=0.000
+  offset=639: keys=0x9B13 lx=0.000 ly=0.000
+  offset=640: keys=0x3F9B lx=0.000 ly=0.000
+  offset=641: keys=0x003F lx=0.000 ly=0.000
+  offset=647: keys=0x0400 lx=0.000 ly=0.000
+  offset=648: keys=0x0004 lx=0.000 ly=0.000
+  offset=659: keys=0x1B00 lx=0.000 ly=0.000
+  offset=660: keys=0x001B lx=0.000 ly=0.000
+  offset=671: keys=0x3375 lx=0.000 ly=0.000
+  offset=672: keys=0xC033 lx=0.038 ly=0.000
+  offset=673: keys=0xCDC0 lx=0.000 ly=0.000
+  offset=674: keys=0xCCCD lx=0.000 ly=0.000
+  offset=675: keys=0x1CCC lx=0.000 ly=0.000
+  offset=676: keys=0x3D1C lx=0.000 ly=0.000
+  offset=677: keys=0x003D lx=0.000 ly=0.000
+  offset=679: keys=0x0A00 lx=0.000 ly=0.000
+  offset=680: keys=0x000A lx=0.000 ly=0.000
+  offset=691: keys=0x1B00 lx=0.000 ly=0.000
+  offset=692: keys=0x001B lx=0.000 ly=0.000
+

@@ -31,7 +31,7 @@ constexpr int kWireLowStateSize      = 820;  // confirmed empirically
 constexpr int kWireLowCmdSize        = 730;  // header(10)+motorCmd(20*33)+led(4*3)+wireless(40)+reserve(4)+crc(4)
 constexpr int kWireMotorStateOffset  = kWireHeaderSize + kWireImuSize;  // 63
 constexpr int kWireTailOffset        = kWireMotorStateOffset + 20 * kWireMotorStateSize;  // 703
-constexpr int kWireWirelessOffset    = kWireTailOffset + 20;  // footForce(8)+footForceEst(8)+tick(4) = 20
+constexpr int kWireWirelessOffset    = 206;  // footForce(8)+footForceEst(8)+tick(4) = 20
 
 /// Parsed robot state from UDP LowState packet
 struct RobotState {
