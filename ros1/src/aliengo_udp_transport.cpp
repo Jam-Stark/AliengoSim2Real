@@ -251,14 +251,17 @@ void AliengoUdpTransport::parseStatePacket(const uint8_t *buf, int len) {
     }
 
     // --- Tail (at offset 703) ---
-    if (kWireTailOffset + 20 + 40 <= len) {
+    if (kWireTailOffset + 20 <= len) {
         int toff = kWireTailOffset;
         for (int i = 0; i < 4; ++i)
             state.footForce[i] = readInt16LE(&buf[toff + i * 2]);
         // footForceEst at +8, tick at +16
         state.tick = readUint32LE(&buf[toff + 16]);
-        // wirelessRemote at +20
-        std::memcpy(state.wirelessRemote, &buf[toff + 20], 40);
+    }
+
+    // --- WirelessRemote (at absolute offset 206, confirmed by byte diff) ---
+    if (kWireWirelessOffset + 40 <= len) {
+        std::memcpy(state.wirelessRemote, &buf[kWireWirelessOffset], 40);
     }
 
     // Store
