@@ -21,6 +21,18 @@ AliengoDeployNode::AliengoDeployNode(
       force_gate_(kControlDt, force_gate_params) {
     gravity_ = SimpleTensor::wrap({0.0f, 0.0f, -1.0f});
 
+    // Read direct UDP param (default true for real robot)
+    nh_.param("use_direct_udp", use_direct_udp_, true);
+    if (use_direct_udp_) {
+        std::string robot_ip;
+        nh_.param<std::string>("robot_ip", robot_ip, "192.168.123.10");
+        int robot_port = 8007, local_port = 8091;
+        nh_.param("robot_port", robot_port, 8007);
+        nh_.param("local_port", local_port, 8091);
+        udp_transport_ = std::make_unique<aliengo::AliengoUdpTransport>(
+            robot_ip, robot_port, local_port);
+    }
+
     // Read gate_enabled and brake_enabled params
     nh_.param("gate_enabled", gate_enabled_, true);
     nh_.param("brake_enabled", brake_enabled_, true);
@@ -93,13 +105,21 @@ void AliengoDeployNode::start() {
     reset_policy_states();
     gait_clock_.reset();
 
+    // Start direct UDP transport if enabled
+    if (use_direct_udp_ && udp_transport_) {
+        udp_transport_->start();
+        ROS_INFO("Direct UDP transport started (bypassing ros_udp).");
+    }
+
     control_timer_ = nh_.createTimer(
         ros::Duration(kControlDt),
         &AliengoDeployNode::controlLoop, this);
     timer_started_ = true;
 
     ROS_INFO("Aliengo deploy node started. Control freq: %.0f Hz. "
-             "Waiting for low_state...", 1.0f / kControlDt);
+             "Mode: %s. Waiting for low_state...",
+             1.0f / kControlDt,
+             use_direct_udp_ ? "DIRECT_UDP" : "ROS_TOPIC");
     ROS_INFO("Press A on remote to enable policy. Press B to stop.");
 }
 
@@ -141,9 +161,33 @@ void AliengoDeployNode::lowStateCallback(
 // ============================================================
 
 void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
+    // ---- In UDP mode: read robot state + process remote directly ----
+    if (use_direct_udp_ && udp_transport_) {
+        if (udp_transport_->hasReceivedState()) {
+            readUdpStateIntoLowState();
+            has_low_state_.store(true, std::memory_order_relaxed);
+
+            // Process wireless remote from UDP state (replaces ROS callback)
+            aliengo::WirelessRemoteState remote_state;
+            {
+                std::lock_guard<std::mutex> lock(low_state_mutex_);
+                remote_state = remote_decoder_.decode(
+                    low_state_.wirelessRemote.data());
+            }
+            processRemoteButtons(remote_state);
+            setCommandFromRemote(remote_state.lx, remote_state.ly,
+                                 remote_state.rx);
+            prev_remote_state_ = remote_state;
+        }
+    }
+
     if (!has_low_state_.load(std::memory_order_relaxed)) {
-        zeroLowCmd();
-        low_cmd_pub_.publish(low_cmd_);
+        if (use_direct_udp_ && udp_transport_) {
+            udp_transport_->setZeroCommand();
+        } else {
+            zeroLowCmd();
+            low_cmd_pub_.publish(low_cmd_);
+        }
         return;
     }
 
@@ -162,8 +206,12 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
         gait_clock_.setStanding(true);
         gait_clock_.step();
 
-        zeroLowCmd();
-        low_cmd_pub_.publish(low_cmd_);
+        if (use_direct_udp_ && udp_transport_) {
+            udp_transport_->setZeroCommand();
+        } else {
+            zeroLowCmd();
+            low_cmd_pub_.publish(low_cmd_);
+        }
         return;
     }
 
@@ -174,8 +222,12 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
     if (static_cast<int>(act.size()) < kActionDim) {
         ROS_ERROR_THROTTLE(2.0,
             "Policy action dim is %zu, expected %d", act.size(), kActionDim);
-        zeroLowCmd();
-        low_cmd_pub_.publish(low_cmd_);
+        if (use_direct_udp_ && udp_transport_) {
+            udp_transport_->setZeroCommand();
+        } else {
+            zeroLowCmd();
+            low_cmd_pub_.publish(low_cmd_);
+        }
         return;
     }
 
@@ -237,13 +289,20 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
     logCsvRow(cmd, last_pred_est_, current_gait_mode_);
 
     // ---- Write motor commands ----
-    if (brake_active) {
-        // When braking, hold current default pose instead of policy output
-        zeroLowCmd();
+    if (use_direct_udp_ && udp_transport_) {
+        if (brake_active) {
+            udp_transport_->setZeroCommand();
+        } else {
+            writeActionToUdp(act);
+        }
     } else {
-        writeActionToCmd(act);
+        if (brake_active) {
+            zeroLowCmd();
+        } else {
+            writeActionToCmd(act);
+        }
+        low_cmd_pub_.publish(low_cmd_);
     }
-    low_cmd_pub_.publish(low_cmd_);
 }
 
 // ============================================================
@@ -544,7 +603,11 @@ void AliengoDeployNode::processRemoteButtons(
             low_cmd_.motorCmd[i].Kd = kDampingKd;
             low_cmd_.motorCmd[i].tau = 0.0f;
         }
-        low_cmd_pub_.publish(low_cmd_);
+        if (use_direct_udp_ && udp_transport_) {
+            udp_transport_->setZeroCommand();  // damping via zero Kp + small Kd
+        } else {
+            low_cmd_pub_.publish(low_cmd_);
+        }
         ROS_WARN("EMERGENCY DAMPING STOP (L2+B).");
     }
 
@@ -641,17 +704,35 @@ void AliengoDeployNode::writeStopPostureCmd() {
     }
 
     // Write target to low_cmd using joint map
-    for (int i = 0; i < kNumJoints; ++i) {
-        int sdk_idx = kJointMap[i];
-        low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
-        low_cmd_.motorCmd[sdk_idx].q = target[i];
-        low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
-        low_cmd_.motorCmd[sdk_idx].Kp = kStopKp;
-        low_cmd_.motorCmd[sdk_idx].Kd = kStopKd;
-        low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
+    if (use_direct_udp_ && udp_transport_) {
+        aliengo::MotorCommand cmds[20];
+        for (int i = 0; i < 20; ++i) {
+            cmds[i].mode = kMotorModeServo;
+            cmds[i].q = kPosStopF;
+            cmds[i].dq = kVelStopF;
+            cmds[i].Kp = 0.0f; cmds[i].Kd = 0.0f; cmds[i].tau = 0.0f;
+        }
+        for (int i = 0; i < kNumJoints; ++i) {
+            int sdk_idx = kJointMap[i];
+            cmds[sdk_idx].q = target[i];
+            cmds[sdk_idx].dq = 0.0f;
+            cmds[sdk_idx].Kp = kStopKp;
+            cmds[sdk_idx].Kd = kStopKd;
+            cmds[sdk_idx].tau = 0.0f;
+        }
+        udp_transport_->setCommand(cmds);
+    } else {
+        for (int i = 0; i < kNumJoints; ++i) {
+            int sdk_idx = kJointMap[i];
+            low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
+            low_cmd_.motorCmd[sdk_idx].q = target[i];
+            low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
+            low_cmd_.motorCmd[sdk_idx].Kp = kStopKp;
+            low_cmd_.motorCmd[sdk_idx].Kd = kStopKd;
+            low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
+        }
+        low_cmd_pub_.publish(low_cmd_);
     }
-
-    low_cmd_pub_.publish(low_cmd_);
 
     if (reached_hold) {
         ROS_INFO("Stop posture reached. Holding down pose.");
@@ -796,4 +877,75 @@ void AliengoDeployNode::logCsvRow(const std::vector<float> &cmd,
              << (bs.eligible ? 1 : 0) << "," << (bs.active ? 1 : 0) << ","
              << bs.hold_counter << "," << bs.est_force_x_n
              << std::endl;
+}
+
+// ============================================================
+// Direct UDP: Read RobotState into low_state_ for observation extraction
+// ============================================================
+
+void AliengoDeployNode::readUdpStateIntoLowState() {
+    if (!udp_transport_) return;
+    auto rs = udp_transport_->getState();
+    if (!rs.valid) return;
+
+    std::lock_guard<std::mutex> lock(low_state_mutex_);
+
+    // IMU
+    for (int i = 0; i < 4; ++i)
+        low_state_.imu.quaternion[i] = rs.imu_quaternion[i];
+    for (int i = 0; i < 3; ++i) {
+        low_state_.imu.gyroscope[i] = rs.imu_gyroscope[i];
+        low_state_.imu.accelerometer[i] = rs.imu_accelerometer[i];
+        low_state_.imu.rpy[i] = rs.imu_rpy[i];
+    }
+    low_state_.imu.temperature = rs.imu_temperature;
+
+    // Motors (20)
+    for (int i = 0; i < 20; ++i) {
+        low_state_.motorState[i].mode = rs.motors[i].mode;
+        low_state_.motorState[i].q = rs.motors[i].q;
+        low_state_.motorState[i].dq = rs.motors[i].dq;
+    }
+
+    // Foot force
+    for (int i = 0; i < 4; ++i)
+        low_state_.footForce[i] = rs.footForce[i];
+
+    // Wireless remote
+    for (int i = 0; i < 40; ++i)
+        low_state_.wirelessRemote[i] = rs.wirelessRemote[i];
+
+    low_state_.tick = rs.tick;
+}
+
+// ============================================================
+// Direct UDP: Write policy action to UDP transport
+// ============================================================
+
+void AliengoDeployNode::writeActionToUdp(const std::vector<float> &action) {
+    if (!udp_transport_) return;
+
+    aliengo::MotorCommand cmds[20];
+    // Initialize all to safe defaults
+    for (int i = 0; i < 20; ++i) {
+        cmds[i].mode = kMotorModeServo;
+        cmds[i].q = kPosStopF;
+        cmds[i].dq = kVelStopF;
+        cmds[i].tau = 0.0f;
+        cmds[i].Kp = 0.0f;
+        cmds[i].Kd = 0.0f;
+    }
+
+    // Write policy action for the 12 active joints
+    for (int i = 0; i < kNumJoints; ++i) {
+        int sdk_idx = kJointMap[i];
+        cmds[sdk_idx].mode = kMotorModeServo;
+        cmds[sdk_idx].q = action[i];
+        cmds[sdk_idx].dq = 0.0f;
+        cmds[sdk_idx].Kp = kKp[i];
+        cmds[sdk_idx].Kd = kKd[i];
+        cmds[sdk_idx].tau = 0.0f;
+    }
+
+    udp_transport_->setCommand(cmds);
 }

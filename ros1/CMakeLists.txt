@@ -108,6 +108,7 @@ add_definitions(-DDEFAULT_ALIENGO_POLICY_PATH="${DEFAULT_ALIENGO_POLICY_PATH}")
 add_executable(aliengo_deploy
   src/aliengo_deploy_main.cpp
   src/aliengo_deploy_node.cpp
+  src/aliengo_udp_transport.cpp
   src/gait_clock.cpp
   src/wireless_remote_decoder.cpp
   ${CPP_MANAGER_ENV_SRC}

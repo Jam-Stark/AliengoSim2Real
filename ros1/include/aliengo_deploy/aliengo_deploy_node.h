@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aliengo_deploy/aliengo_constants.h"
+#include "aliengo_deploy/aliengo_udp_transport.h"
 #include "aliengo_deploy/brake_command_gate.h"
 #include "aliengo_deploy/force_mode_switcher.h"
 #include "aliengo_deploy/gait_clock.h"
@@ -105,6 +106,13 @@ private:
     static float lerp(float a, float b, float t) {
         return (1.0f - t) * a + t * b;
     }
+
+    // ---- Direct UDP transport (bypasses ros_udp) ----
+    std::unique_ptr<aliengo::AliengoUdpTransport> udp_transport_;
+    bool use_direct_udp_ = true;        // default: direct UDP to robot
+
+    void readUdpStateIntoLowState();     // copy RobotState -> low_state_
+    void writeActionToUdp(const std::vector<float> &action);
 
     // ---- ROS handles ----
     ros::NodeHandle &nh_;
