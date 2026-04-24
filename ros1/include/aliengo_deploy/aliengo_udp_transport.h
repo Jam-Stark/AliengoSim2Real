@@ -21,18 +21,19 @@ namespace aliengo {
 //   - LowCmd:   730 bytes, motor struct = 33 bytes
 // ============================================================
 
-// Wire format constants (Aliengo v3.0.0)
+// Struct format constants (Aliengo v3.0.0 via TX2 relay)
+// The relay forwards raw struct bytes (sizeof=891/730), NOT compressed wire format
 constexpr int kWireHeaderSize        = 10;   // levelFlag+commVersion+robotID+SN+bandWidth
 constexpr int kWireImuSize           = 53;   // quat[4]+gyro[3]+acc[3]+rpy[3]+temp
-constexpr int kWireMotorStateSize    = 32;   // on-wire motor state block
-constexpr int kWireMotorCmdSize      = 33;   // mode+q+dq+tau+Kp+Kd+reserve[3]
+constexpr int kWireMotorStateSize    = 38;   // sizeof(MotorState) via relay
+constexpr int kWireMotorCmdSize      = 33;   // sizeof(MotorCmd)
 constexpr int kWireLedSize           = 3;
-constexpr int kWireLowStateSize      = 820;  // confirmed empirically
-constexpr int kWireLowCmdSize        = 730;  // header(10)+motorCmd(20*33)+led(4*3)+wireless(40)+reserve(4)+crc(4)
+constexpr int kWireLowStateSize      = 891;  // sizeof(LowState) via relay
+constexpr int kWireLowCmdSize        = 730;  // sizeof(LowCmd)
 constexpr int kWireMotorStateOffset  = kWireHeaderSize + kWireImuSize;  // 63
-constexpr int kWireTailOffset        = kWireMotorStateOffset + 20 * kWireMotorStateSize;  // 703
-// WirelessRemote at absolute offset 206 (NOT in tail -- confirmed by A-button byte diff)
-constexpr int kWireWirelessOffset    = 206;
+constexpr int kWireTailOffset        = kWireMotorStateOffset + 20 * kWireMotorStateSize;  // 823
+// WirelessRemote offset: tail + footForce(8) + footForceEst(8) + tick(4) = tail+20
+constexpr int kWireWirelessOffset    = kWireTailOffset + 20;  // 843
 
 /// Parsed robot state from UDP LowState packet
 struct RobotState {
