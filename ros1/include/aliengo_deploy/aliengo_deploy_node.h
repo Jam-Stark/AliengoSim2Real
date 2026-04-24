@@ -168,6 +168,12 @@ private:
     std::array<float, aliengo::kNumJoints> stop_start_pos_{};
     mutable std::mutex stop_mutex_;
 
+    // ---- Stand-up interpolation (before policy handover) ----
+    bool is_standing_up_ = false;
+    int stand_up_step_ = 0;
+    std::array<float, aliengo::kNumJoints> stand_up_start_pos_{};
+    void writeStandUpCmd();
+
     // ---- Helpers ----
     void publishForceEstimator(const std::vector<float> &pred_est);
     void logCsvRow(const std::vector<float> &cmd,

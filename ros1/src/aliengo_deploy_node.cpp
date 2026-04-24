@@ -196,6 +196,12 @@ void AliengoDeployNode::controlLoop(const ros::TimerEvent & /*event*/) {
         return;
     }
 
+    // ---- Stand-up interpolation phase ----
+    if (is_standing_up_) {
+        writeStandUpCmd();
+        return;
+    }
+
     if (is_stop_.load(std::memory_order_relaxed)) {
         bool has_stop_posture = false;
         {
@@ -580,18 +586,20 @@ void AliengoDeployNode::processRemoteButtons(
 
     auto edges = remote_decoder_.computeEdges(prev_remote_state_, state);
 
-    // A button: enable policy
+    // A button: start stand-up interpolation (then handover to policy)
     if (edges.a) {
         cancelStopSequence();
-        is_stop_.store(false, std::memory_order_relaxed);
-        gait_clock_.reset();
-        reset_observation_buffers();
-        reset_policy_states();
-        ROS_INFO("Policy ENABLED by remote A button.");
+        // Record current joint positions as interpolation start
+        stand_up_start_pos_ = getCurrentLegJointPos();
+        stand_up_step_ = 0;
+        is_standing_up_ = true;
+        is_stop_.store(true, std::memory_order_relaxed);  // keep stop until handover
+        ROS_INFO("Stand-up started. Will handover to policy after reaching default pose.");
     }
 
-    // B button: controlled stop
+    // B button: controlled stop + cancel stand-up
     if (edges.b) {
+        is_standing_up_ = false;
         startStopSequence();
         ROS_WARN("Controlled STOP requested by remote B button.");
     }
@@ -953,4 +961,108 @@ void AliengoDeployNode::writeActionToUdp(const std::vector<float> &action) {
     }
 
     udp_transport_->setCommand(cmds);
+}
+
+// ============================================================
+// Stand-Up Interpolation → Policy Handover
+// ============================================================
+
+void AliengoDeployNode::writeStandUpCmd() {
+    const int total_interp = kStandUpSteps;
+    const int total_hold = kStandUpHoldSteps;
+    const int total_steps = total_interp + total_hold;
+
+    ++stand_up_step_;
+
+    if (stand_up_step_ <= total_interp) {
+        // ---- Phase 1: Interpolate from current to default pose ----
+        float alpha = std::min(1.0f,
+            static_cast<float>(stand_up_step_) / static_cast<float>(total_interp));
+        // Smooth alpha (cubic ease-in-out)
+        float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
+
+        // Kp/Kd ramp from gentle start to policy target
+        float kp_alpha = smooth;
+        float kd_alpha = smooth;
+
+        std::array<float, kNumJoints> target;
+        for (int i = 0; i < kNumJoints; ++i) {
+            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
+        }
+
+        if (use_direct_udp_ && udp_transport_) {
+            aliengo::MotorCommand cmds[20];
+            for (int i = 0; i < 20; ++i) {
+                cmds[i].mode = kMotorModeServo;
+                cmds[i].q = kPosStopF; cmds[i].dq = kVelStopF;
+                cmds[i].Kp = 0; cmds[i].Kd = 0; cmds[i].tau = 0;
+            }
+            for (int i = 0; i < kNumJoints; ++i) {
+                int sdk_idx = kJointMap[i];
+                cmds[sdk_idx].q = target[i];
+                cmds[sdk_idx].dq = 0.0f;
+                cmds[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_alpha);
+                cmds[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kd_alpha);
+                cmds[sdk_idx].tau = 0.0f;
+            }
+            udp_transport_->setCommand(cmds);
+        } else {
+            for (int i = 0; i < kNumJoints; ++i) {
+                int sdk_idx = kJointMap[i];
+                low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
+                low_cmd_.motorCmd[sdk_idx].q = target[i];
+                low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
+                low_cmd_.motorCmd[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_alpha);
+                low_cmd_.motorCmd[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kd_alpha);
+                low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
+            }
+            low_cmd_pub_.publish(low_cmd_);
+        }
+
+        if (stand_up_step_ % 25 == 0) {
+            ROS_INFO("Stand-up: step %d/%d, alpha=%.2f, Kp=%.1f",
+                     stand_up_step_, total_interp, smooth,
+                     lerp(kStandUpKpStart, kKp[0], kp_alpha));
+        }
+
+    } else if (stand_up_step_ <= total_steps) {
+        // ---- Phase 2: Hold at default pose with full Kp/Kd ----
+        if (use_direct_udp_ && udp_transport_) {
+            aliengo::MotorCommand cmds[20];
+            for (int i = 0; i < 20; ++i) {
+                cmds[i].mode = kMotorModeServo;
+                cmds[i].q = kPosStopF; cmds[i].dq = kVelStopF;
+                cmds[i].Kp = 0; cmds[i].Kd = 0; cmds[i].tau = 0;
+            }
+            for (int i = 0; i < kNumJoints; ++i) {
+                int sdk_idx = kJointMap[i];
+                cmds[sdk_idx].q = kDefaultJointPos[i];
+                cmds[sdk_idx].dq = 0.0f;
+                cmds[sdk_idx].Kp = kKp[i];
+                cmds[sdk_idx].Kd = kKd[i];
+                cmds[sdk_idx].tau = 0.0f;
+            }
+            udp_transport_->setCommand(cmds);
+        } else {
+            for (int i = 0; i < kNumJoints; ++i) {
+                int sdk_idx = kJointMap[i];
+                low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
+                low_cmd_.motorCmd[sdk_idx].q = kDefaultJointPos[i];
+                low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
+                low_cmd_.motorCmd[sdk_idx].Kp = kKp[i];
+                low_cmd_.motorCmd[sdk_idx].Kd = kKd[i];
+                low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
+            }
+            low_cmd_pub_.publish(low_cmd_);
+        }
+
+    } else {
+        // ---- Phase 3: Handover to policy ----
+        is_standing_up_ = false;
+        is_stop_.store(false, std::memory_order_relaxed);
+        gait_clock_.reset();
+        reset_observation_buffers();
+        reset_policy_states();
+        ROS_INFO("Stand-up complete. Policy ENABLED — handover with matched Kp/Kd.");
+    }
 }

@@ -169,6 +169,12 @@ constexpr float kStopKd = 5.0f;
 constexpr int kStopStepsToStand = 50;    // 1.0 s at 50 Hz
 constexpr int kStopStepsToDown = 90;     // 1.8 s at 50 Hz
 
+// Stand-up interpolation (before policy handover)
+constexpr int kStandUpSteps = 100;      // 2.0 s at 50 Hz
+constexpr int kStandUpHoldSteps = 25;   // 0.5 s hold at default pose before handover
+constexpr float kStandUpKpStart = 5.0f; // gentle initial Kp
+constexpr float kStandUpKdStart = 0.5f; // gentle initial Kd
+
 // Damping mode Kd for emergency stop
 constexpr float kDampingKd = 3.0f;
 
