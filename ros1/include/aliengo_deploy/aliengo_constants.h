@@ -94,17 +94,17 @@ constexpr float kActionScaleVec[kNumJoints] = {
 // hip/thigh: Kp=60, Kd=2.45  |  calf: Kp=96, Kd=4.9
 // These are MuJoCo-exported values; may need tuning for real robot
 // ------------------------------------------------------------
-constexpr float kKp[kNumJoints] = {
-    60.0f, 60.0f, 60.0f, 60.0f,    // hip
-    60.0f, 60.0f, 60.0f, 60.0f,    // thigh
-    96.0f, 96.0f, 96.0f, 96.0f,    // calf
+constexpr float kKp[12] = {
+    20.0f, 20.0f, 20.0f, 20.0f,    // hip
+    20.0f, 20.0f, 20.0f, 20.0f,    // thigh
+    30.0f, 30.0f, 30.0f, 30.0f,    // calf
+};
+constexpr float kKd[12] = {
+    1.0f, 1.0f, 1.0f, 1.0f,        // hip
+    1.0f, 1.0f, 1.0f, 1.0f,        // thigh
+    2.0f, 2.0f, 2.0f, 2.0f,        // calf
 };
 
-constexpr float kKd[kNumJoints] = {
-    2.45f, 2.45f, 2.45f, 2.45f,    // hip
-    2.45f, 2.45f, 2.45f, 2.45f,    // thigh
-    4.90f, 4.90f, 4.90f, 4.90f,    // calf
-};
 
 // ------------------------------------------------------------
 // Observation scales (applied in obs extraction, NOT noise)
