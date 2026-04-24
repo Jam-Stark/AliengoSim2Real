@@ -968,101 +968,107 @@ void AliengoDeployNode::writeActionToUdp(const std::vector<float> &action) {
 // ============================================================
 
 void AliengoDeployNode::writeStandUpCmd() {
-    const int total_interp = kStandUpSteps;
-    const int total_hold = kStandUpHoldSteps;
-    const int total_steps = total_interp + total_hold;
+    // Two-stage stand-up:
+    //   Stage 1: extend CALFS first (widen base), keep hips/thighs at start
+    //   Stage 2: raise THIGHS + adjust HIPS (lift body)
+    //   Hold: maintain default pose
+    //   Handover: enable policy
+    //
+    // Joint indices in policy order:
+    //   [0-3] hip, [4-7] thigh, [8-11] calf
+
+    const int s1 = kStandUpStage1Steps;
+    const int s2 = kStandUpStage2Steps;
+    const int hold = kStandUpHoldSteps;
+    const int total = s1 + s2 + hold;
 
     ++stand_up_step_;
 
-    if (stand_up_step_ <= total_interp) {
-        // ---- Phase 1: Interpolate from current to default pose ----
+    std::array<float, kNumJoints> target;
+    float kp_factor = 0.0f;
+
+    if (stand_up_step_ <= s1) {
+        // ---- Stage 1: Extend calfs, keep hips/thighs at start ----
         float alpha = std::min(1.0f,
-            static_cast<float>(stand_up_step_) / static_cast<float>(total_interp));
-        // Smooth alpha (cubic ease-in-out)
+            static_cast<float>(stand_up_step_) / static_cast<float>(s1));
         float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
+        kp_factor = smooth * 0.5f;  // ramp to ~50% of target Kp
 
-        // Kp/Kd ramp from gentle start to policy target
-        float kp_alpha = smooth;
-        float kd_alpha = smooth;
-
-        std::array<float, kNumJoints> target;
-        for (int i = 0; i < kNumJoints; ++i) {
+        for (int i = 0; i < 4; ++i)   // hip [0-3]: stay at start
+            target[i] = stand_up_start_pos_[i];
+        for (int i = 4; i < 8; ++i)   // thigh [4-7]: barely move (10%)
+            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth * 0.1f);
+        for (int i = 8; i < 12; ++i)  // calf [8-11]: full interpolation
             target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
-        }
 
-        if (use_direct_udp_ && udp_transport_) {
-            aliengo::MotorCommand cmds[20];
-            for (int i = 0; i < 20; ++i) {
-                cmds[i].mode = kMotorModeServo;
-                cmds[i].q = kPosStopF; cmds[i].dq = kVelStopF;
-                cmds[i].Kp = 0; cmds[i].Kd = 0; cmds[i].tau = 0;
-            }
-            for (int i = 0; i < kNumJoints; ++i) {
-                int sdk_idx = kJointMap[i];
-                cmds[sdk_idx].q = target[i];
-                cmds[sdk_idx].dq = 0.0f;
-                cmds[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_alpha);
-                cmds[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kd_alpha);
-                cmds[sdk_idx].tau = 0.0f;
-            }
-            udp_transport_->setCommand(cmds);
-        } else {
-            for (int i = 0; i < kNumJoints; ++i) {
-                int sdk_idx = kJointMap[i];
-                low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
-                low_cmd_.motorCmd[sdk_idx].q = target[i];
-                low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
-                low_cmd_.motorCmd[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_alpha);
-                low_cmd_.motorCmd[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kd_alpha);
-                low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
-            }
-            low_cmd_pub_.publish(low_cmd_);
-        }
+        if (stand_up_step_ % 50 == 0)
+            ROS_INFO("Stand-up stage 1: step %d/%d, calf_alpha=%.2f",
+                     stand_up_step_, s1, smooth);
 
-        if (stand_up_step_ % 25 == 0) {
-            ROS_INFO("Stand-up: step %d/%d, alpha=%.2f, Kp=%.1f",
-                     stand_up_step_, total_interp, smooth,
-                     lerp(kStandUpKpStart, kKp[0], kp_alpha));
-        }
+    } else if (stand_up_step_ <= s1 + s2) {
+        // ---- Stage 2: Raise thighs + adjust hips ----
+        int step_in_s2 = stand_up_step_ - s1;
+        float alpha = std::min(1.0f,
+            static_cast<float>(step_in_s2) / static_cast<float>(s2));
+        float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
+        kp_factor = 0.5f + smooth * 0.5f;  // ramp from 50% to 100%
 
-    } else if (stand_up_step_ <= total_steps) {
-        // ---- Phase 2: Hold at default pose with full Kp/Kd ----
-        if (use_direct_udp_ && udp_transport_) {
-            aliengo::MotorCommand cmds[20];
-            for (int i = 0; i < 20; ++i) {
-                cmds[i].mode = kMotorModeServo;
-                cmds[i].q = kPosStopF; cmds[i].dq = kVelStopF;
-                cmds[i].Kp = 0; cmds[i].Kd = 0; cmds[i].tau = 0;
-            }
-            for (int i = 0; i < kNumJoints; ++i) {
-                int sdk_idx = kJointMap[i];
-                cmds[sdk_idx].q = kDefaultJointPos[i];
-                cmds[sdk_idx].dq = 0.0f;
-                cmds[sdk_idx].Kp = kKp[i];
-                cmds[sdk_idx].Kd = kKd[i];
-                cmds[sdk_idx].tau = 0.0f;
-            }
-            udp_transport_->setCommand(cmds);
-        } else {
-            for (int i = 0; i < kNumJoints; ++i) {
-                int sdk_idx = kJointMap[i];
-                low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
-                low_cmd_.motorCmd[sdk_idx].q = kDefaultJointPos[i];
-                low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
-                low_cmd_.motorCmd[sdk_idx].Kp = kKp[i];
-                low_cmd_.motorCmd[sdk_idx].Kd = kKd[i];
-                low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
-            }
-            low_cmd_pub_.publish(low_cmd_);
-        }
+        for (int i = 0; i < 4; ++i)   // hip [0-3]: interpolate to target
+            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
+        for (int i = 4; i < 8; ++i)   // thigh [4-7]: full interpolation
+            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i],
+                             0.1f + smooth * 0.9f);  // from 10% to 100%
+        for (int i = 8; i < 12; ++i)  // calf [8-11]: already at target
+            target[i] = kDefaultJointPos[i];
+
+        if (step_in_s2 % 50 == 0)
+            ROS_INFO("Stand-up stage 2: step %d/%d, thigh_alpha=%.2f",
+                     step_in_s2, s2, smooth);
+
+    } else if (stand_up_step_ <= total) {
+        // ---- Hold: full default pose with full Kp ----
+        for (int i = 0; i < kNumJoints; ++i)
+            target[i] = kDefaultJointPos[i];
+        kp_factor = 1.0f;
 
     } else {
-        // ---- Phase 3: Handover to policy ----
+        // ---- Handover to policy ----
         is_standing_up_ = false;
         is_stop_.store(false, std::memory_order_relaxed);
         gait_clock_.reset();
         reset_observation_buffers();
         reset_policy_states();
-        ROS_INFO("Stand-up complete. Policy ENABLED — handover with matched Kp/Kd.");
+        ROS_INFO("Stand-up complete. Policy ENABLED.");
+        return;
+    }
+
+    // ---- Write command (common for all stages) ----
+    if (use_direct_udp_ && udp_transport_) {
+        aliengo::MotorCommand cmds[20];
+        for (int i = 0; i < 20; ++i) {
+            cmds[i].mode = kMotorModeServo;
+            cmds[i].q = kPosStopF; cmds[i].dq = kVelStopF;
+            cmds[i].Kp = 0; cmds[i].Kd = 0; cmds[i].tau = 0;
+        }
+        for (int i = 0; i < kNumJoints; ++i) {
+            int sdk_idx = kJointMap[i];
+            cmds[sdk_idx].q = target[i];
+            cmds[sdk_idx].dq = 0.0f;
+            cmds[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_factor);
+            cmds[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kp_factor);
+            cmds[sdk_idx].tau = 0.0f;
+        }
+        udp_transport_->setCommand(cmds);
+    } else {
+        for (int i = 0; i < kNumJoints; ++i) {
+            int sdk_idx = kJointMap[i];
+            low_cmd_.motorCmd[sdk_idx].mode = kMotorModeServo;
+            low_cmd_.motorCmd[sdk_idx].q = target[i];
+            low_cmd_.motorCmd[sdk_idx].dq = 0.0f;
+            low_cmd_.motorCmd[sdk_idx].Kp = lerp(kStandUpKpStart, kKp[i], kp_factor);
+            low_cmd_.motorCmd[sdk_idx].Kd = lerp(kStandUpKdStart, kKd[i], kp_factor);
+            low_cmd_.motorCmd[sdk_idx].tau = 0.0f;
+        }
+        low_cmd_pub_.publish(low_cmd_);
     }
 }

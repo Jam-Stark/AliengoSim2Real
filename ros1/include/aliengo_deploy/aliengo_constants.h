@@ -171,11 +171,14 @@ constexpr float kStopKd = 5.0f;
 constexpr int kStopStepsToStand = 50;    // 1.0 s at 50 Hz
 constexpr int kStopStepsToDown = 90;     // 1.8 s at 50 Hz
 
-// Stand-up interpolation (before policy handover)
-constexpr int kStandUpSteps = 200;      // 4.0 s at 50 Hz (slower = safer)
-constexpr int kStandUpHoldSteps = 50;   // 1.0 s hold at default pose before handover
-constexpr float kStandUpKpStart = 2.0f; // very gentle initial Kp
-constexpr float kStandUpKdStart = 0.3f; // very gentle initial Kd
+// Stand-up interpolation — TWO STAGES (before policy handover)
+// Stage 1: extend calfs first (widen base of support)
+// Stage 2: raise thighs (lift body)
+constexpr int kStandUpStage1Steps = 150;   // 3.0 s: extend calfs
+constexpr int kStandUpStage2Steps = 150;   // 3.0 s: raise thighs + fine-tune hips
+constexpr int kStandUpHoldSteps = 50;      // 1.0 s hold at default pose
+constexpr float kStandUpKpStart = 3.0f;    // gentle initial Kp
+constexpr float kStandUpKdStart = 0.5f;    // gentle initial Kd
 
 // Damping mode Kd for emergency stop
 constexpr float kDampingKd = 3.0f;
