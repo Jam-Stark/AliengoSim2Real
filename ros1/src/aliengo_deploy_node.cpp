@@ -21,23 +21,28 @@ AliengoDeployNode::AliengoDeployNode(
       force_gate_(kControlDt, force_gate_params) {
     gravity_ = SimpleTensor::wrap({0.0f, 0.0f, -1.0f});
 
+    // Use PRIVATE namespace for all params (launch <param> inside <node>)
+    ros::NodeHandle pnh("~");
+
     // Read direct UDP param (default true for real robot)
-    nh_.param("use_direct_udp", use_direct_udp_, true);
+    pnh.param("use_direct_udp", use_direct_udp_, true);
     if (use_direct_udp_) {
         std::string robot_ip;
-        nh_.param<std::string>("robot_ip", robot_ip, "192.168.123.10");
-        int robot_port = 8007, local_port = 8091;
-        nh_.param("robot_port", robot_port, 8007);
-        nh_.param("local_port", local_port, 8091);
+        pnh.param<std::string>("robot_ip", robot_ip, "192.168.123.12");
+        int robot_port = 9000, local_port = 8091;
+        pnh.param("robot_port", robot_port, 9000);
+        pnh.param("local_port", local_port, 8091);
+        ROS_INFO("UDP transport target: %s:%d (local %d)",
+                 robot_ip.c_str(), robot_port, local_port);
         udp_transport_ = std::make_unique<aliengo::AliengoUdpTransport>(
             robot_ip, robot_port, local_port);
     }
 
     // Read gate_enabled and brake_enabled params
-    nh_.param("gate_enabled", gate_enabled_, true);
-    nh_.param("brake_enabled", brake_enabled_, true);
+    pnh.param("gate_enabled", gate_enabled_, true);
+    pnh.param("brake_enabled", brake_enabled_, true);
     std::string gate_preset_name;
-    nh_.param<std::string>("gate_preset", gate_preset_name, "v2");
+    pnh.param<std::string>("gate_preset", gate_preset_name, "v2");
     aliengo::ForceGateParams ignored_params;
     aliengo::ForceGatePreset preset_tmp;
     if (aliengo::forceGatePresetFromName(gate_preset_name, preset_tmp, ignored_params)) {
@@ -45,7 +50,7 @@ AliengoDeployNode::AliengoDeployNode(
     }
     // Read CSV logging param
     std::string csv_path;
-    nh_.param<std::string>("force_log_csv", csv_path, "");
+    pnh.param<std::string>("force_log_csv", csv_path, "");
     if (!csv_path.empty()) {
         initCsvLog(csv_path);
     }
