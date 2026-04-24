@@ -95,14 +95,14 @@ constexpr float kActionScaleVec[kNumJoints] = {
 // These are MuJoCo-exported values; may need tuning for real robot
 // ------------------------------------------------------------
 constexpr float kKp[12] = {
-    20.0f, 20.0f, 20.0f, 20.0f,    // hip
-    10.0f, 10.0f, 10.0f, 10.0f,    // thigh
-    15.0f, 15.0f, 15.0f, 15.0f,    // calf
+    30.0f, 30.0f, 30.0f, 30.0f,    // hip
+    30.0f, 30.0f, 30.0f, 30.0f,    // thigh
+    45.0f, 45.0f, 45.0f, 45.0f,    // calf
 };
 constexpr float kKd[12] = {
     1.5f, 1.5f, 1.5f, 1.5f,        // hip
     1.5f, 1.5f, 1.5f, 1.5f,        // thigh
-    2.5f, 2.5f, 2.5f, 2.5f,        // calf
+    3.0f, 3.0f, 3.0f, 3.0f,        // calf
 };
 
 
