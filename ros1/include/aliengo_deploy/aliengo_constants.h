@@ -94,16 +94,18 @@ constexpr float kActionScaleVec[kNumJoints] = {
 // hip/thigh: Kp=60, Kd=2.45  |  calf: Kp=96, Kd=4.9
 // These are MuJoCo-exported values; may need tuning for real robot
 // ------------------------------------------------------------
+// 当前值（MuJoCo 导出，对实机来说偏大）
 constexpr float kKp[12] = {
-    30.0f, 30.0f, 30.0f, 30.0f,    // hip
-    30.0f, 30.0f, 30.0f, 30.0f,    // thigh
-    45.0f, 45.0f, 45.0f, 45.0f,    // calf
+    60.0f, 60.0f, 60.0f, 60.0f,    // hip
+    60.0f, 60.0f, 60.0f, 60.0f,    // thigh
+    96.0f, 96.0f, 96.0f, 96.0f,    // calf
 };
 constexpr float kKd[12] = {
-    1.5f, 1.5f, 1.5f, 1.5f,        // hip
-    1.5f, 1.5f, 1.5f, 1.5f,        // thigh
-    3.0f, 3.0f, 3.0f, 3.0f,        // calf
+    2.45f, 2.45f, 2.45f, 2.45f,    // hip
+    2.45f, 2.45f, 2.45f, 2.45f,    // thigh
+    4.90f, 4.90f, 4.90f, 4.90f,    // calf
 };
+
 
 
 
