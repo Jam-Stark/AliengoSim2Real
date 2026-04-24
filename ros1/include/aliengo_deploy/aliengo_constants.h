@@ -94,7 +94,7 @@ constexpr float kActionScaleVec[kNumJoints] = {
 // hip/thigh: Kp=60, Kd=2.45  |  calf: Kp=96, Kd=4.9
 // These are MuJoCo-exported values; may need tuning for real robot
 // ------------------------------------------------------------
-// 当前值（MuJoCo 导出，对实机来说偏大）
+
 constexpr float kKp[12] = {
     60.0f, 60.0f, 60.0f, 60.0f,    // hip
     60.0f, 60.0f, 60.0f, 60.0f,    // thigh
@@ -172,10 +172,10 @@ constexpr int kStopStepsToStand = 50;    // 1.0 s at 50 Hz
 constexpr int kStopStepsToDown = 90;     // 1.8 s at 50 Hz
 
 // Stand-up interpolation (before policy handover)
-constexpr int kStandUpSteps = 100;      // 2.0 s at 50 Hz
-constexpr int kStandUpHoldSteps = 25;   // 0.5 s hold at default pose before handover
-constexpr float kStandUpKpStart = 5.0f; // gentle initial Kp
-constexpr float kStandUpKdStart = 0.5f; // gentle initial Kd
+constexpr int kStandUpSteps = 200;      // 4.0 s at 50 Hz (slower = safer)
+constexpr int kStandUpHoldSteps = 50;   // 1.0 s hold at default pose before handover
+constexpr float kStandUpKpStart = 2.0f; // very gentle initial Kp
+constexpr float kStandUpKdStart = 0.3f; // very gentle initial Kd
 
 // Damping mode Kd for emergency stop
 constexpr float kDampingKd = 3.0f;
