@@ -37,21 +37,21 @@
 docker stop noetic-gpu
 
 # 提交容器当前状态为新镜像
-docker commit noetic-gpu noetic-gpu:aliengo-deploy
+docker commit noetic-gpu noetic-cpu:aliengo-deploy
 
 # 验证
-docker images | grep noetic-gpu
-# 应看到 noetic-gpu:aliengo-deploy，大小约 8-12 GB
+docker images | grep noetic-cpu
+# 应看到 noetic-cpu:aliengo-deploy，大小约 8-12 GB
 ```
 
 ### 1.2 导出镜像为 tar 文件
 
 ```bash
 # 压缩导出（约 3-5 GB）
-docker save noetic-gpu:aliengo-deploy | gzip > noetic-gpu-aliengo-deploy.tar.gz
+docker save noetic-cpu:aliengo-deploy | gzip > noetic-cpu-aliengo-deploy.tar.gz
 
 # 如果磁盘空间紧张或想更快，不压缩:
-# docker save noetic-gpu:aliengo-deploy -o noetic-gpu-aliengo-deploy.tar
+# docker save noetic-cpu:aliengo-deploy -o noetic-cpu-aliengo-deploy.tar
 ```
 
 ### 1.3 备份宿主机上的源码和数据
@@ -76,7 +76,7 @@ tar czf workspace-backup.tar.gz \
 
 | 文件 | 大小估计 | 必需？ |
 |------|----------|:------:|
-| `noetic-gpu-aliengo-deploy.tar.gz` | 3-5 GB | ✅ |
+| `noetic-cpu-aliengo-deploy.tar.gz` | 3-5 GB | ✅ |
 | 源码（git 仓库或 `workspace-backup.tar.gz`） | 200-500 MB | ✅ |
 | TX2 上的 relay 程序 | 已在 TX2 上，不需要迁移 | — |
 
@@ -161,7 +161,7 @@ tar xzf /path/to/workspace-backup.tar.gz
 ### 3.1 导入镜像
 
 ```bash
-docker load < /path/to/noetic-gpu-aliengo-deploy.tar.gz
+docker load < /path/to/noetic-cpu-aliengo-deploy.tar.gz
 
 # 验证
 docker images | grep noetic-gpu
