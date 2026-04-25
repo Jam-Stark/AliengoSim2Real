@@ -1,319 +1,186 @@
 # Aliengo ROS1 RL Policy Deployment
 
-ROS1 (Noetic) catkin 包，用于在 Unitree Aliengo 四足机器人上部署 RL 运动策略。
-
-## 概述
-
-此包将训练好的 TorchScript 策略（12 维关节位置控制器）通过 ROS1 话题
-与 Unitree 官方 `unitree_ros_to_real` 的 `ros_udp` 桥接节点通信，
-实现 50 Hz 低层闭环控制。
+在 Unitree Aliengo (v3.0.0 固件) 上部署 RL 运动策略的完整框架。
 
 ## 架构
 
 ```
-ros_udp bridge  <-- UDP -->  Aliengo Robot (192.168.123.10)
-    │
-    ├── pub: low_state (unitree_legged_msgs/LowState)
-    └── sub: low_cmd   (unitree_legged_msgs/LowCmd)
-    │
-aliengo_deploy node
-    ├── 订阅 low_state → 提取 IMU / 关节观测
-    ├── 运行 policy inference (50 Hz)
-    ├── standing / walking gate
-    ├── brake gate
-    ├── 发布 /force_estimator
-    ├── 记录 CSV 日志
-    └── 发布 low_cmd → 关节位置 PD 指令
+macOS (开发机)          ROG Docker (x86_64)         TX2 (ARM64)            Controller
+编写代码 → rsync →     aliengo_deploy node    →    aliengo_relay     →    192.168.123.10
+                       (policy inference       ←    (SDK v3.0.0       ←    (电机控制器)
+                        + standing/walking gate      UDP 转发)
+                        + brake gate
+                        + force estimator
+                        + CSV logging
+                        + stand-up 前段)
+
+通信协议:
+  Docker ──UDP 730B LowCmd──→ TX2:9000 (relay)
+  Docker ←─UDP 891B LowState─← TX2:9000 (relay)
+  TX2    ──SDK UDP──→ 192.168.123.10:8007
+  TX2    ←─SDK UDP──← 192.168.123.10:8007
 ```
+
+**为什么需要 TX2 relay？** Aliengo v3.0.0 的运动控制器只接受来自板载 PC (TX2/MiniPC) 的电机命令，外部 PC 的 UDP 命令会被忽略（但状态数据可以收到）。relay 在 TX2 上用原生 SDK 转发命令。
 
 ## 文件结构
 
 ```
 ros1/
-├── CMakeLists.txt                     # catkin 构建配置
-├── package.xml                        # catkin 包声明
-├── README.md                          # 本文件
-├── docker/
-│   └── Dockerfile                     # Noetic + CUDA + LibTorch 镜像
-├── launch/
-│   └── aliengo_deploy.launch          # 同时启动 ros_udp + deploy 节点
+├── CMakeLists.txt
+├── package.xml
+├── README.md                              # 本文件
+├── docker/Dockerfile                      # Noetic + LibTorch CPU Docker 镜像
+├── tx2_relay/
+│   └── aliengo_relay.cpp                  # TX2 上运行的 SDK UDP 中继
 ├── include/aliengo_deploy/
-│   ├── aliengo_constants.h            # 关节映射/默认位姿/PD增益/obs规格
-│   ├── brake_command_gate.h           # brake gate
-│   ├── aliengo_deploy_node.h          # 主节点头文件
-│   ├── force_mode_switcher.h          # standing / walking gate
-│   ├── gait_clock.h                   # 步态相位时钟
-│   └── wireless_remote_decoder.h      # 遥控器字节解码器
+│   ├── aliengo_constants.h                # 关节映射/默认位姿/PD增益/obs规格
+│   ├── aliengo_deploy_node.h              # 主节点
+│   ├── aliengo_udp_transport.h            # 直接 UDP 通信层
+│   ├── brake_command_gate.h               # 刹车保护门
+│   ├── force_mode_switcher.h              # standing/walking gate (v2/v2_robust)
+│   ├── gait_clock.h                       # 步态相位时钟
+│   └── wireless_remote_decoder.h          # 遥控器字节解码
 ├── src/
-│   ├── aliengo_deploy_main.cpp        # main 入口
-│   ├── aliengo_deploy_node.cpp        # 主节点实现
-│   ├── gait_clock.cpp                 # (header-only placeholder)
-│   ├── wireless_remote_decoder.cpp    # 遥控器解码实现
-│   └── test/                          # fake low_state + monitor 测试节点
+│   ├── aliengo_deploy_main.cpp            # main 入口
+│   ├── aliengo_deploy_node.cpp            # 主节点实现
+│   ├── aliengo_udp_transport.cpp          # UDP 收发实现
+│   ├── gait_clock.cpp
+│   ├── wireless_remote_decoder.cpp
+│   └── test/                              # 无实机接口级测试
+│       ├── fake_low_state_publisher.cpp
+│       └── low_cmd_monitor.cpp
 ├── launch/
-│   ├── aliengo_deploy.launch          # 实机部署 launch
-│   └── test_deploy.launch             # 无实机接口级测试 launch
+│   ├── aliengo_deploy.launch              # 实机部署
+│   └── test_deploy.launch                 # 无实机测试
 └── scripts/
-    ├── setup_and_build.sh             # 完整搭建步骤参考
-    └── start_aliengo_deploy.sh        # 一键启动脚本
+    ├── setup_and_build.sh
+    └── start_aliengo_deploy.sh
 ```
 
-## 依赖
-
-- ROS1 Noetic
-- `unitree_legged_msgs` (来自 `unitree_ros_to_real`)
-- `unitree_legged_real` (来自 `unitree_ros_to_real`，提供 `ros_udp`)
-- `unitree_legged_sdk` (Aliengo 固件对应版本的 SDK)
-- LibTorch ≥ 2.0 CPU 版（或 ONNX Runtime，通过 `USE_ONNX=ON` 切换）
-- OpenCV, Eigen3, jsoncpp, libudev
-
-## 环境搭建 (远程机 Docker)
+## 快速开始
 
 ### 前提
 
-- 已按 `scripts/ros1ENV.MD` 构建了 `noetic-gpu:2026-04` Docker 镜像
-- 远程机宿主机 `~/Downloads/WorkSpace/` 目录下有以下仓库：
+1. ROG 笔记本有 Docker + `noetic-gpu:2026-04` 镜像
+2. Aliengo TX2 可 SSH 访问 (unitree@192.168.123.12)
+3. TX2 上已编译 `aliengo_relay`（见下方"TX2 Relay 搭建"）
+4. `policy.pt` 放在 `policy/aliengo/` 目录
 
-```
-~/Downloads/WorkSpace/
-├── AliengoSim2Real/        ← 本仓库（含 ros1/ 代码和 policy/）
-│   ├── ros1/
-│   ├── policy/aliengo/     ← 放 policy.pt
-│   └── utils/              ← 推理核心 (cpp_manager_env 等)
-└── unitree_ros_to_real/    ← Unitree 官方 ROS1 包
-    ├── unitree_legged_msgs/
-    ├── unitree_legged_real/
-    └── unitree_legged_sdk/
-```
-
-Docker 启动时 `-v $HOME/Downloads/WorkSpace:/work` 映射后，
-容器内路径对应为 `/work/AliengoSim2Real/` 和 `/work/unitree_ros_to_real/`。
-
-### 步骤 1: 宿主机 — 启动容器
+### 步骤 1: TX2 上启动 relay
 
 ```bash
-docker run -it --name noetic-gpu --gpus all --network host \
-  -v $HOME/Downloads/WorkSpace:/work \
-  noetic-gpu:2026-04
+ssh unitree@192.168.123.12
+cd /home/unitree/unitree_legged_sdk
+sudo env LD_LIBRARY_PATH=lib ./aliengo_relay
 ```
 
-> 不加 `--rm`，这样容器内安装的 LibTorch 不会丢失。后续用 `docker start -i noetic-gpu` 重新进入。
-
-### 步骤 2: 容器内 — 安装 LibTorch CPU 版（只需做一次）
+### 步骤 2: Docker 中启动部署节点
 
 ```bash
-cd /opt
-wget -q "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip" -O libtorch.zip
-unzip -q libtorch.zip && rm libtorch.zip
-echo 'export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"' >> /root/.bashrc
-echo 'export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"' >> /root/.bashrc
-source /root/.bashrc
-```
-
-### 步骤 3: 宿主机 — 初始化 unitree_legged_sdk
-
-在**宿主机**终端执行（避免容器内 git safe.directory 问题）：
-
-```bash
-cd ~/Downloads/WorkSpace/unitree_ros_to_real
-git submodule update --init --recursive
-# 如果失败：
-#   rm -rf unitree_legged_sdk
-#   git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
-```
-
-### 步骤 4: 容器内 — 构建 catkin workspace
-
-```bash
-source /opt/ros/noetic/setup.bash
-export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
-
-mkdir -p /root/catkin_ws/src
-
-# 软链接所有包（注意路径：/work/ 下直接是仓库名，没有 projects/ 子目录）
-ln -sf /work/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
-ln -sf /work/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
-ln -sf /work/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
-ln -sf /work/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
-
-# 编译
-cd /root/catkin_ws
-catkin_make -DCMAKE_BUILD_TYPE=Release
-
-# Source 工作区（每次新开 shell 都需要）
-source devel/setup.bash
-```
-
-### 步骤 5: 容器内 — 验证
-
-```bash
+docker start -i noetic-gpu
+# 容器内:
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+echo "127.0.0.1 $(hostname)" >> /etc/hosts 2>/dev/null
 source /opt/ros/noetic/setup.bash
 source /root/catkin_ws/devel/setup.bash
-
-rospack find aliengo_deploy        # 应输出: /root/catkin_ws/src/aliengo_deploy
-rospack find unitree_legged_real   # 应输出: /root/catkin_ws/src/unitree_legged_real
-```
-
-## 放置 Policy 文件
-
-将 `policy.pt` 放到远程机宿主机上：
-
-```
-~/Downloads/WorkSpace/AliengoSim2Real/policy/aliengo/policy.pt
-```
-
-容器内对应路径为：`/work/AliengoSim2Real/policy/aliengo/policy.pt`
-
-## 使用
-
-> 以下所有命令均在 **Docker 容器内**执行。
-
-### 方式 1: Launch 文件 (推荐)
-
-```bash
-source /opt/ros/noetic/setup.bash
-source /root/catkin_ws/devel/setup.bash
+export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
 roslaunch aliengo_deploy aliengo_deploy.launch \
     policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
-    gate_preset:=v2 \
-    _gate_enabled:=true \
-    _brake_enabled:=true \
-    _force_log_csv:=/tmp/force_log.csv
+    gate_preset:=v2_robust
 ```
 
-可用的 `gate_preset`：
-- `v2`
-- `v2_robust`
-
-### 方式 2: 分步启动
-
-终端 1 — 启动 ros_udp bridge:
-```bash
-source /opt/ros/noetic/setup.bash
-source /root/catkin_ws/devel/setup.bash
-roslaunch unitree_legged_real real.launch ctrl_level:=lowlevel
-```
-
-终端 2 — 启动策略节点:
-```bash
-source /opt/ros/noetic/setup.bash
-source /root/catkin_ws/devel/setup.bash
-rosrun aliengo_deploy aliengo_deploy \
-    policy_path=/work/AliengoSim2Real/policy/aliengo/ \
-    gate_preset=v2_robust
-```
-
-## Gate / Brake / Force Estimator
-
-### standing / walking gate
-
-当前 ROS1 部署链路已集成 standing / walking gate：
-- 有显式速度命令 → `command_walking`
-- 无显式速度命令 → 依据 `pred_est` 中的 `base_force_est_local` 决定 `standing` / `force_walking`
-- `standing` 时 gait phase 冻结为 `0`
-- `walking` 时 gait phase 正常推进
-
-默认支持两个 preset：
-
-| preset | 用途 |
-|------|------|
-| `v2` | 默认版本，接近 MuJoCo 配置 |
-| `v2_robust` | 更保守，适合实机 estimator 更 noisy 的情况 |
-
-### brake gate
-
-当前 ROS1 部署链路已集成 brake gate：
-- 仅在 walking 状态下生效
-- 当前向命令足够大且 `|wz|` 较小时，如果估计到底座局部 `x` 向力持续足够负，则触发 brake
-- brake 激活后会清零 command，并停止继续下发正常 walking command
-
-### Force Estimator 实时查看
-
-节点会发布：
-- `/force_estimator`，类型为 `geometry_msgs/WrenchStamped`
-
-其中：
-- `wrench.force.{x,y,z}` → 预测的 `base_force_est_local`
-- `wrench.torque.{x,y,z}` → 预测的 `base_lin_vel`
-
-查看方式：
-
-```bash
-rostopic echo /force_estimator
-```
-
-如需画图：
-
-```bash
-rqt_plot /force_estimator/wrench/force/x /force_estimator/wrench/force/y
-```
-
-### CSV 日志
-
-通过参数 `_force_log_csv:=/tmp/force_log.csv` 可开启每步记录，内容包括：
-- command
-- `pred_est`
-- gait mode
-- standing / walking gate 内部状态
-- brake gate 内部状态
-
-示例：
-
-```bash
-roslaunch aliengo_deploy aliengo_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
-    gate_preset:=v2_robust \
-    _force_log_csv:=/tmp/force_log.csv
-```
-
-## 无实机测试
-
-当前仓库还提供了接口级测试框架：
-- fake low_state 发布器
-- low_cmd monitor
-- 测试 launch
-
-启动方式见 [`scripts/StaticTest.md`](../scripts/StaticTest.md)。
-
-## 遥控器操作
+### 步骤 3: 遥控器操作
 
 | 按键 | 功能 |
 |------|------|
-| **A** | 使能策略（开始运动） |
-| **B** | 受控停止（站立→卧倒） |
-| **L2+B** | 紧急制动（阻尼模式） |
+| **A** | 启动 stand-up（2 阶段站立 → 策略接管） |
+| **B** | 受控停止（站立→趴下） |
+| **L2+B** | 紧急阻尼制动 |
 | **Start** | 清零速度指令 |
 | **Select** | 重置策略状态 |
-| 左摇杆前后 | vx（前进/后退） |
-| 左摇杆左右 | wz（转向） |
-| 右摇杆左右 | vy（侧移） |
+| 左摇杆 | vx (前后) + wz (左右转向) |
+| 右摇杆 | vy (侧移) |
 
-## Policy 规格
+## Stand-Up 前段
 
-| 项目 | 值 |
-|------|------|
-| 输入 | 1472 = 46 × 32 history |
-| 输出 | 12 delta joint pos + 6 pred_est |
-| 动作 | q_target = q_default + 0.25 × action |
-| 频率 | 50 Hz |
-| 格式 | TorchScript (.pt) |
+按 A 后不会直接启用策略，而是经过 2 阶段站立：
 
-观测向量 (单帧 46 维):
-- projected_gravity[x,y] (2)
-- base_ang_vel × 0.25 (3)
-- joint_pos - default (12)
-- joint_vel × 0.05 (12)
-- last_action_raw (12)
-- gait_clock [sin,cos] (2)
-- commands × [2.0, 2.0, 0.25] (3)
+1. **Stage 1** (3s): 先展开小腿 (calf)，大腿几乎不动 → 形成稳定支撑
+2. **Stage 2** (3s): 收大腿 (thigh) 抬高身体 + 调髋关节
+3. **Hold** (1s): 保持默认站姿，用满 Kp
+4. **Handover**: warm-start obs history → 策略接管
+
+参数在 `aliengo_constants.h` 中可调。
+
+## TX2 Relay 搭建
+
+### 首次编译
+
+```bash
+# 把 relay 源码传到 TX2
+scp ros1/tx2_relay/aliengo_relay.cpp unitree@192.168.123.12:/home/unitree/unitree_legged_sdk/
+
+# SSH 到 TX2 编译
+ssh unitree@192.168.123.12
+cd /home/unitree/unitree_legged_sdk
+g++ -I include -L lib -O2 -o aliengo_relay aliengo_relay.cpp \
+    -lunitree_legged_sdk -lpthread -llcm
+```
+
+### 运行
+
+```bash
+sudo env LD_LIBRARY_PATH=/home/unitree/unitree_legged_sdk/lib ./aliengo_relay
+```
+
+## Launch 参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `policy_path` | ...policy/aliengo/ | TorchScript 模型目录 |
+| `gate_preset` | v2 | standing/walking gate 预设 (v2 / v2_robust) |
+| `robot_ip` | 192.168.123.12 | TX2 relay IP |
+| `robot_port` | 9000 | TX2 relay 端口 |
+| `use_direct_udp` | true | 直接 UDP 模式 (false=ROS topic 模式，用于 fake test) |
+| `inference_device` | cpu | cpu / cuda |
+| `gait_frequency` | 2.0 | gait clock 频率 (Hz) |
+
+## Docker 环境搭建
+
+见 `scripts/ros1ENV.MD`。核心要点：
+- 使用 `noetic-gpu:2026-04` Docker 镜像
+- 容器内安装 LibTorch CPU 版到 `/opt/libtorch`
+- catkin workspace 通过软链接组装
+
+## 关键参数调整
+
+### PD 增益
+
+在 `aliengo_constants.h` 中：
+```cpp
+constexpr float kKp[12] = { hip×4, thigh×4, calf×4 };
+constexpr float kKd[12] = { hip×4, thigh×4, calf×4 };
+```
+当前从 MuJoCo 导出，实机上可能需要降低 30-50%。
+
+### 关节映射
+
+如果实机关节顺序与标准 Aliengo URDF 不一致（FR_hip=0, FR_thigh=1, ...），需修改 `kJointMap[12]`。
+
+### Stand-Up 参数
+
+```cpp
+kStandUpStage1Steps / kStandUpStage2Steps / kStandUpHoldSteps
+kStandUpKpStart / kStandUpKdStart
+```
 
 ## 安全注意事项
 
-1. **首次测试必须使用保护架悬挂机器人**
-2. 上电后默认处于零力矩模式，需按 A 键才会启用策略
-3. 任何时候按 B 键可安全趴下，L2+B 可紧急制动
-4. PD 增益值来自 MuJoCo 仿真导出，实机可能需要调整
-5. 确保以太网连接稳定 (192.168.123.x 网段)
-6. 每次新开容器 shell，都必须执行 `source /opt/ros/noetic/setup.bash && source /root/catkin_ws/devel/setup.bash`
-7. standing / walking gate 与 brake gate 已接入，但实机上仍需根据 `pred_est` 噪声分布调 `gate_preset` 或后续阈值
+1. **首次部署务必使用保护架**
+2. 按 A 后有 7 秒站立过渡，不会立即高 Kp
+3. 随时按 B 安全趴下，L2+B 紧急制动
+4. 关节映射必须通过手动验证确认
+5. PD 增益从低开始，逐步增大

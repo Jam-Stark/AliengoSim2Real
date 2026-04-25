@@ -1,6 +1,14 @@
-用这个版本就行，目标是 `Ubuntu 22.04 宿主机 + Docker + GPU 透传 + ROS1 Noetic(Focal) 容器`。我把它固定成 `CUDA 11.8 + Ubuntu 20.04`，这样和 `Noetic` 的平台更一致。
+# Aliengo ROS1 部署环境搭建指南
 
-**1. 宿主机安装 GPU 容器支持**
+目标：`Ubuntu 22.04 宿主机 + Docker + GPU 透传 + ROS1 Noetic (Focal) 容器`。
+基于 `CUDA 11.8 + Ubuntu 20.04`，与 Noetic 的平台一致。
+
+> **注意**：当前策略推理使用 **LibTorch CPU 版**，因为 ROG 笔记本的 RTX 5070 + CUDA 12.x 驱动
+> 与 CUDA 11.8 版 LibTorch 不兼容。50Hz 的 MLP 推理在 CPU 上完全够用。
+
+---
+
+## 1. 宿主机安装 GPU 容器支持
 
 ```bash
 sudo apt-get update
@@ -21,7 +29,7 @@ sudo systemctl restart docker
 docker run --rm --gpus all nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04 nvidia-smi
 ```
 
-**2. 构建 Noetic GPU 镜像**
+## 2. 构建 Noetic GPU 镜像
 
 ```bash
 mkdir -p ~/docker/noetic-gpu
@@ -49,7 +57,7 @@ RUN echo "deb http://packages.ros.org/ros/ubuntu focal main" > /etc/apt/sources.
 
 # 其余依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git vim \
+    build-essential cmake git vim wget unzip \
     python3-pip python3-rosdep python3-vcstool \
     libeigen3-dev libjsoncpp-dev libopencv-dev libudev-dev \
     ros-noetic-ros-base \
@@ -73,75 +81,7 @@ WORKDIR /work
 docker build -t noetic-gpu:2026-04 .
 ```
 
-**3. 启动 GPU 容器**
-
-如果你需要 OpenCV/GUI 显示，宿主机先执行：
-
-```bash
-xhost +si:localuser:root
-mkdir -p ~/.ros
-```
-
-然后启动：
-
-```bash
-docker run -it --rm \
-  --name noetic-gpu \
-  --hostname noetic-gpu \
-  --gpus all \
-  --network host \
-  --ipc host \
-  -e DISPLAY=$DISPLAY \
-  -e QT_X11_NO_MITSHM=1 \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -v $HOME/.ros:/root/.ros \
-  -v $HOME/Downloads/WorkSpace:/work \
-  --device /dev/input:/dev/input \
-  --device /dev/bus/usb:/dev/bus/usb \
-  noetic-gpu:2026-04
-```
-
-**4. 容器内验证**
-
-```bash
-source /opt/ros/noetic/setup.bash
-nvidia-smi
-roscore
-```
-
-如果以后你的代码已经迁成 ROS1 `catkin` 包，再在容器内这样编：
-
-```bash
-source /opt/ros/noetic/setup.bash
-mkdir -p /root/catkin_ws/src
-ln -s /work/go2w_sim2sim /root/catkin_ws/src/go2w_sim2sim
-cd /root/catkin_ws
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y --rosdistro noetic
-catkin_make -DCMAKE_BUILD_TYPE=Release
-source devel/setup.bash
-```
-
-当前要注意一点：你这个仓库现在还是 ROS2，不是 ROS1，所以这个 GPU 容器先解决的是“Noetic + CUDA 环境可用”，不是“当前代码直接能编”。
-
-来源：
-
-- NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/1.18.1/install-guide.html
-- `nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04`: https://hub.docker.com/layers/nvidia/cuda/11.8.0-cudnn8-devel-ubuntu20.04/images/
-- `ros:noetic-ros-base-focal`: https://hub.docker.com/layers/library/ros/noetic-ros-base-focal/images/
-- Noetic EOL: https://www.ros.org/blog/noetic-eol/
-
-
-
-
-已创建 [`ros1/scripts/setup_and_build.sh`](ros1/scripts/setup_and_build.sh) 完整搭建指南。以下是你在远程机上要执行的操作，按顺序来：
-
----
-
-### 步骤 1: 启动你已有的 Docker 容器
-
-在远程机宿主机上运行：
+## 3. 启动 GPU 容器
 
 ```bash
 docker run -it \
@@ -155,64 +95,100 @@ docker run -it \
   noetic-gpu:2026-04
 ```
 
-> ⚠️ 注意去掉了 `--rm`，这样容器内安装的 LibTorch 不会丢失。后续用 `docker start -i noetic-gpu` 重新进入。
+> ⚠️ 去掉了 `--rm`，这样容器内安装的 LibTorch 不会丢失。后续用 `docker start -i noetic-gpu` 重新进入。
+> 使用 `--network host` 以便容器内直接访问 192.168.123.x 网段。
 
----
-
-### 步骤 2: 容器内安装 LibTorch
-
-进入容器后执行：
+## 4. 容器内安装 LibTorch (CPU 版)
 
 ```bash
 cd /opt
-wget -q "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu118.zip" -O libtorch.zip
+wget -q "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip" -O libtorch.zip
 unzip -q libtorch.zip && rm libtorch.zip
 echo 'export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"' >> /root/.bashrc
 echo 'export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"' >> /root/.bashrc
 source /root/.bashrc
 ```
 
----
+> **为什么用 CPU 版？** RTX 5070 需要 CUDA 12.x，但 Docker 镜像基于 CUDA 11.8。
+> CUDA 版 LibTorch 要求 CUDA runtime 版本匹配，CPU 版无此限制。
+> 50Hz MLP 推理在 CPU 上延迟 < 1ms，完全满足要求。
 
-### 步骤 3: 初始化 unitree_legged_sdk
-
-```bash
-cd /work/unitree_ros_to_real
-git submodule update --init --recursive
-# 如果失败则手动 clone:
-# rm -rf unitree_legged_sdk
-# git clone https://github.com/unitreerobotics/unitree_legged_sdk.git
-```
-
----
-
-### 步骤 4: 创建 catkin workspace 并编译
+## 5. 创建 catkin workspace 并编译
 
 ```bash
 source /opt/ros/noetic/setup.bash
 
 mkdir -p /root/catkin_ws/src
+
+# 软链接依赖包和部署包
 ln -sf /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
-ln -sf /work/projects/unitree_ros_to_real/unitree_legged_real /root/catkin_ws/src/
-ln -sf /work/projects/unitree_ros_to_real/unitree_legged_sdk  /root/catkin_ws/src/
 ln -sf /work/projects/AliengoSim2Real/ros1                    /root/catkin_ws/src/aliengo_deploy
 
 cd /root/catkin_ws
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
+catkin_make -DCMAKE_BUILD_TYPE=Release
+source devel/setup.bash
+```
+
+> **路径说明**：
+> - 宿主机 `~/Downloads/WorkSpace` → 容器内 `/work`
+> - 项目在 `/work/projects/AliengoSim2Real/`
+> - unitree_legged_msgs 在 `/work/projects/unitree_ros_to_real/unitree_legged_msgs/`
+> - `ros1/` 目录通过软链接挂载为 `aliengo_deploy` 包名
+
+## 6. 验证
+
+```bash
+rospack find aliengo_deploy
+# 应输出: /root/catkin_ws/src/aliengo_deploy
+
+rospack find unitree_legged_msgs
+# 应输出: /root/catkin_ws/src/unitree_legged_msgs
+```
+
+## 7. ROS 网络配置（容器内）
+
+每次进入容器后需要设置（或写入 `.bashrc`）：
+
+```bash
+export ROS_MASTER_URI=http://127.0.0.1:11311
+export ROS_HOSTNAME=127.0.0.1
+echo "127.0.0.1 $(hostname)" >> /etc/hosts 2>/dev/null
+```
+
+> **为什么需要这个？** Docker `--network host` 模式下，hostname 不一定能被 DNS 解析。
+> 不设置会导致 ROS node 之间无法通信（一直等待连接）。
+
+## 8. 日常使用
+
+### 重新进入已有容器
+
+```bash
+docker start -i noetic-gpu
+```
+
+### 在容器内打开第二个终端
+
+```bash
+docker exec -it noetic-gpu bash
+```
+
+### 编译更新
+
+```bash
+cd /root/catkin_ws
+source /opt/ros/noetic/setup.bash
+export CMAKE_PREFIX_PATH="/opt/libtorch:${CMAKE_PREFIX_PATH}"
 catkin_make -DCMAKE_BUILD_TYPE=Release
 source devel/setup.bash
 ```
 
 ---
 
-### 步骤 5: 验证
+## 参考来源
 
-```bash
-rospack find aliengo_deploy
-rospack find unitree_legged_real
-```
-
-两个命令都应输出包路径。编译产物在 `/root/catkin_ws/devel/lib/` 下。
-
----
-
-如果编译出错，把错误信息发给我，我来定位修复。
+- NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/
+- `nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04`: https://hub.docker.com/layers/nvidia/cuda/
+- `ros:noetic-ros-base-focal`: https://hub.docker.com/layers/library/ros/noetic-ros-base-focal/
+- Noetic EOL: https://www.ros.org/blog/noetic-eol/
+- LibTorch CPU: https://pytorch.org/get-started/locally/

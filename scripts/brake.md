@@ -307,7 +307,12 @@ flowchart TD
 
 ---
 
-## 16. ROS1 实机部署实现进度
+## 16. ROS1 实机部署实现状态
+
+### 架构
+
+当前使用 **TX2 relay** 架构。brake gate 在控制循环中位于 ForceModeSwitcher 之后、写命令之前。
+完整架构见 [`ros1/README.md`](../ros1/README.md)。
 
 ### 设计适配说明
 
@@ -316,42 +321,41 @@ flowchart TD
 - **去掉 phase_name 依赖**：brake 在任何 walking mode（非 standing）下都可触发
 - **eligibility 条件保留**：`cmd_vx >= 0.2` 且 `|wz| <= 0.10` 且 command 非零
 - **latch 机制调整**：一旦触发，持续 active 直到 mode 回到 standing 或 command 归零（替代 phase-change 解锁）
-- **参数保持 v2 默认**：`force_x_threshold = -32N`，`hold_steps = 2`
+- **参数保持默认**：`force_x_threshold = -32N`，`hold_steps = 2`
 
 ### 已完成的改动
 
 | 改动 | 文件 | 说明 |
 |------|------|------|
-| C++ BrakeCommandGate | [`ros1/include/aliengo_deploy/brake_command_gate.h`](../ros1/include/aliengo_deploy/brake_command_gate.h) | 完整状态机：eligible → trigger_sample → hold → latch → release |
-| 节点头文件 | [`ros1/include/aliengo_deploy/aliengo_deploy_node.h`](../ros1/include/aliengo_deploy/aliengo_deploy_node.h) | 添加 `brake_gate_` 成员和 `brake_enabled_` 参数 |
-| 控制循环集成 | [`ros1/src/aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | gate 之后、写命令之前运行 brake；active 时零力矩 + 清零 command |
-| CSV 日志扩展 | [`ros1/src/aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 添加 `brake_eligible,brake_active,brake_hold,brake_est_fx` 列 |
+| C++ BrakeCommandGate | [`brake_command_gate.h`](../ros1/include/aliengo_deploy/brake_command_gate.h) | 完整状态机：eligible → trigger_sample → hold → latch → release |
+| 节点集成 | [`aliengo_deploy_node.h`](../ros1/include/aliengo_deploy/aliengo_deploy_node.h) | `brake_gate_` 成员 |
+| 控制循环 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | gate 之后、写命令之前运行 brake；active 时零力矩 + 清零 command |
+| CSV 日志 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | `brake_eligible,brake_active,brake_hold,brake_est_fx` 列 |
+| TX2 relay | [`aliengo_relay.cpp`](../ros1/tx2_relay/aliengo_relay.cpp) | 命令通过 relay 转发到控制器 |
 
 ### 控制循环中 brake 的位置
 
 ```
+遥控器解码 → stand-up 阶段判断
+      ↓
 policy forward → action + pred_est
       ↓
 ForceModeSwitcher → mode (standing / walking)
       ↓
 GaitClock → phase freeze / advance
       ↓
-BrakeCommandGate → brake active?     ← 新增
+BrakeCommandGate → brake active?
       ↓
-  active: zero low_cmd + zero command
-  inactive: writeActionToCmd(action)
+  active: zero cmd → writeActionToUdp (零力矩)
+  inactive: writeActionToUdp (策略 action)
       ↓
-publish low_cmd
+UDP → TX2 relay → Controller
 ```
 
-### 启动参数
+### 实机测试进度
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `brake_enabled` | `true` | 启用/禁用 brake gate |
-
-### 待验证事项
-
+- [x] 静态测试中 brake 逻辑正确触发
+- [x] 与 ForceModeSwitcher 和 stand-up 正确协作
 - [ ] 实机 force estimator x 分量噪声范围，确认 -32N 阈值是否合适
 - [ ] latch release 条件（mode → standing 或 command → zero）是否在实际操作中足够灵敏
 - [ ] brake active 时 zero low_cmd 是否应改为 hold 当前位姿而非完全释放

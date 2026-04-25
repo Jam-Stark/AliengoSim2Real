@@ -315,49 +315,62 @@ flowchart LR
 
 ---
 
-## 9. ROS1 实机部署实现进度
+## 9. ROS1 实机部署实现状态
+
+### 架构
+
+当前使用 **TX2 relay** 架构：Docker (策略推理) → TX2 (SDK v3.0.0 relay) → 运动控制器。
+详见 [`ros1/README.md`](../ros1/README.md)。
 
 ### 已完成的改动
 
 | 改动 | 文件 | 说明 |
 |------|------|------|
-| `pred_est` 提取 | [`utils/cpp_manager_env/net.h`](../utils/cpp_manager_env/net.h:191) | 添加 `get_last_aux_output()` getter，`last_aux_output_` 成员 |
-| Tuple 解包 | [`utils/cpp_manager_env/net.cpp`](../utils/cpp_manager_env/net.cpp:1791) | `forward()` 返回 Tuple 时自动存储 `elements[1]` 到 `last_aux_output_` |
-| C++ ForceModeSwitcher | [`ros1/include/aliengo_deploy/force_mode_switcher.h`](../ros1/include/aliengo_deploy/force_mode_switcher.h) | 完整移植 Python 版三态状态机，内置 GATE_PRESET_V2 参数 |
-| GaitClock mode 控制 | [`ros1/include/aliengo_deploy/gait_clock.h`](../ros1/include/aliengo_deploy/gait_clock.h:14) | 添加 `setStanding()` —— standing 模式冻结 phase=0 |
-| 控制循环集成 | [`ros1/src/aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp:132) | 在 `controlLoop()` 中接入 gate + pred_est 提取 + gait 模式驱动 |
-| Force ROS topic | [`ros1/src/aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp:697) | 发布 `/force_estimator` (geometry_msgs/WrenchStamped) |
-| CSV 日志 | [`ros1/src/aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp:720) | 每步记录 cmd, pred_est, mode, gate 内部状态 |
-| 构建依赖 | [`ros1/CMakeLists.txt`](../ros1/CMakeLists.txt:21), [`ros1/package.xml`](../ros1/package.xml:13) | 添加 `geometry_msgs` |
+| `pred_est` 提取 | [`net.h`](../utils/cpp_manager_env/net.h) | 添加 `get_last_aux_output()` getter，`last_aux_output_` 成员 |
+| Tuple 解包 | [`net.cpp`](../utils/cpp_manager_env/net.cpp) | TorchScript 返回 Tuple 时自动存储 `elements[1]` 到 `last_aux_output_` |
+| C++ ForceModeSwitcher | [`force_mode_switcher.h`](../ros1/include/aliengo_deploy/force_mode_switcher.h) | 完整移植 Python 版三态状态机，内置 v2 / v2_robust 两套 preset |
+| GaitClock mode 控制 | [`gait_clock.h`](../ros1/include/aliengo_deploy/gait_clock.h) | `setStanding()` 冻结 phase=0 |
+| 控制循环集成 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | gate + pred_est 提取 + gait 模式驱动 + stand-up 前段 |
+| Force ROS topic | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 发布 `/force_estimator` (geometry_msgs/WrenchStamped) |
+| CSV 日志 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 每步记录 cmd, pred_est, mode, gate + brake 内部状态 |
+| TX2 relay | [`aliengo_relay.cpp`](../ros1/tx2_relay/aliengo_relay.cpp) | TX2 上用 SDK v3.0.0 转发命令/状态（控制器只接受板载 PC） |
+| 2 阶段站立 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | Stage1: 展开小腿 → Stage2: 抬大腿 → Hold → 策略接管 |
+| Gate preset 选择 | [`aliengo_deploy_main.cpp`](../ros1/src/aliengo_deploy_main.cpp) | 启动参数 `gate_preset` 支持 v2 / v2_robust |
 
-### 新增控制循环流程
+### 控制循环流程（当前版本）
 
 ```mermaid
 flowchart TD
     A[50Hz timer tick] --> B{has_low_state?}
-    B -- No --> C[publish zero low_cmd]
-    B -- Yes --> D{is_stop?}
-    D -- Yes --> E[gait standing + zero cmd]
-    D -- No --> F[policy forward → action + pred_est]
-    F --> G[提取 base_force_est_local from pred_est]
-    G --> H[ForceModeSwitcher.update cmd, forces]
-    H --> I{gate mode}
-    I -->|standing| J[gait phase = 0]
-    I -->|force_walking| K[gait phase 正常推进]
-    I -->|command_walking| K
-    J --> L[gait_clock.step]
-    K --> L
-    L --> M[publish /force_estimator topic]
-    M --> N[write CSV log row]
-    N --> O[writeActionToCmd + publish low_cmd]
+    B -- No --> Z[idle]
+    B -- Yes --> C[decode remote + check buttons]
+    C --> D{stand-up 阶段?}
+    D -- Yes --> E[2-stage stand-up interpolation]
+    D -- No --> F{is_stop / damping?}
+    F -- Yes --> G[controlled stop / damping]
+    F -- No --> H[policy forward → action + pred_est]
+    H --> I[ForceModeSwitcher.update → mode]
+    I --> J{gate mode}
+    J -->|standing| K[gait phase = 0]
+    J -->|walking| L[gait phase 推进]
+    K --> M[BrakeCommandGate.update]
+    L --> M
+    M --> N{brake active?}
+    N -- Yes --> O[zero cmd + zero torque]
+    N -- No --> P[writeActionToUdp]
+    O --> Q[publish /force_estimator + CSV]
+    P --> Q
 ```
 
-### 启动参数
+### Launch 参数
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
-| `gate_enabled` | `true` | 启用/禁用 standing/walking gate |
-| `force_log_csv` | `""` | CSV 日志路径（空=不记录） |
+| `gate_preset` | `v2` | standing/walking gate 预设 (v2 / v2_robust) |
+| `robot_ip` | `192.168.123.12` | TX2 relay IP |
+| `robot_port` | `9000` | TX2 relay 端口 |
+| `inference_device` | `cpu` | 推理设备 |
+| `gait_frequency` | `2.0` | gait clock 频率 (Hz) |
 
 ### 查看 force estimator
 
@@ -365,16 +378,17 @@ flowchart TD
 # 实时 echo
 rostopic echo /force_estimator
 
-# 实时曲线 (需要 GUI)
-rqt_plot /force_estimator/wrench/force/x /force_estimator/wrench/force/y
-
 # 录 bag
 rosbag record /force_estimator /low_cmd /low_state
 ```
 
-### 待验证事项
+### 实机测试进度
 
-- [ ] 实机 force estimator 噪声分布是否与 MuJoCo sim2sim 一致
+- [x] Docker 内静态测试（fake publisher + 策略推理）
+- [x] 直连 UDP 读取状态（IMU + 电机 + 遥控器）
+- [x] TX2 relay 编译运行
+- [x] 2 阶段站立成功（保护架下）
+- [ ] 关节映射手动逐腿验证（**关键！** 观察到 RR/FR 可能交换）
+- [ ] 脱离保护架地面行走
 - [ ] v2 preset 阈值是否需要针对实机重新调整
-- [ ] standing → force_walking 切换延迟是否可接受
-- [ ] CSV 日志是否完整覆盖所有 gate 内部状态
+- [ ] force estimator 噪声分布 vs MuJoCo sim2sim
