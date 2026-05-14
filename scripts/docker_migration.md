@@ -164,8 +164,8 @@ tar xzf /path/to/workspace-backup.tar.gz
 docker load < /path/to/noetic-cpu-aliengo-deploy.tar.gz
 
 # 验证
-docker images | grep noetic-gpu
-# 应看到 noetic-gpu   aliengo-deploy   <hash>   约 8-12 GB
+docker images | grep noetic-cpu
+# 应看到 noetic-cpu   aliengo-deploy   <hash>   约 13.6 GB
 ```
 
 ### 3.2 创建并启动容器
@@ -179,7 +179,7 @@ docker run -it \
   --ipc host \
   -v $HOME/Downloads/WorkSpace:/work \
   --device /dev/input:/dev/input \
-  noetic-gpu:aliengo-deploy
+  noetic-cpu:aliengo-deploy
 ```
 
 > **参数调整说明**：
@@ -275,7 +275,7 @@ docker run -it \
   --network host \
   --ipc host \
   -v $HOME/Downloads/WorkSpace:/work \
-  noetic-gpu:aliengo-deploy
+  noetic-cpu:aliengo-deploy
 ```
 
 ### Q: 编译报错 "could not find Torch"
@@ -312,14 +312,61 @@ catkin_make -DCMAKE_BUILD_TYPE=Release
 
 | # | 操作 | 位置 | 状态 |
 |---|------|------|:----:|
-| 1 | `docker commit noetic-gpu noetic-gpu:aliengo-deploy` | 旧机 | ⬜ |
-| 2 | `docker save ... \| gzip > noetic-gpu-aliengo-deploy.tar.gz` | 旧机 | ⬜ |
-| 3 | 备份源码 (`git push` 或 `tar`) | 旧机 | ⬜ |
-| 4 | 传输 tar.gz + 源码到新机器 | — | ⬜ |
-| 5 | 安装 Docker + NVIDIA Container Toolkit | 新机 | ⬜ |
-| 6 | `docker load < noetic-gpu-aliengo-deploy.tar.gz` | 新机 | ⬜ |
-| 7 | 准备源码目录结构 (放到 `/work` 挂载路径下) | 新机 | ⬜ |
-| 8 | `docker run -it --name noetic-gpu -v ...:/work ...` | 新机 | ⬜ |
-| 9 | 容器内验证软链接有效 (或重建 + 重编译) | 新机 | ⬜ |
-| 10 | 静态测试通过 (fake publisher) | 新机 | ⬜ |
+| 1 | `docker commit noetic-gpu noetic-cpu:aliengo-deploy` | 旧机 | ✅ |
+| 2 | `docker save ... \| gzip > noetic-cpu-aliengo-deploy.tar.gz` | 旧机 | ✅ |
+| 3 | 备份源码 (`git push` 或 `tar`) | 旧机 | ✅ |
+| 4 | 传输 tar.gz + 源码到新机器 | — | ✅ |
+| 5 | 安装 Docker + NVIDIA Container Toolkit | 新机 | ✅ |
+| 6 | `docker load < noetic-cpu-aliengo-deploy.tar.gz` | 新机 | ✅ |
+| 7 | 准备源码目录结构 (放到 `/work` 挂载路径下) | 新机 | ✅ |
+| 8 | `docker run -it --name noetic-gpu -v ...:/work ...` | 新机 | ✅ |
+| 9 | 容器内验证软链接有效 (或重建 + 重编译) | 新机 | ✅ |
+| 10 | 静态测试通过 (fake publisher) | 新机 | ✅ |
 | 11 | 连 Aliengo 网络 + 实机测试 | 新机 | ⬜ |
+
+---
+
+## 迁移完成记录
+
+> **迁移日期**：2026-05-14 20:12 HKT
+> **来源**：ROG Strix G16 (Ubuntu 22.04, RTX 5070)
+> **目标**：lt5.precognition.team (Ubuntu 24.04, RTX 5090)
+
+### 目标机器环境
+
+| 项目 | 值 |
+|------|-----|
+| OS | Ubuntu 24.04.3 LTS (Noble) |
+| 内核 | 6.17.0-23-generic, x86_64 |
+| GPU | NVIDIA GeForce RTX 5090 (24 GB), 驱动 580.142, CUDA 13.0 |
+| Docker | 28.5.1 |
+| NVIDIA Container Toolkit | 1.17.8-1 |
+| cmake | 3.28.3 |
+| 用户 | baoquanc (docker 组) |
+
+### 迁移过程记录
+
+1. **镜像导入**：`docker load < noetic-cpu-aliengo-deploy.tar.gz` → 镜像名 `noetic-cpu:aliengo-deploy` (13.6 GB)
+2. **启动容器**：
+   ```bash
+   docker run -it --name noetic-gpu --hostname noetic-gpu \
+     --gpus all --network host --ipc host \
+     -v $HOME/Downloads/WorkSpace:/work \
+     noetic-cpu:aliengo-deploy
+   ```
+3. **软链接需修复**：旧容器内的软链接指向 `/work/AliengoSim2Real/ros1`（无 `projects/` 中间目录），新机器实际路径为 `/work/projects/AliengoSim2Real/ros1`。需重建软链接：
+   ```bash
+   rm -f /root/catkin_ws/src/aliengo_deploy
+   rm -f /root/catkin_ws/src/unitree_legged_msgs
+   rm -f /root/catkin_ws/src/unitree_legged_real
+   rm -f /root/catkin_ws/src/unitree_legged_sdk
+   ln -sf /work/projects/AliengoSim2Real/ros1 /root/catkin_ws/src/aliengo_deploy
+   ln -sf /work/projects/unitree_ros_to_real/unitree_legged_msgs /root/catkin_ws/src/
+   ```
+   > **根因**：旧 ROG 笔记本上源码放在 `~/Downloads/WorkSpace/AliengoSim2Real/`（无 `projects/`），镜像 commit 时保存了那时的软链接路径。新机器按规范使用 `~/Downloads/WorkSpace/projects/AliengoSim2Real/`，路径不匹配。`unitree_legged_real` 和 `unitree_legged_sdk` 在新架构下不需要，已删除。
+4. **重新编译**：路径变化后旧 `build/`/`devel/` 缓存不可用，`rm -rf build devel && catkin_make` 重新编译（约 2 分钟），编译成功。
+5. **静态测试通过**：`roslaunch aliengo_deploy test_deploy.launch` + `fake_low_state_publisher`，策略使能后 Kp 正常变非零，NaN 计数为 0，无异常。
+
+### 待完成
+
+- [ ] 连接 Aliengo 网络 (192.168.123.x) 进行实机测试（见 [ROS1TEST.md](ROS1TEST.md)）

@@ -1,14 +1,10 @@
-(base) dreams@dreams-ROG-Strix-G16-G614FR-G614FR:~/Downloads/WorkSpace$ cat /etc/os-release
-uname -m
-nvidia-smi
-g++ --version
-cmake --version
-python3 --version
-ls /opt/ros
-echo "${UNITREE_ROS2_SETUP:-unset}"
-test -f ~/unitree_ros2/setup_local.sh && echo unitree_setup_ok || echo unitree_setup_missing
-pkg-config --modversion opencv4
-ldconfig -p | egrep 'onnxruntime|jsoncpp|udev'
+# 机器信息记录
+
+## 旧机器（ROG 笔记本 — 迁移来源）
+
+> 信息采集时间：2026-04-22
+
+```
 PRETTY_NAME="Ubuntu 22.04.5 LTS"
 NAME="Ubuntu"
 VERSION_ID="22.04"
@@ -46,20 +42,78 @@ Wed Apr 22 16:51:58 2026
 |    0   N/A  N/A           16402      G   /usr/share/code/code                    131MiB |
 +-----------------------------------------------------------------------------------------+
 g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
-Copyright (C) 2021 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
 cmake version 3.22.1
-
-CMake suite maintained and supported by Kitware (kitware.com/cmake).
 Python 3.13.9
-humble
-unset
-unitree_setup_missing
-4.5.4
-        libudev.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libudev.so.1
-        libudev.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libudev.so
-        libjsoncpp.so.25 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjsoncpp.so.25
-        libjsoncpp.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libjsoncpp.so
-        libgudev-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgudev-1.0.so.0
+ROS2: humble
+UNITREE_ROS2_SETUP: unset
+unitree_setup: missing
+OpenCV: 4.5.4
+libudev: /lib/x86_64-linux-gnu/libudev.so.1
+libjsoncpp: /lib/x86_64-linux-gnu/libjsoncpp.so.25
+```
+
+| 项目 | 值 |
+|------|-----|
+| 型号 | ROG Strix G16 G614FR |
+| OS | Ubuntu 22.04.5 LTS (Jammy) |
+| 内核 | x86_64 |
+| GPU | NVIDIA GeForce RTX 5070 (12 GB) |
+| 驱动 | 590.48.01 / CUDA 13.1 |
+| g++ | 11.4.0 |
+| cmake | 3.22.1 |
+| Python | 3.13.9 |
+| ROS2 | humble |
+| OpenCV | 4.5.4 |
+
+---
+
+## 新机器（lt5 工作站 — 迁移目标）
+
+> 迁移完成时间：2026-05-14 20:12 HKT
+
+```
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.3 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+x86_64
+Linux lt5.precognition.team 6.17.0-23-generic #23~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC x86_64 GNU/Linux
+Wed May 13 15:07:41 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.142                Driver Version: 580.142        CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090 ...    Off |   00000000:02:00.0 Off |                  N/A |
+| N/A   54C    P4             21W /   95W |      15MiB /  24463MiB |      7%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------------------------------------------------------+
+Docker version 28.5.1, build e180ab8
+nvidia-container-toolkit 1.17.8-1
+cmake version 3.28.3
+git version 2.43.0
+```
+
+| 项目 | 值 |
+|------|-----|
+| 主机名 | lt5.precognition.team |
+| OS | Ubuntu 24.04.3 LTS (Noble) |
+| 内核 | 6.17.0-23-generic, x86_64 |
+| GPU | NVIDIA GeForce RTX 5090 (24 GB) |
+| 驱动 | 580.142 / CUDA 13.0 |
+| Docker | 28.5.1 |
+| NVIDIA Container Toolkit | 1.17.8-1 |
+| cmake | 3.28.3 |
+| git | 2.43.0 |
+| 用户组 | baoquanc (sudo, users, docker) |
+| 工作目录 | ~/Downloads/WorkSpace/projects/ |
+
+### 已部署的 Docker 容器
+
+| 容器名 | 镜像 | 用途 |
+|--------|------|------|
+| `noetic-gpu` | `noetic-cpu:aliengo-deploy` (13.6 GB) | Aliengo ROS1 部署环境 |
+
