@@ -586,20 +586,32 @@ void AliengoDeployNode::processRemoteButtons(
 
     auto edges = remote_decoder_.computeEdges(prev_remote_state_, state);
 
-    // A button: start stand-up interpolation (then handover to policy)
+    // A button: start stand-up interpolation, then confirm policy handover.
     if (edges.a) {
-        cancelStopSequence();
-        // Record current joint positions as interpolation start
-        stand_up_start_pos_ = getCurrentLegJointPos();
-        stand_up_step_ = 0;
-        is_standing_up_ = true;
-        is_stop_.store(true, std::memory_order_relaxed);  // keep stop until handover
-        ROS_INFO("Stand-up started. Will handover to policy after reaching default pose.");
+        if (stand_up_waiting_for_handover_) {
+            stand_up_waiting_for_handover_ = false;
+            is_standing_up_ = false;
+            is_stop_.store(false, std::memory_order_relaxed);
+            gait_clock_.reset();
+            reset_observation_buffers();
+            reset_policy_states();
+            ROS_INFO("Stand-up confirmed by second A. Policy ENABLED.");
+        } else {
+            cancelStopSequence();
+            // Record current joint positions as interpolation start
+            stand_up_start_pos_ = getCurrentLegJointPos();
+            stand_up_step_ = 0;
+            stand_up_waiting_for_handover_ = false;
+            is_standing_up_ = true;
+            is_stop_.store(true, std::memory_order_relaxed);  // keep stop until handover
+            ROS_INFO("Stand-up started. Press A again after default pose to enable policy.");
+        }
     }
 
     // B button: controlled stop + cancel stand-up
     if (edges.b) {
         is_standing_up_ = false;
+        stand_up_waiting_for_handover_ = false;
         startStopSequence();
         ROS_WARN("Controlled STOP requested by remote B button.");
     }
@@ -971,16 +983,13 @@ void AliengoDeployNode::writeStandUpCmd() {
     // Two-stage stand-up:
     //   Stage 1: extend CALFS first (widen base), keep hips/thighs at start
     //   Stage 2: raise THIGHS + adjust HIPS (lift body)
-    //   Hold: maintain default pose
-    //   Handover: enable policy
+    //   Wait: maintain default pose until A confirms policy handover
     //
     // Joint indices in policy order:
     //   [0-3] hip, [4-7] thigh, [8-11] calf
 
     const int s1 = kStandUpStage1Steps;
     const int s2 = kStandUpStage2Steps;
-    const int hold = kStandUpHoldSteps;
-    const int total = s1 + s2 + hold;
 
     ++stand_up_step_;
 
@@ -1025,21 +1034,15 @@ void AliengoDeployNode::writeStandUpCmd() {
             ROS_INFO("Stand-up stage 2: step %d/%d, thigh_alpha=%.2f",
                      step_in_s2, s2, smooth);
 
-    } else if (stand_up_step_ <= total) {
-        // ---- Hold: full default pose with full Kp ----
+    } else {
+        // ---- Wait for second A: full default pose with full Kp ----
+        if (!stand_up_waiting_for_handover_) {
+            stand_up_waiting_for_handover_ = true;
+            ROS_INFO("Stand-up reached default pose. Press A again to enable policy.");
+        }
         for (int i = 0; i < kNumJoints; ++i)
             target[i] = kDefaultJointPos[i];
         kp_factor = 1.0f;
-
-    } else {
-        // ---- Handover to policy ----
-        is_standing_up_ = false;
-        is_stop_.store(false, std::memory_order_relaxed);
-        gait_clock_.reset();
-        reset_observation_buffers();
-        reset_policy_states();
-        ROS_INFO("Stand-up complete. Policy ENABLED.");
-        return;
     }
 
     // ---- Write command (common for all stages) ----

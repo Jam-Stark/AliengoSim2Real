@@ -176,7 +176,6 @@ constexpr int kStopStepsToDown = 90;     // 1.8 s at 50 Hz
 // Stage 2: raise thighs (lift body)
 constexpr int kStandUpStage1Steps = 150;   // 3.0 s: extend calfs
 constexpr int kStandUpStage2Steps = 150;   // 3.0 s: raise thighs + fine-tune hips
-constexpr int kStandUpHoldSteps = 50;      // 1.0 s hold at default pose
 constexpr float kStandUpKpStart = 3.0f;    // gentle initial Kp
 constexpr float kStandUpKdStart = 0.5f;    // gentle initial Kd
 
