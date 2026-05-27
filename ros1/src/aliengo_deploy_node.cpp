@@ -980,9 +980,8 @@ void AliengoDeployNode::writeActionToUdp(const std::vector<float> &action) {
 // ============================================================
 
 void AliengoDeployNode::writeStandUpCmd() {
-    // Two-stage stand-up:
-    //   Stage 1: extend CALFS first (widen base), keep hips/thighs at start
-    //   Stage 2: raise THIGHS + adjust HIPS (lift body)
+    // Coordinated stand-up:
+    //   Stage 1/2: move hips, thighs, and calfs together to avoid foot sweep
     //   Wait: maintain default pose until A confirms policy handover
     //
     // Joint indices in policy order:
@@ -990,49 +989,32 @@ void AliengoDeployNode::writeStandUpCmd() {
 
     const int s1 = kStandUpStage1Steps;
     const int s2 = kStandUpStage2Steps;
+    const int total = s1 + s2;
 
     ++stand_up_step_;
 
     std::array<float, kNumJoints> target;
     float kp_factor = 0.0f;
 
-    if (stand_up_step_ <= s1) {
-        // ---- Stage 1: Extend calfs, keep hips/thighs at start ----
+    if (stand_up_step_ <= total) {
         float alpha = std::min(1.0f,
-            static_cast<float>(stand_up_step_) / static_cast<float>(s1));
+            static_cast<float>(stand_up_step_) / static_cast<float>(total));
         float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
-        kp_factor = smooth * 0.5f;  // ramp to ~50% of target Kp
+        kp_factor = smooth;
 
-        for (int i = 0; i < 4; ++i)   // hip [0-3]: stay at start
-            target[i] = stand_up_start_pos_[i];
-        for (int i = 4; i < 8; ++i)   // thigh [4-7]: barely move (10%)
-            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth * 0.1f);
-        for (int i = 8; i < 12; ++i)  // calf [8-11]: full interpolation
+        for (int i = 0; i < kNumJoints; ++i)
             target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
 
-        if (stand_up_step_ % 50 == 0)
-            ROS_INFO("Stand-up stage 1: step %d/%d, calf_alpha=%.2f",
-                     stand_up_step_, s1, smooth);
-
-    } else if (stand_up_step_ <= s1 + s2) {
-        // ---- Stage 2: Raise thighs + adjust hips ----
-        int step_in_s2 = stand_up_step_ - s1;
-        float alpha = std::min(1.0f,
-            static_cast<float>(step_in_s2) / static_cast<float>(s2));
-        float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
-        kp_factor = 0.5f + smooth * 0.5f;  // ramp from 50% to 100%
-
-        for (int i = 0; i < 4; ++i)   // hip [0-3]: interpolate to target
-            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
-        for (int i = 4; i < 8; ++i)   // thigh [4-7]: full interpolation
-            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i],
-                             0.1f + smooth * 0.9f);  // from 10% to 100%
-        for (int i = 8; i < 12; ++i)  // calf [8-11]: already at target
-            target[i] = kDefaultJointPos[i];
-
-        if (step_in_s2 % 50 == 0)
-            ROS_INFO("Stand-up stage 2: step %d/%d, thigh_alpha=%.2f",
-                     step_in_s2, s2, smooth);
+        if (stand_up_step_ % 50 == 0) {
+            if (stand_up_step_ <= s1) {
+                ROS_INFO("Stand-up stage 1: step %d/%d, alpha=%.2f",
+                         stand_up_step_, s1, smooth);
+            } else {
+                int step_in_s2 = stand_up_step_ - s1;
+                ROS_INFO("Stand-up stage 2: step %d/%d, alpha=%.2f",
+                         step_in_s2, s2, smooth);
+            }
+        }
 
     } else {
         // ---- Wait for second A: full default pose with full Kp ----
