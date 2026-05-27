@@ -981,7 +981,8 @@ void AliengoDeployNode::writeActionToUdp(const std::vector<float> &action) {
 
 void AliengoDeployNode::writeStandUpCmd() {
     // Coordinated stand-up:
-    //   Stage 1/2: move hips, thighs, and calfs together to avoid foot sweep
+    //   Stage 1/2: move each leg as a unit to avoid foot sweep
+    //   Rear legs lead slightly to counter backward pitch during lift
     //   Wait: maintain default pose until A confirms policy handover
     //
     // Joint indices in policy order:
@@ -999,20 +1000,30 @@ void AliengoDeployNode::writeStandUpCmd() {
     if (stand_up_step_ <= total) {
         float alpha = std::min(1.0f,
             static_cast<float>(stand_up_step_) / static_cast<float>(total));
-        float smooth = alpha * alpha * (3.0f - 2.0f * alpha);
-        kp_factor = smooth;
+        auto smoothstep = [](float x) {
+            x = std::max(0.0f, std::min(1.0f, x));
+            return x * x * (3.0f - 2.0f * x);
+        };
+        float front_smooth = smoothstep(alpha - kStandUpFrontAlphaLag);
+        float rear_smooth = smoothstep(alpha + kStandUpRearAlphaLead);
+        kp_factor = smoothstep(alpha);
 
-        for (int i = 0; i < kNumJoints; ++i)
-            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i], smooth);
+        for (int i = 0; i < kNumJoints; ++i) {
+            bool is_rear = (i == 2 || i == 3 || i == 6 || i == 7 ||
+                            i == 10 || i == 11);
+            float leg_smooth = is_rear ? rear_smooth : front_smooth;
+            target[i] = lerp(stand_up_start_pos_[i], kDefaultJointPos[i],
+                             leg_smooth);
+        }
 
         if (stand_up_step_ % 50 == 0) {
             if (stand_up_step_ <= s1) {
-                ROS_INFO("Stand-up stage 1: step %d/%d, alpha=%.2f",
-                         stand_up_step_, s1, smooth);
+                ROS_INFO("Stand-up stage 1: step %d/%d, front_alpha=%.2f, rear_alpha=%.2f",
+                         stand_up_step_, s1, front_smooth, rear_smooth);
             } else {
                 int step_in_s2 = stand_up_step_ - s1;
-                ROS_INFO("Stand-up stage 2: step %d/%d, alpha=%.2f",
-                         step_in_s2, s2, smooth);
+                ROS_INFO("Stand-up stage 2: step %d/%d, front_alpha=%.2f, rear_alpha=%.2f",
+                         step_in_s2, s2, front_smooth, rear_smooth);
             }
         }
 
