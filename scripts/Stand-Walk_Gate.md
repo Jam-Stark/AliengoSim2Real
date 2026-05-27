@@ -332,9 +332,9 @@ flowchart LR
 | GaitClock mode 控制 | [`gait_clock.h`](../ros1/include/aliengo_deploy/gait_clock.h) | `setStanding()` 冻结 phase=0 |
 | 控制循环集成 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | gate + pred_est 提取 + gait 模式驱动 + stand-up 前段 |
 | Force ROS topic | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 发布 `/force_estimator` (geometry_msgs/WrenchStamped) |
-| CSV 日志 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 每步记录 cmd, pred_est, mode, gate + brake 内部状态 |
+| CSV 日志 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | `force_log_csv` 非空时每步记录 cmd, pred_est, mode, gate + brake 内部状态 |
 | TX2 relay | [`aliengo_relay.cpp`](../ros1/tx2_relay/aliengo_relay.cpp) | TX2 上用 SDK v3.0.0 转发命令/状态（控制器只接受板载 PC） |
-| 2 阶段站立 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | Stage1: 展开小腿 → Stage2: 抬大腿 → Hold → 策略接管 |
+| Stand-up 前段 | [`aliengo_deploy_node.cpp`](../ros1/src/aliengo_deploy_node.cpp) | 6 秒协调插值，后腿略提前、前腿略滞后，到默认站姿后等待第二次 A 接入策略 |
 | Gate preset 选择 | [`aliengo_deploy_main.cpp`](../ros1/src/aliengo_deploy_main.cpp) | 启动参数 `gate_preset` 支持 v2 / v2_robust |
 
 ### 控制循环流程（当前版本）
@@ -345,7 +345,7 @@ flowchart TD
     B -- No --> Z[idle]
     B -- Yes --> C[decode remote + check buttons]
     C --> D{stand-up 阶段?}
-    D -- Yes --> E[2-stage stand-up interpolation]
+    D -- Yes --> E[stand-up interpolation / wait second A]
     D -- No --> F{is_stop / damping?}
     F -- Yes --> G[controlled stop / damping]
     F -- No --> H[policy forward → action + pred_est]
@@ -371,6 +371,7 @@ flowchart TD
 | `robot_port` | `9000` | TX2 relay 端口 |
 | `inference_device` | `cpu` | 推理设备 |
 | `gait_frequency` | `2.0` | gait clock 频率 (Hz) |
+| `force_log_csv` | 空 | 非空时写 CSV，例如 `/tmp/force_estimator_log.csv` |
 
 ### 查看 force estimator
 
@@ -380,6 +381,13 @@ rostopic echo /force_estimator
 
 # 录 bag
 rosbag record /force_estimator /low_cmd /low_state
+
+# 写 CSV，需要节点启动时传入
+roslaunch aliengo_deploy aliengo_deploy.launch \
+  force_log_csv:=/tmp/force_estimator_log.csv
+
+docker exec noetic-gpu head -5 /tmp/force_estimator_log.csv
+docker cp noetic-gpu:/tmp/force_estimator_log.csv ./
 ```
 
 ### 实机测试进度
@@ -387,7 +395,7 @@ rosbag record /force_estimator /low_cmd /low_state
 - [x] Docker 内静态测试（fake publisher + 策略推理）
 - [x] 直连 UDP 读取状态（IMU + 电机 + 遥控器）
 - [x] TX2 relay 编译运行
-- [x] 2 阶段站立成功（保护架下）
+- [x] 6 秒 stand-up 插值 + 第二次 A 接入策略（保护架下）
 - [ ] 关节映射手动逐腿验证（**关键！** 观察到 RR/FR 可能交换）
 - [ ] 脱离保护架地面行走
 - [ ] v2 preset 阈值是否需要针对实机重新调整

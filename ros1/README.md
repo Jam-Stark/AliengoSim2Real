@@ -89,14 +89,15 @@ export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
 roslaunch aliengo_deploy aliengo_deploy.launch \
     policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
-    gate_preset:=v2_robust
+    gate_preset:=v2_robust \
+    force_log_csv:=/tmp/force_estimator_log.csv
 ```
 
 ### 步骤 3: 遥控器操作
 
 | 按键 | 功能 |
 |------|------|
-| **A** | 启动 stand-up（2 阶段站立 → 策略接管） |
+| **A** | 第一次启动 stand-up，默认站姿后第二次接入策略 |
 | **B** | 受控停止（站立→趴下） |
 | **L2+B** | 紧急阻尼制动 |
 | **Start** | 清零速度指令 |
@@ -106,12 +107,12 @@ roslaunch aliengo_deploy aliengo_deploy.launch \
 
 ## Stand-Up 前段
 
-按 A 后不会直接启用策略，而是经过 2 阶段站立：
+第一次按 A 后不会直接启用策略，而是先完成 stand-up 插值：
 
-1. **Stage 1** (3s): 先展开小腿 (calf)，大腿几乎不动 → 形成稳定支撑
-2. **Stage 2** (3s): 收大腿 (thigh) 抬高身体 + 调髋关节
-3. **Hold** (1s): 保持默认站姿，用满 Kp
-4. **Handover**: warm-start obs history → 策略接管
+1. **Stage 1** (0~3s): 四条腿协调向默认站姿插值，日志显示 `front_alpha/rear_alpha`
+2. **Stage 2** (3~6s): 继续协调插值到默认站姿，后腿略提前、前腿略滞后以抑制后仰
+3. **Wait**: 持续保持默认站姿，不自动接入策略
+4. **Second A**: 再按 A 后 warm-start obs history → 策略接管
 
 参数在 `aliengo_constants.h` 中可调。
 
@@ -147,6 +148,7 @@ sudo env LD_LIBRARY_PATH=/home/unitree/unitree_legged_sdk/lib ./aliengo_relay
 | `use_direct_udp` | true | 直接 UDP 模式 (false=ROS topic 模式，用于 fake test) |
 | `inference_device` | cpu | cpu / cuda |
 | `gait_frequency` | 2.0 | gait clock 频率 (Hz) |
+| `force_log_csv` | 空 | 非空时保存 pred_est/gate/brake CSV，例如 `/tmp/force_estimator_log.csv` |
 
 ## Docker 环境搭建
 
@@ -173,14 +175,15 @@ constexpr float kKd[12] = { hip×4, thigh×4, calf×4 };
 ### Stand-Up 参数
 
 ```cpp
-kStandUpStage1Steps / kStandUpStage2Steps / kStandUpHoldSteps
+kStandUpStage1Steps / kStandUpStage2Steps
+kStandUpRearAlphaLead / kStandUpFrontAlphaLag
 kStandUpKpStart / kStandUpKdStart
 ```
 
 ## 安全注意事项
 
 1. **首次部署务必使用保护架**
-2. 按 A 后有 7 秒站立过渡，不会立即高 Kp
+2. 第一次按 A 后有 6 秒站立插值，随后等待第二次 A 才接入策略
 3. 随时按 B 安全趴下，L2+B 紧急制动
 4. 关节映射必须通过手动验证确认
 5. PD 增益从低开始，逐步增大

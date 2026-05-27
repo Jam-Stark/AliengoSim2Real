@@ -128,7 +128,8 @@ roslaunch aliengo_deploy aliengo_deploy.launch \
     policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
     gate_preset:=v2_robust \
     robot_ip:=192.168.123.12 \
-    robot_port:=9000
+    robot_port:=9000 \
+    force_log_csv:=/tmp/force_estimator_log.csv
 ```
 
 预期日志：
@@ -137,6 +138,7 @@ roslaunch aliengo_deploy aliengo_deploy.launch \
 [UdpTransport] First state received (891 bytes).
 Aliengo deploy node started. Control freq: 50 Hz. Mode: DIRECT_UDP.
 [Manager] Policy 0 Initialized Successfully.
+CSV force estimator log opened: /tmp/force_estimator_log.csv
 ```
 
 > 注意：现在连接的是 TX2 relay (192.168.123.12:9000)，不是控制器 (192.168.123.10:8007)。
@@ -158,6 +160,13 @@ rostopic echo /force_estimator
 
 应该看到 `pred_est` 数据流（策略加载后即开始推理，虽然还没使能电机命令）。
 
+如果启动时传了 `force_log_csv:=/tmp/force_estimator_log.csv`，可以在容器里确认 CSV：
+
+```bash
+docker exec noetic-gpu head -5 /tmp/force_estimator_log.csv
+docker cp noetic-gpu:/tmp/force_estimator_log.csv ./
+```
+
 ---
 
 ### 第 7 步：⚠️ 保护架上按 A — 启动 Stand-Up
@@ -169,17 +178,18 @@ rostopic echo /force_estimator
 
 在遥控器上 **按 A**，观察：
 
-1. **Stage 1** (0~3s)：先展开小腿 (calf)，大腿几乎不动
-2. **Stage 2** (3~6s)：收大腿抬高身体 + 调髋关节
-3. **Hold** (6~7s)：保持默认站姿
-4. **Handover** (7s)：策略接管，打印 `Stand-up complete. Policy ENABLED.`
+1. **Stage 1** (0~3s)：四条腿协调向默认站姿插值，日志显示 `front_alpha` 和 `rear_alpha`
+2. **Stage 2** (3~6s)：继续协调插值到默认站姿，后腿略提前、前腿略滞后
+3. **Wait** (6s 后)：保持默认站姿，打印 `Stand-up reached default pose. Press A again to enable policy.`
+4. **Second A**：再次按 A 后策略接管，打印 `Stand-up confirmed by second A. Policy ENABLED.`
 
 如果有异常（单腿乱甩、关节角度跳变、NaN），立即 **按 B** 停止。
 
 > 站立参数在 [`aliengo_constants.h`](../ros1/include/aliengo_deploy/aliengo_constants.h:174)：
 > - `kStandUpStage1Steps = 150` (3.0s)
 > - `kStandUpStage2Steps = 150` (3.0s)
-> - `kStandUpHoldSteps = 50` (1.0s)
+> - `kStandUpRearAlphaLead = 0.10`
+> - `kStandUpFrontAlphaLag = 0.04`
 > - `kStandUpKpStart = 3.0` (起始 Kp，逐步增大)
 
 ---
