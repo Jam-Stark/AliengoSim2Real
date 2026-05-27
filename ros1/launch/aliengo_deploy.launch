@@ -16,6 +16,7 @@
     <arg name="use_direct_udp" default="true"/>
     <arg name="robot_ip" default="192.168.123.12"/>
     <arg name="robot_port" default="9000"/>
+    <arg name="force_log_csv" default=""/>
 
     <!-- NOTE: ros_udp bridge is NOT needed in direct UDP mode (default).
          Only start it if use_direct_udp:=false -->
@@ -32,6 +33,8 @@
         <param name="use_direct_udp" value="$(arg use_direct_udp)"/>
         <param name="robot_ip" value="$(arg robot_ip)"/>
         <param name="robot_port" value="$(arg robot_port)"/>
+        <param name="force_log_csv" value="$(arg force_log_csv)"
+               if="$(eval arg('force_log_csv') != '')"/>
     </node>
 
 </launch>

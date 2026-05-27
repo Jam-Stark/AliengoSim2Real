@@ -22,6 +22,7 @@
     <arg name="policy_path" default=""/>
     <arg name="inference_device" default="cpu"/>
     <arg name="gait_frequency" default="2.0"/>
+    <arg name="force_log_csv" default=""/>
 
     <!-- 1. Aliengo deploy node (策略推理) -->
     <node pkg="aliengo_deploy" type="aliengo_deploy" name="aliengo_deploy"
@@ -31,6 +32,8 @@
         <param name="inference_device" value="$(arg inference_device)"/>
         <param name="gait_frequency" value="$(arg gait_frequency)"/>
         <param name="use_local_gamepad" value="false"/>
+        <param name="force_log_csv" value="$(arg force_log_csv)"
+               if="$(eval arg('force_log_csv') != '')"/>
     </node>
 
     <!-- 2. Low cmd monitor (验证输出) -->
