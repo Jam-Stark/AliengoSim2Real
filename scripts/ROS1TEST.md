@@ -125,7 +125,7 @@ source /root/catkin_ws/devel/setup.bash
 export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
 roslaunch aliengo_deploy aliengo_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
+    policy_path:=/work/AliengoSim2Real/policy/aliengo_new/ \
     gate_preset:=v2_robust \
     robot_ip:=192.168.123.12 \
     robot_port:=9000 \

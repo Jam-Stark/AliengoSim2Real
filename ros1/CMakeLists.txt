@@ -98,8 +98,13 @@ file(GLOB CPP_GAMEPAD_SRC ${CPP_GAMEPAD_PATH}/*.cpp)
 # ============================================================
 # Policy path defaults (can be overridden at runtime)
 # ============================================================
-set(DEFAULT_ALIENGO_POLICY_PATH "${REAL_SOURCE_DIR}/../policy/aliengo/"
-    CACHE STRING "Default path to Aliengo policy directory")
+set(DEFAULT_ALIENGO_POLICY_OLD_PATH "${REAL_SOURCE_DIR}/../policy/aliengo/")
+set(DEFAULT_ALIENGO_POLICY_NEW_PATH "${REAL_SOURCE_DIR}/../policy/aliengo_new/")
+if(NOT DEFINED DEFAULT_ALIENGO_POLICY_PATH OR
+   "${DEFAULT_ALIENGO_POLICY_PATH}" STREQUAL "${DEFAULT_ALIENGO_POLICY_OLD_PATH}")
+  set(DEFAULT_ALIENGO_POLICY_PATH "${DEFAULT_ALIENGO_POLICY_NEW_PATH}"
+      CACHE STRING "Default path to Aliengo policy directory" FORCE)
+endif()
 add_definitions(-DDEFAULT_ALIENGO_POLICY_PATH="${DEFAULT_ALIENGO_POLICY_PATH}")
 
 # ============================================================

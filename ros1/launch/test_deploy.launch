@@ -11,7 +11,7 @@
     <!--                                                                -->
     <!-- 完整测试 3 步:                                                  -->
     <!--   终端1: roslaunch aliengo_deploy test_deploy.launch            -->
-    <!--          policy_path:=/work/AliengoSim2Real/policy/aliengo/     -->
+    <!--          policy_path:=/work/AliengoSim2Real/policy/aliengo_new/ -->
     <!--   终端2: rosrun aliengo_deploy fake_low_state_publisher         -->
     <!--   终端3: (可选) rostopic echo /low_cmd                         -->
     <!--                                                                -->

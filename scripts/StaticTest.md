@@ -6,7 +6,7 @@
 
 - Docker 容器 `noetic-gpu` 已启动
 - catkin workspace 已编译通过（含 `aliengo_deploy`、`fake_low_state_publisher`、`low_cmd_monitor`）
-- `policy.pt` 已放置在 `/work/AliengoSim2Real/policy/aliengo/`
+- `policy.pt` 已放置在 `/work/AliengoSim2Real/policy/aliengo_new/`
 - LibTorch CPU 已安装在 `/opt/libtorch`
 
 ## 重新编译（如有代码变更）
@@ -36,7 +36,7 @@ source /root/catkin_ws/devel/setup.bash
 export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
 roslaunch aliengo_deploy test_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo/
+    policy_path:=/work/AliengoSim2Real/policy/aliengo_new/
 ```
 
 > `test_deploy.launch` 使用 `use_direct_udp:=false`，通过 ROS topic 收发，不需要实机/relay。

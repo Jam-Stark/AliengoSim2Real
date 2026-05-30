@@ -142,7 +142,7 @@ tar xzf /path/to/workspace-backup.tar.gz
 ├── projects/
 │   ├── AliengoSim2Real/
 │   │   ├── ros1/              ← catkin 包源码
-│   │   ├── policy/aliengo/    ← policy.pt 策略文件
+│   │   ├── policy/aliengo_new/ ← policy.pt 策略文件
 │   │   ├── utils/             ← ManagerEnv 等共用代码
 │   │   ├── scripts/           ← 文档
 │   │   └── ...
