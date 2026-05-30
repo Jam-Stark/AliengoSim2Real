@@ -91,19 +91,19 @@ constexpr float kActionScaleVec[kNumJoints] = {
 
 // ------------------------------------------------------------
 // PD gains (policy order)
-// hip/thigh: Kp=80, Kd=2.5  |  calf: Kp=120, Kd=4.5
+// hip/thigh: Kp=48, Kd=1.75  |  calf: Kp=72, Kd=3.15
 // Deployment PD gains for the current Aliengo policy; may need tuning for real robot
 // ------------------------------------------------------------
 
 constexpr float kKp[12] = {
-    80.0f, 80.0f, 80.0f, 80.0f,        // hip
-    80.0f, 80.0f, 80.0f, 80.0f,        // thigh
-    120.0f, 120.0f, 120.0f, 120.0f,    // calf
+    48.0f, 48.0f, 48.0f, 48.0f,    // hip
+    48.0f, 48.0f, 48.0f, 48.0f,    // thigh
+    72.0f, 72.0f, 72.0f, 72.0f,    // calf
 };
 constexpr float kKd[12] = {
-    2.50f, 2.50f, 2.50f, 2.50f,    // hip
-    2.50f, 2.50f, 2.50f, 2.50f,    // thigh
-    4.50f, 4.50f, 4.50f, 4.50f,    // calf
+    1.75f, 1.75f, 1.75f, 1.75f,    // hip
+    1.75f, 1.75f, 1.75f, 1.75f,    // thigh
+    3.15f, 3.15f, 3.15f, 3.15f,    // calf
 };
 
 
