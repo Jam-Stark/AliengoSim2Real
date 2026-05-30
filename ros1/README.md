@@ -65,7 +65,7 @@ ros1/
 1. ROG 笔记本有 Docker + `noetic-gpu:2026-04` 镜像
 2. Aliengo TX2 可 SSH 访问 (unitree@192.168.123.12)
 3. TX2 上已编译 `aliengo_relay`（见下方"TX2 Relay 搭建"）
-4. `policy.pt` 放在 `policy/aliengo_new/` 目录
+4. `policy.pt` 放在 `policy/aliengo/` 目录
 
 ### 步骤 1: TX2 上启动 relay
 
@@ -88,7 +88,7 @@ source /root/catkin_ws/devel/setup.bash
 export LD_LIBRARY_PATH="/opt/libtorch/lib:${LD_LIBRARY_PATH}"
 
 roslaunch aliengo_deploy aliengo_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo_new/ \
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/ \
     gate_preset:=v2_robust \
     force_log_csv:=/tmp/force_estimator_log.csv
 ```
@@ -141,7 +141,7 @@ sudo env LD_LIBRARY_PATH=/home/unitree/unitree_legged_sdk/lib ./aliengo_relay
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `policy_path` | ...policy/aliengo_new/ | TorchScript 模型目录 |
+| `policy_path` | ...policy/aliengo/ | TorchScript 模型目录 |
 | `gate_preset` | v2 | standing/walking gate 预设 (v2 / v2_robust) |
 | `robot_ip` | 192.168.123.12 | TX2 relay IP |
 | `robot_port` | 9000 | TX2 relay 端口 |

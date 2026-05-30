@@ -63,7 +63,7 @@ Remote keys=0x0100 lx=0.000 ly=0.500 rx=0.000
 ```bash
 # 终端 1: 启动 deploy 节点（use_direct_udp=false）
 roslaunch aliengo_deploy test_deploy.launch \
-    policy_path:=/work/AliengoSim2Real/policy/aliengo_new/
+    policy_path:=/work/AliengoSim2Real/policy/aliengo/
 
 # 终端 2: 启动 fake publisher (带键盘控制)
 rosrun aliengo_deploy fake_low_state_publisher
