@@ -2,6 +2,8 @@
 
 This directory builds the ROS2 package `go2w_vtm`.
 
+All paths below are repo-relative unless explicitly stated. Run build commands from the repository root.
+
 The package currently installs three executables:
 
 - `go2w_real_deploy`
@@ -14,7 +16,7 @@ The other two are helper/debug nodes.
 ## Build
 
 ```bash
-cd /home/albusgive2/go2w_sim2sim/ros2
+cd ros2
 source /opt/ros/humble/setup.bash
 source ~/unitree_ros2/setup_local.sh
 colcon build --packages-select go2w_vtm --cmake-args -DUSE_ONNX=ON -DBUILD_TESTING=OFF
@@ -59,8 +61,8 @@ Main features:
 
 Source:
 
-- main: [go2w_real_deploy.cpp](/home/albusgive2/go2w_sim2sim/ros2/src/src/go2w_real_deploy/go2w_real_deploy.cpp)
-- node: [go2w_real_deploy_node.cpp](/home/albusgive2/go2w_sim2sim/ros2/src/src/go2w_real_deploy/go2w_real_deploy_node.cpp)
+- main: [go2w_real_deploy.cpp](src/src/go2w_real_deploy/go2w_real_deploy.cpp)
+- node: [go2w_real_deploy_node.cpp](src/src/go2w_real_deploy/go2w_real_deploy_node.cpp)
 
 #### Custom startup arguments
 
@@ -195,7 +197,7 @@ Behavior:
 
 Source:
 
-- [go2w_stand.cpp](/home/albusgive2/go2w_sim2sim/ros2/src/src/go2w_stand/go2w_stand.cpp)
+- [go2w_stand.cpp](src/src/go2w_stand/go2w_stand.cpp)
 
 ### 3. `deep_camera`
 
@@ -217,13 +219,13 @@ Behavior:
 
 Source:
 
-- [deep_camera.cpp](/home/albusgive2/go2w_sim2sim/ros2/src/src/deep_camera/deep_camera.cpp)
+- [deep_camera.cpp](src/src/deep_camera/deep_camera.cpp)
 
 ## Installed Targets
 
 These executables are defined in:
 
-- [CMakeLists.txt](/home/albusgive2/go2w_sim2sim/ros2/src/CMakeLists.txt)
+- [CMakeLists.txt](src/CMakeLists.txt)
 
 Current installed targets:
 

@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>DDS通信接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>DDS通信接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/dds_service">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/dds_service</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">DDS通信接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-01-04 15:35:45</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><style data-line="2">
+table th:first-of-type {
+    width: 160pt;
+    text-align: center;
+}
+
+}
+</style>
+<h1 data-line="12" id="heading-1">Unitree&nbsp;SDK&nbsp;介绍</h1>
+<p data-line="14"><strong>unitree_sdk2</strong>&nbsp;是在DDS上做了一层封装，支持&nbsp;DDS&nbsp;组件的&nbsp;Qos&nbsp;配置，对应用开发提供简单的封装接口，并实现了基于&nbsp;DDS&nbsp;Topic&nbsp;的&nbsp;RPC&nbsp;机制，适用于在 A2 内部进程间以及 A2 外部与内部的进程间通过发布/订阅和请求/响应两种方式完成不同场景下的数据通信。</p>
+<h2 data-line="16" id="heading-2">DDS 简介</h2>
+<p data-line="17">DDS(全称&nbsp;Data&nbsp;Distribution&nbsp;Service&nbsp;数据分发服务)，是一个中间件，由OMG发布的分布式通信规范，采用发布/订阅模型，提供多种QoS服务质量策略，以保障数据进行实时、高效、灵活地分发，可满足各种分布式实时通信应用需求。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2023/9/5/bc447ffc02cf442186d8b7d57e52fb7d_754x448.jpeg" alt="" class="medium-zoom-image"></figure>
+<p data-line="22">(图片来源&nbsp;<a href="https://www.dds-foundation.org/">https://www.dds-foundation.org</a>)</p>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="24">
+<p class="md-editor-admonition-title">说明：</p>
+<p><strong>unitree_sdk2</strong>&nbsp;安装配置教程，本文不再赘述，请查阅&nbsp;<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/quick_development">《快速开发》</a>。</p>
+</div>
+<h1 data-line="29" id="heading-3">接口说明</h1>
+<h2 data-line="32" id="heading-4">unitree::robot::ChannelFactory</h2>
+<p data-line="34"><code>unitree::robot::ChannelFactory</code>&nbsp;在unitree::robot&nbsp;下，提供了一个ChannelFactory&nbsp;的单例，用于创建基于&nbsp;DDS&nbsp;Topic&nbsp;的&nbsp;Channel。ChannelFactory&nbsp;在使用前必须调用初始化接口，以对底层的&nbsp;DDS&nbsp;配置进行初始化，调用方法如</p>
+<p data-line="36"><code>unitree::robot::ChannelFactory::Instance()-&gt;Init(0)</code></p>
+<p data-line="38">各接口描述如下：</p>
+<table data-line="40">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>Instance</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>static&nbsp;&nbsp;unitree::robot::ChannelFactory*&nbsp;unitree::robot::ChannelFactory::Instance()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>获取单例静态指针。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td><strong>无</strong></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>unitree::robot::ChannelFactory&nbsp;单例静态指针。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="48">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>Init</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;Init(int32_t&nbsp;domainId,&nbsp;const&nbsp;std::string&amp;&nbsp;networkInterface&nbsp;=&nbsp;"",&nbsp;bool&nbsp;enableSharedMemory&nbsp;=&nbsp;false)</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>指定&nbsp;Domain&nbsp;Id,&nbsp;网卡名、是否使用共享内存三个初始化参数，对ChannelFactory&nbsp;初始化。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td><strong>domainId</strong>：默认构造DdsParticipant的domain&nbsp;id；<br> <strong>networkInterface</strong>：指定网卡名，默认为空；<br> <strong>enableSharedMemory</strong>：是否使用共享内存，默认为&nbsp;false。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td>如果 <strong>networkInterface</strong>&nbsp;为空，会生成自动选择网卡配置； 在&nbsp;A2&nbsp;外部开发应用程序时，enableSharedMemory&nbsp;需设置为&nbsp;false。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="56">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th>CreateSendChannel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>template<typename msg> ChannelPtr<msg>&nbsp;CreateSendChannel(const&nbsp;std::string&amp;&nbsp;name)</msg></typename msg></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>指定&nbsp;name，创建一个指定消息类型为&nbsp;MSG&nbsp;的用来发送数据的&nbsp;Channel。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td><strong>name</strong>：Channel&nbsp;名。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>template<typename msg>&nbsp;ChannelPtr<msg></msg></typename msg></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="64">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th>CreateRecvChannel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>template<typename msg> ChannelPtr<msg>&nbsp;CreateRecvChannel(const&nbsp;std::string&amp;&nbsp;name,&nbsp;std::function&lt;void(const&nbsp;void*)&gt;&nbsp;callback,&nbsp;int32_t&nbsp;queuelen&nbsp;=&nbsp;0)</msg></typename msg></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>指定&nbsp;name，创建一个指定消息类型为&nbsp;MSG&nbsp;的用来接收数据的&nbsp;Channel。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td><strong>name</strong>：Channel&nbsp;名；<br> <strong>callback</strong>：消息到达时的回调函数；<br> <strong>queuelen</strong>：消息缓存队列的长度；如果长度为&nbsp;0，不启用消息缓存内列。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>template<typename msg>&nbsp;ChannelPtr<msg></msg></typename msg></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td>如果消息在回调函数中处理耗时较长，建议启用消息缓存队列，避免&nbsp;DDS&nbsp;回调线程阻塞。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="72">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>Release</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;Release()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>释放&nbsp;ChannelFactory&nbsp;静态资源。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td>unitree::robot::ChannelFactory::Instance()-&gt;Release()</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="80" id="heading-5">unitree::robot::ChannelPublisher</h2>
+<p data-line="82"><code>unitree::robot::ChannelPublisher</code>&nbsp;类实现了指定类型的消息发布功能。</p>
+<table data-line="84">
+<thead>
+<tr>
+<th style="text-align:center">类名</th>
+<th>构造与析构</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">template<typename msg> ChannelPublisher</typename msg></td>
+<td>explicit&nbsp;ChannelPublisher(const&nbsp;std::string&amp;&nbsp;channelName); ~ChannelPublisher()</td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="88">
+<p class="md-editor-admonition-title">注意：</p>
+<p>unitree::robot::ChannelPublisher&nbsp;构造时使用了unitree::robot::ChannelFactory::Instance()-&gt;CreateSendChannel<msg>(mChannelName)，所以在使用unitree::robot::ChannelPublisher&nbsp;之前需要先初始化unitree::robot::ChannelFactory&nbsp;单例。</msg></p>
+</div>
+<table data-line="92">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>InitChannel</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;InitChannel()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>初始化&nbsp;Channel，准备用于发送消息。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="100">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>CloseChannel</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;CloseChannel()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>关闭&nbsp;Channel。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="108">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Write</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>bool&nbsp;Write(const&nbsp;MSG&amp;&nbsp;msg)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>发送指定类型的消息。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>msg：发送&nbsp;类型为&nbsp;MSG&nbsp;的消息。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>true：发送成功； false：发送失败。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="116" id="heading-6">unitree::robot::ChannelSubscriber</h2>
+<p data-line="118"><code>unitree::robot::ChannelSubscriber</code>&nbsp;实现了指定类型的消息订阅功能。</p>
+<table data-line="120">
+<thead>
+<tr>
+<th style="text-align:center"><strong>类名</strong></th>
+<th>构造与析构</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">template<typename msg> ChannelSubscriber</typename msg></td>
+<td>explicit&nbsp;ChannelSubscriber(const&nbsp;std::string&amp;&nbsp;channelName); ~ChannelSubscriber()</td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="124">
+<p class="md-editor-admonition-title"> 注意：</p>
+<p>unitree::robot::ChannelSubscriber&nbsp;构造时使用了unitree::robot::ChannelFactory::Instance()-&gt;CreateSendChannel<msg>(mChannelName)，所以在使用unitree::robot::ChannelSubscriber&nbsp;之前需要先初始化unitree::robot::ChannelFactory&nbsp;单例。</msg></p>
+</div>
+<table data-line="128">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>InitChannel</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;InitChannel(const&nbsp;std::function&lt;void(const&nbsp;void*)&gt;&amp;&nbsp;callback,&nbsp;int64_t&nbsp;queuelen&nbsp;=&nbsp;0)</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>初始化&nbsp;Channel，准备用于接收或处理消息。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td><strong>callback</strong>：消息到达时的回调函数；<br> <strong>queuelen</strong>：消息缓存队列的长度；如果长度为&nbsp;0，不启用消息缓存内列。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td>如果消息在回调函数中处理耗时较长，建议启用消息缓存队列，避免&nbsp;DDS&nbsp;回调线程阻塞。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="136">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>CloseChannel</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>void&nbsp;CloseChannel()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>关闭&nbsp;Channel。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="144">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th><strong>GetLastDataAvailableTime</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td>int64_t&nbsp;GetLastDataAvailableTime()</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td>获取最后一次收到消息的时间。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td>Channel&nbsp;未初始化时返回-1；否则返回从系统启动开始从&nbsp;0&nbsp;单调递增的时间戳，精确到微秒。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="152" id="heading-7">机器人&nbsp;Service&nbsp;Client&nbsp;接口</h2>
+<p data-line="154">机器人内部的多个服务组件通过&nbsp;RPC&nbsp;Client&nbsp;的方式对外提供部分功能接口，用户能方便的通过&nbsp;Client&nbsp;的接口实现对</p>
+<p data-line="156">机器人&nbsp;的控制或数据获取。</p>
+<h4 data-line="158" id="heading-8">部分通用错误码列表：</h4>
+<table data-line="160">
+<thead>
+<tr>
+<th>错误号</th>
+<th>错误描述</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3001</td>
+<td>未知错误</td>
+<td>客户端/服务端返回</td>
+</tr>
+<tr>
+<td>3102</td>
+<td>请求发送错误</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3103</td>
+<td>API&nbsp;未注册</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3104</td>
+<td>请求超时</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3105</td>
+<td>请求与响应数据不匹配</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3106</td>
+<td>响应数据无效</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3107</td>
+<td>租约无效</td>
+<td>客户端返回</td>
+</tr>
+<tr>
+<td>3201</td>
+<td>响应发送错误</td>
+<td>发生在服务端,不会返回到客户端</td>
+</tr>
+<tr>
+<td>3202</td>
+<td>服务端内部错误</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>3203</td>
+<td>API&nbsp;在服务端未实现</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>3204</td>
+<td>API&nbsp;参数错误</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>3205</td>
+<td>请求被拒绝</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>3206</td>
+<td>租约无效</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>3207</td>
+<td>租约已存在</td>
+<td>服务端返回</td>
+</tr>
+</tbody>
+</table>
+<h4 data-line="177" id="heading-9">部分客户端通用接口描述：</h4>
+<table data-line="179">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Init</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>void&nbsp;Init()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>客户端初始化，完成客户端&nbsp;API&nbsp;注册等逻辑。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="187">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>SetTimeout</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>void&nbsp;SetTimeout(float&nbsp;timeout)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置&nbsp;RPC&nbsp;请求超时时间。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>timeout：单位秒。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>如未设置超时，默认超时时间为&nbsp;1&nbsp;秒。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="195">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>WaitLeaseApplied</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>void&nbsp;WaitLeaseApplied()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>申请租约，函数会阻塞至申请到租约。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>只在启用了租约时有效。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="203">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>GetApiVersion</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>const&nbsp;std::string&amp;&nbsp;GetApiVersion()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>获取客户端&nbsp;API&nbsp;版本。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>返回客户端&nbsp;API&nbsp;版本。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="211">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>GetApiVersion</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>const&nbsp;std::string&amp;&nbsp;GetServerApiVersion()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>获取服务端&nbsp;API&nbsp;版本。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>返回服务端&nbsp;API&nbsp;版本。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="219" id="heading-10">消息发布与接收示例</h2>
+<p data-line="221"><strong>发布例程路径：</strong>&nbsp;<code>unitree_sdk2/example/helloworld/publisher.cpp</code></p>
+<p data-line="223"><strong>接收例程路径：</strong>&nbsp;<code>unitree_sdk2/example/helloworld/subscriber.cpp</code></p>
+<h2 data-line="225" id="heading-11">A2 常用TOPIC 列表</h2>
+<table data-line="226">
+<thead>
+<tr>
+<th>TopicName</th>
+<th>类型组</th>
+<th>消息类型定义</th>
+<th>Info</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rt/lf/mainboardstate</td>
+<td>hg</td>
+<td>MainBoardState_</td>
+<td>获取主板反馈信息</td>
+</tr>
+<tr>
+<td>rt/lowstate</td>
+<td>hg</td>
+<td>LowState_</td>
+<td>获取底层反馈信息(IMU、电机等)</td>
+</tr>
+<tr>
+<td>rt/lf/lowstate</td>
+<td>hg</td>
+<td>LowState_</td>
+<td>获取底层反馈信息(IMU、电机等)-低频模式</td>
+</tr>
+<tr>
+<td>rt/lowcmd</td>
+<td>hg</td>
+<td>LowCmd_</td>
+<td>底层控制命令</td>
+</tr>
+<tr>
+<td>rt/lf/bmsstate</td>
+<td>hg</td>
+<td>BmsState_</td>
+<td>获取电池反馈数据</td>
+</tr>
+<tr>
+<td>rt/lf/secondary_bmsstate</td>
+<td>hg</td>
+<td>BmsState_</td>
+<td>获取第二电池反馈数据</td>
+</tr>
+<tr>
+<td>rt/odommodestate</td>
+<td>go2</td>
+<td>IMUState_</td>
+<td>获取里程计信息</td>
+</tr>
+<tr>
+<td>rt/lf/odommodestate</td>
+<td>go2</td>
+<td>IMUState_</td>
+<td>获取里程计信息-低频模式</td>
+</tr>
+<tr>
+<td>rt/lf/secondary_imu</td>
+<td>hg</td>
+<td>IMUState_</td>
+<td>获取机身IMU数据-低频模式</td>
+</tr>
+<tr>
+<td>rt/secondary_imu</td>
+<td>hg</td>
+<td>IMUState_</td>
+<td>获取机身IMU数据</td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="239">
+<p class="md-editor-admonition-title">注意</p>
+<p>我们不直接提供idl文件，而是提供经由Cyclone DDS的idlc组件编译好的消息定义文件，参考如下：</p>
+<ol>
+<li><a href="https://github.com/unitreerobotics/unitree_sdk2/tree/main/include/unitree/idl">Uintree-sdk2 IDL</a></li>
+<li><a href="https://github.com/unitreerobotics/unitree_sdk2_python/tree/master/unitree_sdk2py/idl">PythonSDk2 IDL</a></li>
+<li><a href="https://github.com/unitreerobotics/unitree_ros2/tree/master/cyclonedds_ws/src/unitree">ROS2 MSG</a></li>
+</ol>
+</div>
+<!--
+|  **函数名**  |  **Init**  |
+| :---: | --- |
+|  **函数原型**  |  void Init(const std::string& ddsParameterFileName = "")  |
+|  **功能概述**  |  指定配置文件初始化 DdsParticipant。  |
+|  **参数**  |  **ddsParameterFileName** ：指定一个 json 格式的配置文件路径，当ddsParameterFileName为空时，默认为当前程序目录下的名为 dds\_parameter.json 的配置文件。  |
+|  **返回值**  |  无  |
+|  **备注**  |  如果文件不存在, 会抛出配置文件不存在的异常; 如果指定的网不可用，会抛出DDS异常。  |
+
+|  **函数名**  |  **Init**  |
+| :---: | --- |
+|  **函数原型**  |  void Init(const JsonMap& param)  |
+|  **功能概述**  |  指定JsonMap配置初始化DdsParticipant。  |
+|  **参数**  |  **param** ：JsonMap格式配置。  |
+|  **返回值**  |  无  |
+|  **备注**  |  如果指定的网不可用, 会抛出DDS异常。  | 
+-- data-line="246">
+--></article></div></div></div>
+</body>
+</html>

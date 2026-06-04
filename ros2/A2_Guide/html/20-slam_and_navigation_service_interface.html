@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>SLAM与导航服务接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>SLAM与导航服务接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/slam_and_navigation_service_interface">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/slam_and_navigation_service_interface</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">SLAM与导航服务接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-08 21:46:22</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><style data-line="0">
+table th:first-of-type {
+    width: 20pt;
+}
+table th:nth-of-type(2) {
+    width: 60pt;
+}
+table th:nth-of-type(3) {
+    width: 120pt;
+}
+</style>
+<div class="md-editor-admonition md-editor-admonition-tip" data-line="12">
+<p class="md-editor-admonition-title">注意事项</p>
+<p>1.<code>高冲击的剧烈运动</code>(如空翻等动作)可能<code>损坏雷达硬件</code>，导致点云与IMU数据异常，请尽量避免机器人剧烈运动。</p>
+<p>2.适用场景与范围：<code>X轴/Y轴小于45m</code>且<code>特征丰富</code>的<code>静态室内平地</code>场景，请<code>勿超过</code>建议范围。剧烈动作可能导致定位丢失，请在使用该接口时<code>避免机器人剧烈运动</code>。</p>
+<p>3.该部分功能适用于<code>教育科研</code>行业，不建议用于行业应用，行业应用请联系销售。</p>
+<p>4.使用前请参考<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/lidar_service_interface">软件服务接口-&gt;Lidar服务接口-&gt;雷达固件更新</a>更新雷达固件。</p>
+<p>5.该接口仅支持<code>JT128</code>雷达机型，使用前请先联系<code>技术支持</code>进行<code>OTA升级</code>。</p>
+</div>
+<p data-line="24">使用前请先联系<code>技术支持进行OTA升级</code> SLAM NAV服务到为<code>1.0.0</code>以上。</p>
+<h2 data-line="26" id="heading-1">一、介绍</h2>
+<p data-line="27">1.SLAM与导航服务的接口基于<code>unitree sdk2</code>进行接口调用，客户端通过配置不同的api-id、订阅不同的话题数据，即可实现基础的SLAM与导航功能，使用前请确保与机器人在<code>同一局域网网段下</code>。</p>
+<p data-line="29">2.SLAM输出的点云与定位信息基于机身坐标系，X轴正方向为机器人<code>正前方</code>，Z轴正方向为<code>竖直向上</code>。</p>
+<p data-line="31">3.SLAM与导航服务部署在PC2(IP:192.168.123.162)中，可咨询销售与技术支持获取用户名与密码。</p>
+<h2 data-line="33" id="heading-2">二、网络配置检查</h2>
+<p data-line="34">1.通过网线直连的方式接入局域网内，并将本机IP设置为192.168.123.200<br>
+<img src="https://doc-cdn.unitree.com/static/2026/3/27/2a8600bcbfa44e2b9f54cd08f909197f_965x701.png" alt="" class="medium-zoom-image"></p>
+<p data-line="37">2.检查网络通信是否正常</p>
+<pre data-line="38"><code class="language-" language=""><span class="code-block">ssh unitree<span class="hljs-meta">@192</span>.<span class="hljs-number">168.123</span>.<span class="hljs-number">162</span> <span class="hljs-comment">#进入PC2，密码请咨询销售与技术支持</span>
+
+ping <span class="hljs-number">192.168</span>.<span class="hljs-number">123.161</span> <span class="hljs-comment">#运控PC</span>
+
+ping <span class="hljs-number">192.168</span>.<span class="hljs-number">124.20</span> <span class="hljs-comment">#雷达1</span>
+
+ping <span class="hljs-number">192.168</span>.<span class="hljs-number">124.21</span> <span class="hljs-comment">#雷达2</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/3/27/b0e794f27d6a49758ecfb8bf617fa86f_927x936.png" alt="" class="medium-zoom-image"></figure>
+<h2 data-line="49" id="heading-3">三、服务数据说明</h2>
+<p data-line="50">服务名称与版本：SERVICE_NAME = "slam_operate"、VERSION = "1.0.0.1"<br>
+当前已开放接口api-id:1801开始建图、1802结束建图、1804初始化位姿、1102位姿导航、1201暂停导航、1202恢复导航、1901关闭slam。服务请求参数与反馈数据格式<code>均为Json</code>，具体参数如下：</p>
+<p data-line="53">1.开始建图</p>
+<pre data-line="54"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1801
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+      <span class="hljs-string">"slam_type"</span>: <span class="hljs-string">"indoor"</span> <span class="hljs-comment">#固定值</span>
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="73">2.结束建图</p>
+<pre data-line="74"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1802
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+      <span class="hljs-string">"address"</span>: <span class="hljs-string">"/home/unitree/test.pcd"</span> <span class="hljs-comment">#pcd保存地址</span>
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="92"><code>注意</code>：<br>
+为防止多个pcd地图文件数据占用过多的磁盘空间，建议文件名统一为<code>test1.pcd ~ test10.pcd</code>，覆盖式保存地图pcd数据。</p>
+<p data-line="95">3.初始化位姿</p>
+<pre data-line="96"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1804
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+        <span class="hljs-string">"x"</span>: 0.0, <span class="hljs-comment">#初始化平移信息</span>
+        <span class="hljs-string">"y"</span>: 0.0,
+        <span class="hljs-string">"z"</span>: 0.0,
+        <span class="hljs-string">"q_x"</span>: 0.0, <span class="hljs-comment">#初始化旋转信息</span>
+        <span class="hljs-string">"q_y"</span>: 0.0,
+        <span class="hljs-string">"q_z"</span>: 0.0,
+        <span class="hljs-string">"q_w"</span>: 1.0,
+        <span class="hljs-string">"address"</span>: <span class="hljs-string">"/home/unitree/test.pcd"</span> <span class="hljs-comment">#pcd加载地址</span>
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="121">4.位姿导航</p>
+<pre data-line="122"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1102
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+       <span class="hljs-string">"targetPose"</span>: {  
+          <span class="hljs-string">"x"</span>: 2.0,    <span class="hljs-comment">#目标位姿信息</span>
+          <span class="hljs-string">"y"</span>: 0.0,
+          <span class="hljs-string">"z"</span>: 0.0,
+          <span class="hljs-string">"q_x"</span>: 0.0,
+          <span class="hljs-string">"q_y"</span>: 0.0,
+          <span class="hljs-string">"q_z"</span>: 0.0,
+          <span class="hljs-string">"q_w"</span>: 1.0
+        },
+        <span class="hljs-string">"mode"</span>:1      <span class="hljs-comment">#固定值</span>
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="151"><code>注意</code>：<br>
+目标点与当前位置之间的距离不超过<code>30m</code>，机器人会沿直线行走，受雷达视角限制，障碍物高度不要低于<code>30cm</code></p>
+<p data-line="154">5.暂停导航</p>
+<pre data-line="155"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1201
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="172">6.恢复导航</p>
+<pre data-line="173"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1202
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="190">7.关闭slam</p>
+<pre data-line="191"><code class="language-" language=""><span class="code-block">api <span class="hljs-built_in">id</span>: 1901
+
+输入参数：
+{
+  <span class="hljs-string">"data"</span>: {
+    }
+}
+
+反馈响应：
+{
+    <span class="hljs-string">"succeed"</span>:<span class="hljs-literal">true</span>, <span class="hljs-comment">#是否执行成功</span>
+    <span class="hljs-string">"errorCode"</span>:0,  <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">""</span>,      <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:{}       <span class="hljs-comment">#其余数据</span>
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<h2 data-line="209" id="heading-4">四、话题数据说明</h2>
+<p data-line="210">1.建图实时点云数据话题：rt/unitree/slam_mapping/points  数据类型：sensor_msgs::msg::dds_::PointCloud2_</p>
+<p data-line="212">2.建图实时里程计数据话题：rt/unitree/slam_mapping/odom  数据类型：nav_msgs::msg::dds_::Odometry_</p>
+<p data-line="214">3.定位实时点云数据话题：rt/unitree/slam_relocation/points  数据类型：sensor_msgs::msg::dds_::PointCloud2_</p>
+<p data-line="216">4.定位实时里程计数据话题：rt/unitree/slam_relocation/odom 数据类型：nav_msgs::msg::dds_::Odometry_</p>
+<p data-line="218">5.实时广播类信息话题：rt/slam_info 数据类型:std_msgs::msg::dds_::String_</p>
+<p data-line="220">6.执行情况信息反馈话题：rt/slam_key_info 数据类型:std_msgs::msg::dds_::String_</p>
+<p data-line="222">7.全局地图点云数据话题(仅在开始定位后发送一次，用户可通过订阅该话题获取地图数据)：rt/unitree/slam_relocation/global_map  数据类型：sensor_msgs::msg::dds_::PointCloud2_</p>
+<p data-line="224">其中，实时广播类信息和执行情况反馈信息中的数据均为Json格式，可通过不同的字段判断和获取，具体如下：<br>
+①实时广播类信息类型(rt/slam_info)：基础状态信息</p>
+<pre data-line="226"><code class="language-" language=""><span class="code-block">{
+    <span class="hljs-string">"type"</span>: <span class="hljs-string">"robot_data"</span>,  <span class="hljs-comment">#数据类型</span>
+    <span class="hljs-string">"errorCode"</span><span class="hljs-symbol">:</span><span class="hljs-number">0</span>,         <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"sec"</span>: <span class="hljs-number">123456789</span>,      <span class="hljs-comment">#时间戳</span>
+    <span class="hljs-string">"nanosec"</span>: <span class="hljs-number">987654321</span>,
+    <span class="hljs-string">"info"</span><span class="hljs-symbol">:XXX</span>,            <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span><span class="hljs-symbol">:</span>{
+        <span class="hljs-string">"motorTemp"</span>: [<span class="hljs-number">30.5</span>,<span class="hljs-number">30.5</span>,...],   <span class="hljs-comment">#电机温度(单位°C)</span>
+        <span class="hljs-string">"motorError"</span>: [<span class="hljs-number">0</span>,<span class="hljs-number">0</span>,<span class="hljs-number">0</span>,...],      <span class="hljs-comment">#电机错误码</span>
+        <span class="hljs-string">"batteryAmp"</span>: <span class="hljs-number">1000.5</span>,           <span class="hljs-comment">#电池1电流值(单位mA)</span>
+        <span class="hljs-string">"batteryPower"</span><span class="hljs-symbol">:</span><span class="hljs-number">10.0</span>,            <span class="hljs-comment">#电池1百分比电量(单位%)</span>
+        <span class="hljs-string">"batteryTemp"</span><span class="hljs-symbol">:</span><span class="hljs-number">30.5</span>,             <span class="hljs-comment">#电池1温度值(单位°C)</span>
+        <span class="hljs-string">"batteryVol"</span><span class="hljs-symbol">:</span><span class="hljs-number">1000.5</span>,            <span class="hljs-comment">#电池1电压值(单位mV)</span>
+        <span class="hljs-string">"batteryAmpSecondary"</span>: <span class="hljs-number">1000.5</span>,  <span class="hljs-comment">#电池2电流值(单位mA)</span>
+        <span class="hljs-string">"batteryPowerSecondary"</span><span class="hljs-symbol">:</span><span class="hljs-number">10.0</span>,   <span class="hljs-comment">#电池2百分比电量(单位%)</span>
+        <span class="hljs-string">"batteryTempSecondary"</span><span class="hljs-symbol">:</span><span class="hljs-number">30.5</span>,    <span class="hljs-comment">#电池2温度值(单位°C)</span>
+        <span class="hljs-string">"batteryVolSecondary"</span><span class="hljs-symbol">:</span><span class="hljs-number">1000.5</span>,   <span class="hljs-comment">#电池2电压值(单位mV)</span>
+        <span class="hljs-string">"sportMode"</span><span class="hljs-symbol">:-</span><span class="hljs-number">1</span>,                 <span class="hljs-comment">#运动模式,暂无</span>
+        <span class="hljs-string">"gaitType"</span><span class="hljs-symbol">:-</span><span class="hljs-number">1</span>,                  <span class="hljs-comment">#步态，暂无</span>
+        <span class="hljs-string">"cpuTemp"</span><span class="hljs-symbol">:</span><span class="hljs-number">30.5</span>,                 <span class="hljs-comment">#CPU核心平均温度(单位°C)</span>
+        <span class="hljs-string">"cpuUsage"</span><span class="hljs-symbol">:</span><span class="hljs-number">30.5</span>,                <span class="hljs-comment">#CPU核心占用率(单位%)</span>
+        <span class="hljs-string">"cpuMemory"</span><span class="hljs-symbol">:</span><span class="hljs-number">30.5</span>,               <span class="hljs-comment">#CPU内存使用率(单位%)</span>
+        <span class="hljs-string">"cpuFrequency"</span><span class="hljs-symbol">:</span><span class="hljs-number">100.5</span>            <span class="hljs-comment">#CPU平均核心频率(单位MHz)</span>
+    }
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="254">②实时广播类信息类型(rt/slam_info)：定位信息</p>
+<pre data-line="255"><code class="language-" language=""><span class="code-block">{
+    <span class="hljs-string">"type"</span>: <span class="hljs-string">"pos_info"</span>,  <span class="hljs-comment">#数据类型 pos_info(定位过程)/mapping_info(建图过程)</span>
+    <span class="hljs-string">"errorCode"</span><span class="hljs-symbol">:</span><span class="hljs-number">0</span>,       <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"sec"</span>: <span class="hljs-number">123456789</span>,    <span class="hljs-comment">#时间戳</span>
+    <span class="hljs-string">"nanosec"</span>: <span class="hljs-number">987654321</span>,
+    <span class="hljs-string">"info"</span><span class="hljs-symbol">:XXX</span>,          <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:
+      {
+        <span class="hljs-string">"currentPose"</span>: { <span class="hljs-comment">#当前位姿</span>
+          <span class="hljs-string">"x"</span>: <span class="hljs-number">1.5</span>,      
+          <span class="hljs-string">"y"</span>: <span class="hljs-number">1.5</span>,
+          <span class="hljs-string">"z"</span>: <span class="hljs-number">1.5</span>,
+          <span class="hljs-string">"q_x"</span>: <span class="hljs-number">0.0</span>,
+          <span class="hljs-string">"q_y"</span>: <span class="hljs-number">0.0</span>,
+          <span class="hljs-string">"q_z"</span>: <span class="hljs-number">0.0</span>,
+          <span class="hljs-string">"q_w"</span>: <span class="hljs-number">1.0</span>
+          },
+         <span class="hljs-string">"pcdName"</span>: <span class="hljs-string">"test"</span>                    <span class="hljs-comment">#当前定位使用的地图名</span>
+         <span class="hljs-string">"address"</span>: <span class="hljs-string">"/home/unitree/test.pcd"</span>  <span class="hljs-comment">#当前定位使用的地图地址</span>
+      }
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="278">③实时广播类信息类型(rt/slam_info)：控制信息</p>
+<pre data-line="279"><code class="language-" language=""><span class="code-block">{
+   <span class="hljs-string">"type"</span>: <span class="hljs-string">"ctrl_info"</span>, <span class="hljs-comment">#数据类型</span>
+    <span class="hljs-string">"errorCode"</span>:0,      <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"sec"</span>: 123456789,   <span class="hljs-comment">#时间戳</span>
+    <span class="hljs-string">"nanosec"</span>: 987654321,
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">"XXX"</span>,       <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:
+    {
+      <span class="hljs-string">"targetNodeName"</span>: 9999,
+      <span class="hljs-string">"is_arrived"</span>: <span class="hljs-literal">false</span>,
+      <span class="hljs-string">"startPose"</span>: {
+        <span class="hljs-string">"x"</span>: 1.1,
+        <span class="hljs-string">"y"</span>: 1.2,
+        <span class="hljs-string">"z"</span>: 1.3,
+        <span class="hljs-string">"roll"</span>: 0.0,
+        <span class="hljs-string">"pitch"</span>: 0.0,
+        <span class="hljs-string">"yaw"</span>: 1.2
+      },
+      <span class="hljs-string">"targetPose"</span>: {
+        <span class="hljs-string">"x"</span>: 1.1,
+        <span class="hljs-string">"y"</span>: 1.2,
+        <span class="hljs-string">"z"</span>: 1.3,
+        <span class="hljs-string">"roll"</span>: 0.0,
+        <span class="hljs-string">"pitch"</span>: 0.0,
+        <span class="hljs-string">"yaw"</span>: 1.2
+      },
+      <span class="hljs-string">"stateMachine"</span>: {
+        <span class="hljs-string">"state"</span>:<span class="hljs-string">"follow"</span>,      <span class="hljs-comment"># 当前状态机</span>
+        <span class="hljs-string">"isOpenPlan"</span>:<span class="hljs-literal">false</span>,    
+        <span class="hljs-string">"isBack"</span>:<span class="hljs-literal">false</span>,       
+        <span class="hljs-string">"isClimbStairs"</span>:<span class="hljs-literal">false</span>, 
+        <span class="hljs-string">"isRotate"</span>:<span class="hljs-literal">false</span>,      
+        <span class="hljs-string">"isPause"</span>:<span class="hljs-literal">false</span>,       <span class="hljs-comment"># 是否时暂停控制状态</span>
+        <span class="hljs-string">"ctrName"</span>:<span class="hljs-string">"pid"</span>,       <span class="hljs-comment"># 当前控制器</span>
+        <span class="hljs-string">"vx"</span>: 1.1,
+        <span class="hljs-string">"vy"</span>: 1.2,
+        <span class="hljs-string">"vyaw"</span>: 1.3
+      },
+      <span class="hljs-string">"obsInfo"</span>:{
+        <span class="hljs-string">"state"</span>:<span class="hljs-literal">false</span>,         <span class="hljs-comment"># 有无遇到障碍</span>
+        <span class="hljs-string">"time"</span>:0,              <span class="hljs-comment"># 遇到障碍的时间 单位 s</span>
+      },
+      <span class="hljs-string">"progress"</span>: {
+        <span class="hljs-string">"used_time"</span>: 12.3,
+        <span class="hljs-string">"last_time"</span>: 23.3,
+        <span class="hljs-string">"completion_percentage"</span>: 0.12
+      }
+    }
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="331">④执行情况反馈信息(rt/slam_key_info)：单次任务执行反馈</p>
+<pre data-line="333"><code class="language-" language=""><span class="code-block">{
+   <span class="hljs-string">"type"</span>: <span class="hljs-string">"task_result"</span>,     <span class="hljs-comment">#数据类型</span>
+    <span class="hljs-string">"errorCode"</span>:0,            <span class="hljs-comment">#错误码，0为正常</span>
+    <span class="hljs-string">"sec"</span>: 123456789,         <span class="hljs-comment">#时间戳</span>
+    <span class="hljs-string">"nanosec"</span>: 987654321,
+    <span class="hljs-string">"info"</span>:<span class="hljs-string">"XXX"</span>,             <span class="hljs-comment">#描述信息</span>
+    <span class="hljs-string">"data"</span>:
+    {
+      <span class="hljs-string">"targetNodeName"</span>: 9999, <span class="hljs-comment">#任务目标点</span>
+      <span class="hljs-string">"is_arrived"</span>: <span class="hljs-literal">false</span>     <span class="hljs-comment">#是否完成执行</span>
+    }
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<h2 data-line="350" id="heading-5">五、按键例程demo功能测试</h2>
+<p data-line="351">准备工作：<br>
+(1)在个人PC中安装unitree sdk2，下载地址：<br>
+<a href="https://github.com/unitreerobotics/unitree_sdk2">unitree_sdk2 </a></p>
+<p data-line="355">(2)下载并编译例程，下载地址：<br>
+<a href="https://oss-global-cdn.unitree.com/static/dd442abf94ec44f599095cb15c3e298b.zip">unitree_slam_example </a></p>
+<pre data-line="357"><code class="language-" language=""><span class="code-block"><span class="hljs-comment">#编译测试例程</span>
+<span class="hljs-built_in">cd</span> /youFileAddress
+<span class="hljs-built_in">mkdir</span> build
+<span class="hljs-built_in">cd</span> build
+cmake ..
+make
+
+./keyDemo eth0  <span class="hljs-comment">#网段为123的网卡名称，可通过ifconfig查看</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/7/23/fceae5dce3634125b6eb87e4a84acc48_609x344.png" alt="" class="medium-zoom-image"></figure>
+<div class="md-editor-admonition md-editor-admonition-tip" data-line="369">
+<p class="md-editor-admonition-title">注意事项：</p>
+<p>1.在建图<code>起点</code>位置请控制机器缓慢<code>旋转一圈</code>，建图完成后请<code>回到起点位置</code>缓慢<code>旋转一圈</code>后再保存地图，建图过程遥控机器的速度请勿过快。</p>
+<p>2.<a href="https://oss-global-cdn.unitree.com/static/dd442abf94ec44f599095cb15c3e298b.zip">unitree_slam_example </a>中有rviz2配置文件，可通过rviz2界面中File-&gt;Open Config选择对应的配置文件，查看建图和定位过程。</p>
+<p>3.构建的三维地图精度与雷达本体精度和使用场景有关，请务必了解并熟悉JT128雷达参数与特性，并在适用场景内使用。</p>
+</div>
+</article></div></div></div>
+</body>
+</html>

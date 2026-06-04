@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>A2快速开始</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>A2快速开始</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/a2_quick_start">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/a2_quick_start</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">A2快速开始</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-02-25 11:56:56</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><style data-line="0">
+    img[alt="1"]{
+        height:400px;
+    }
+  </style>
+<h2 data-line="6" id="heading-1">App下载</h2>
+<details open="" data-line="8">
+  <summary><b>中国大陆版</b></summary>
+  不包含港澳台地区
+  <blockquote>
+    <details>
+      <summary>iOS</summary>
+      <br>
+      <img src="https://oss-global-cdn.unitree.com/static/8122d6bd7e70418680492514536fdd8e_400x400.png" width="200" alt="大陆iOS" class="medium-zoom-image">
+    </details>
+    <details>
+      <summary>Android</summary>
+      <br>
+      <img src="https://oss-global-cdn.unitree.com/static/665f81f5e3374aac978e2dfcf66e54fd_400x400.png" width="200" alt="大陆Android" class="medium-zoom-image">
+    </details>
+  </blockquote>
+</details>
+<details open="" data-line="25">
+  <summary><b>国际版</b></summary>
+  <blockquote>
+    <details>
+      <summary>iOS</summary>
+      <br>
+      <img src="https://oss-global-cdn.unitree.com/static/8122d6bd7e70418680492514536fdd8e_400x400.png" width="200" alt="国际iOS" class="medium-zoom-image">
+    </details>
+    <details>
+      <summary>Android</summary>
+      <br>
+      <img src="https://oss-global-cdn.unitree.com/static/7085751fb59e421a8c5a0e0434047364_400x400.png" width="200" alt="国际Android" class="medium-zoom-image">
+    </details>
+  </blockquote>
+</details>
+<h2 data-line="42" id="heading-2">常用资料</h2>
+<p data-line="44">电子版使用手册：<a href="https://marketing.unitree.com/article/zh/A2/User_Manual.html">下载</a></p>
+<p data-line="46">遥控器使用手册：<a href="https://marketing.unitree.com/article/zh/A2/Remote_Control.html">下载</a></p>
+<p data-line="48">电池与充电器手册：<a href="https://marketing.unitree.com/article/zh/A2/Battery_Charger.html">下载</a></p>
+<h2 data-line="50" id="heading-3">使用流程</h2>
+<p data-line="52"><strong>Step1：安装电池</strong></p>
+<p data-line="54"><img src="https://doc-cdn.unitree.com/static/2026/2/10/dacb7090a5dc48b69b75c220a33bc72d_1880x808.png" alt="" class="medium-zoom-image"><br>
+<img src="https://doc-cdn.unitree.com/static/2026/2/10/9e3ff40d270342ecb9df4b2caa8cfb44_1880x808.png" alt="" class="medium-zoom-image"></p>
+<p data-line="58">如图所示，将两块电池插入A2，注意安装方向、不要强行挤压，以免损坏电池接口和卡扣。当听到“咔哒”声时，电池安装完毕。</p>
+<p data-line="60"><strong>Step2：机身摆放</strong></p>
+<p data-line="62">请确保开机运行前机器人放置在平整地面上，机器人腹部支撑垫需平贴地面，机身水平无倾斜趴在地面，机器人小腿呈完全收起状态（如下图），四个膝关节以及足端平放在地面上，确保机器人大腿和小腿都没被机身压住。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/3f4429eb541a44a58b8536619ab62443_2494x1115.png" alt="" class="medium-zoom-image"></figure>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="67">
+<p class="md-editor-admonition-title">关于任意启动的说明</p>
+<p>A2的电机为双编码器，对于开机前腿部摆放位置要求不严格。但推荐使用接近于图中的姿态，以免开机调整姿态时打到机身。</p>
+</div>
+<p data-line="71"><strong>Step3：开机使用</strong></p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/b5c8ae12ae7d40e6afc05d2b1ead2187_1616x716.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="76">机器人完成开机前检查，和开机前准备要求摆放好后，按照如下步骤开机：<strong>先短按电源开关一次，再长按电源开关3秒以上</strong>，即可开启电池（电池开启时，指示灯为绿灯常亮，指示灯显示当前电池电量）。电池启动后等待2分钟，机器人自动站立，机身与地面平行，即开机成功。</p>
+<p data-line="78"><strong>Step5：关机</strong></p>
+<p data-line="80">使用两次<code>L2+A</code>令机器狗安全卧倒。随后<strong>同时</strong>短按+长按两块电池上的电源按钮2秒以上，指示灯熄灭则关机完毕。</p>
+<p data-line="82"><strong>Step6：充电</strong></p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/aa548d5fb13745eb9f7d49ac3c9d2d99_1809x843.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="87">①按住电池卡口，将电池从A2机身取出。</p>
+<center data-line="89">
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/2db5a4aae78848919302a894187b7676_844x603.png" alt="1" class="medium-zoom-image"></figure>
+</center>
+<p data-line="95">② 将充电器<strong>先插入交流电源</strong></p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/099923ba7f124d3e9744862e71e7aeb6_1791x1010.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="100">③随后再连接A2电池</p>
+<h2 data-line="102" id="heading-4">标定</h2>
+<p data-line="104">在App中，进入设备-数据-机器狗-标定界面。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/25/11db51b772fa4567bc4e3589a1feec82_1727x1005.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="108">如图所示，将A2的各个关节转动到限位位置，并将腿部下压，使机身电机关节打到限位位置。</p>
+</article></div></div></div>
+</body>
+</html>

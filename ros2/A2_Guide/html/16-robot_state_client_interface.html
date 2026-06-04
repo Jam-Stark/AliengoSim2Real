@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>设备状态服务接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>设备状态服务接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/robot_state_client_interface">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/robot_state_client_interface</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">设备状态服务接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-01-04 15:35:49</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><style data-line="0">
+table th:first-of-type {
+    width: 180pt;
+    text-align: center;
+}
+
+}
+  </style>
+<h2 data-line="9" id="heading-1">RobotStateClient&nbsp;类</h2>
+<p data-line="11">RobotStateClient&nbsp;是设备状态服务提供的&nbsp;Client，通过&nbsp;RobotClient&nbsp;可以方便地通过&nbsp;RPC&nbsp;方式实现对&nbsp;A2&nbsp;内部的服务控制、获取服务状态、设备状态和系统资源使用信息等功能（部分功能接口暂未开放）。</p>
+<h3 data-line="15" id="heading-2">接口错误码列表：</h3>
+<table data-line="17">
+<thead>
+<tr>
+<th>错误号</th>
+<th>错误描述</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5201</td>
+<td>服务开关执行错误。</td>
+<td>服务端返回</td>
+</tr>
+<tr>
+<td>5202</td>
+<td>服务受保护，不允许开启或关闭。</td>
+<td>服务端返回</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="22" id="heading-3">类与接口描述：</h3>
+<table data-line="24">
+<thead>
+<tr>
+<th>类名</th>
+<th>造与析构</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RobotStateClient</td>
+<td>explicit&nbsp;RobotStateClient(); ~RobotStateClient();</td>
+</tr>
+</tbody>
+</table>
+<table data-line="28">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>ServiceSwitch</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;ServiceSwitch(const&nbsp;std::string&amp;&nbsp;name,&nbsp;int32_t&nbsp;swit, int32_t&amp;&nbsp;status)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>服务开关。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>name</strong>：服务名  <br>  <strong>swit</strong>：开关，取值&nbsp;1&nbsp;开启，0&nbsp;关闭。 <br> <strong>status</strong>：操作执行后的服务状态（0：已开启，1：已关闭）</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回&nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="36">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>SetReportFreq</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;SetReportFreq(int32_t&nbsp;interval,&nbsp;int32_t&nbsp;duration)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置服务状态上报频率。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>interval</strong>：设置上报时间间隔，单位秒；<br>  <strong>duration</strong>：设置持续时间，单位秒。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回&nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>目前&nbsp;App&nbsp;获取服务状态功能使用，设置刷新频率。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="44">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Service List</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t ServiceList(std::vector<servicestate>&amp; serviceStateList);</servicestate></td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>查询当前服务状态。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>serviceStateList</strong>：当前服务与状态列表。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回列表，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>列表格式：Name:服务名， Statues：状态，Protect：被保护状态</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="53" id="heading-4">服务名列表</h3>
+<table data-line="54">
+<thead>
+<tr>
+<th style="text-align:center">服务名</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">ai_sport</td>
+<td style="text-align:center">主运动控制服务</td>
+</tr>
+<tr>
+<td style="text-align:center">basic_service</td>
+<td style="text-align:center">底层服务</td>
+</tr>
+<tr>
+<td style="text-align:center">motion_switcher</td>
+<td style="text-align:center">运动控制切换服务</td>
+</tr>
+<tr>
+<td style="text-align:center">ota_box</td>
+<td style="text-align:center">OTA 固件升级服务</td>
+</tr>
+<tr>
+<td style="text-align:center">robot_state</td>
+<td style="text-align:center">设备状态服务</td>
+</tr>
+<tr>
+<td style="text-align:center">vui_service</td>
+<td style="text-align:center">音频灯光服务</td>
+</tr>
+</tbody>
+</table>
+</article></div></div></div>
+</body>
+</html>

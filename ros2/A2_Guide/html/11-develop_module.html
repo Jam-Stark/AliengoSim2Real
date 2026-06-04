@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>用户开发单元说明</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>用户开发单元说明</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/develop_module">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/develop_module</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">用户开发单元说明</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-26 14:18:23</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><h2 data-line="0" id="heading-1">用户开发单元说明</h2>
+<p data-line="2">A2内部安装了用户开发单元，您可以将您的程序部署在此计算机中。基本信息如下：</p>
+<table data-line="4">
+<thead>
+<tr>
+<th><strong>设备名称</strong></th>
+<th><strong>配置信息</strong></th>
+<th><strong>IP地址</strong></th>
+<th><strong>备注</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户开发单元</td>
+<td>Intel Core i7[*]</td>
+<td>192.168.123.162<br>192.168.124.162</td>
+<td>需通过PC2网口通讯，可登录<br>默认用户名：unitree<br>默认密码：Unitree#24226 或 Unitree0408</td>
+</tr>
+</tbody>
+</table>
+<p data-line="8">用户开发单元的网络环境如下所示：</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/1/5/be449fe59e3e44d7bc71613b86bbee77_8192x4270.png" alt="" class="medium-zoom-image"></figure>
+<center data-line="14">
+  内部硬件架构图
+</center>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="18">
+<p class="md-editor-admonition-title">关于网段的重要说明</p>
+<p>需要注意，A2的PC1网络接口（以太网一）连接到的是图上的交换机1，网段为<code>192.168.123.0/24</code>。在这个网段中，您必须也将您的设备设置为123网段，并能且只能在此网段中进行SDK的开发。此网段中，您可以ping到192.168.123.161。<br>
+PC2网络接口（以太网二）连接到的是图上的交换机2，网段为<code>192.168.124.0/24</code>。您必须将自己的设备设置为124网段才能使用，在此网段中您只能连接到用户开发单元（192.168.124.162）以及雷达设备，不能进行SDK开发！！！</p>
+</div>
+<h2 data-line="25" id="heading-2">基本使用</h2>
+<p data-line="27">要使用A2用户开发单元，首先，按图中的方式进行连接：</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/25/c624d4ee45d14dddbe050281afff6cbf_4031x1890.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="31">随后，您需要将您用于连接A2的网卡IP地址设置为124网段。具体操作您可以参考<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/quick_development">快速开发</a>。</p>
+<p data-line="33">您可以使用此地址以远程连接（ssh）的形式进入用户开发单元：192.168.124.162。</p>
+<pre data-line="35"><code class="language-" language=""><span class="code-block">ssh unitree<span class="hljs-keyword">@192</span>.168.124.162</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<h2 data-line="39" id="heading-3">特别说明</h2>
+<p data-line="41">用户开发单元中运行着宇树的Unitree SLAM服务组件，具体见<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/slam_and_navigation_service_interface">SLAM与导航服务接口</a>。您需要确保以下目录不得被修改：</p>
+<pre data-line="43"><code class="language-" language=""><span class="code-block">/home/unitree/slam_config
+/home/unitree/dist
+/home/unitree/graph_pid_ws</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="49">您可以在用户开发单元上安装新的软件包，但不建议您更新或卸载软件包。如果您的程序依赖复杂，建议使用Docker。</p>
+<p data-line="51">目前不提供用户开发单元的镜像或恢复文件。建议您在初次使用时利用Timeshift等工具对系统进行备份。<strong>若您误操作导致SLAM服务无法使用且仍需要使用我们的SLAM接口的（包括雷达接口），根据售后政策的不同，您可能需要为此进行保修范围外的维修。</strong></p>
+</article></div></div></div>
+</body>
+</html>

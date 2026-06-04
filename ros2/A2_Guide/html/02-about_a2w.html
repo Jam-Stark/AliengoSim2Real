@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>关于A2W</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>关于A2W</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/about_a2w">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/about_a2w</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">关于A2W</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-08 20:36:25</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><h2 data-line="0" id="heading-1">产品配置</h2>
+<div style="text-align:center;" data-line="2">
+<table borter="1">
+<tbody><tr>
+  <th bgcolor="#D3D3D3" colspan="2"> 型号</th>
+  <th bgcolor="#D3D3D3" style="width: 40%;"> A2W </th>
+  <th bgcolor="#D3D3D3" style="width: 40%;"> A2W-Pro <br> 多种行业方案选配</th>
+</tr>
+<tr>
+  <td colspan="2"> 渲染图
+  </td><td> <img src="https://doc-cdn.unitree.com/static/2026/4/23/1fb65dc6d32843a3bd02d92e5a525cf1_272x238.png" class="medium-zoom-image"></td>
+  <td> <img src="https://doc-cdn.unitree.com/static/2026/4/23/1fb65dc6d32843a3bd02d92e5a525cf1_272x238.png" class="medium-zoom-image"></td>
+</tr>
+<tr>
+  <td rowspan="13" style="width: 3%;">机械参数</td>
+  <td>站立尺寸</td>
+  <td>900mm x 440mm x 625mm</td>
+  <td>900mm x 440mm x 625mm</td>
+</tr>
+<tr>
+  <td>折叠尺寸</td>
+  <td>930mm x 685mm x 210mm</td>
+  <td>930mm x 685mm x 210mm</td>
+</tr>
+<tr>
+  <td>轮胎尺寸</td>
+  <td>直径：190mm；宽度：51mm</td>
+  <td>直径：190mm；宽度：51mm</td>
+</tr>
+<tr>
+  <td>材质</td>
+  <td>铝合金 + 高强度工程塑料</td>
+  <td>铝合金 + 高强度工程塑料</td>
+</tr>
+<tr>
+  <td>不带电池重量</td>
+  <td>约45kg</td>
+  <td>约45kg</td>
+</tr>
+<tr>
+  <td>带电池重量</td>
+  <td>约52kg</td>
+  <td>约52kg</td>
+</tr>
+<tr>
+  <td>总自由度</td>
+  <td>16个</td>
+  <td>16个</td>
+</tr>
+<tr>
+  <td>关节输出轴承</td>
+  <td>工业级交叉滚子轴承（高精度，高承载力）</td>
+  <td>工业级交叉滚子轴承（高精度，高承载力）</td>
+
+</tr><tr>
+  <td>关节电机</td>
+  <td>低惯量高速内转子永磁同步电机（更好的响应速度和散热）</td>
+  <td>低惯量高速内转子永磁同步电机（更好的响应速度和散热）</td>
+</tr>
+<tr>
+  <td>关节最大扭矩</td>
+  <td>约 180 N.m</td>
+  <td>约 180 N.m</td>
+</tr>
+<tr>
+  <td>超大关节运动空间</td>
+  <td>机身：-58~58°<br>大腿：-134°~180°/-89°~225°<br>小腿：-158°~-30°</td>
+  <td>机身：-58~58°<br>大腿：-134°~180°/-89°~225°<br>小腿：-158°~-30°</td>
+</tr>
+<tr>
+  <td>轮足最大扭矩</td>
+  <td>24N·m</td>
+  <td>24N·m</td>
+</tr>
+<tr>
+  <td>轮足转速@电压</td>
+  <td>11rad/s@58V</td>
+  <td>11rad/s@58V</td>
+</tr>
+
+<tr>
+  <td rowspan="15">电气特性</td>
+  <td>供电电压</td>
+  <td>50.4V</td>
+  <td>50.4V</td>
+</tr>
+<tr>
+  <td>关节编码器</td>
+  <td>双编码器</td>
+  <td>双编码器</td>
+</tr> 
+<tr>
+  <td>散热系统</td>
+  <td>局部风冷散热</td>
+  <td>局部风冷散热</td>
+</tr> 
+<tr>
+  <td>供电方式</td>
+  <td>双仓位，双电池</td>
+  <td>双仓位，双电池</td>
+</tr> 
+<tr>
+  <td>电池容量</td>
+  <td>单节电池 9000mAh（453.6Wh）<br>双节电池 18000mAh（907.2Wh）</td>
+  <td>单节电池 9000mAh（453.6Wh）<br>双节电池 18000mAh（907.2Wh）</td>
+</tr> 
+<tr>
+  <td>WiFi6、蓝牙5.2</td>
+  <td>有</td>
+  <td>有</td>
+</tr>
+<tr>
+  <td>扬声器</td>
+  <td>有</td>
+  <td>有</td>
+</tr>
+<tr>
+  <td>麦克风</td>
+  <td>阵列麦克风</td>
+  <td>阵列麦克风</td>
+</tr>
+<tr>
+  <td>照明灯</td>
+  <td>有</td>
+  <td>有</td>
+</tr>
+<tr>
+  <td>无线矢量定位伴随模组</td>
+  <td>无（可选购）</td>
+  <td>有（已拓展）</td>
+</tr>
+<tr>
+  <td>GPS</td>
+  <td>无（可选购）</td>
+  <td>有（已拓展）</td>
+</tr>
+<tr>
+  <td>4G</td>
+  <td>无（可选购）</td>
+  <td>有（已拓展）</td>
+</tr>
+<tr>
+  <td>感知传感器</td>
+  <td>激光雷达×1+高清相机×1</td>
+  <td>激光雷达×2+高清相机×1</td>
+</tr>
+<tr>
+  <td>控制和算力</td>
+  <td>标配：8核高性能CPU（平台功能）+ Intel Core i7（用户开发）</td>
+  <td>标配：8核高性能CPU（平台功能）+ Intel Core i7（用户开发）<br>选配： 高算力拓展坞</td>
+</tr>
+<tr>
+  <td>外置接口</td>
+  <td>RS485x2<br>CANx2<br>千兆以太网x2<br>USB3.0-TypeC(8核高性能CPU)x2<br>USB3.0-TypeC (Intel Core i7)x2<br>电源输出能力：12V; 24V; BAT；</td>
+    <td>RS485x2<br>CANx2<br>千兆以太网x2<br>USB3.0-TypeC(8核高性能CPU)x2<br>USB3.0-TypeC (Intel Core i7)x2<br>电源输出能力：12V; 24V; BAT；</td>
+</tr>
+<tr>
+  <td rowspan="10">性能参数</td>
+  <td>工作温度</td>
+  <td>-20℃～55℃</td>
+  <td>-20℃～55℃</td>
+</tr>
+<tr>
+  <td>续航</td>
+  <td>空载：<br>可持续行走3.5小时以上，里程约35km<br>负载25kg：<br>可持续行走1.5小时以上，里程约15km</td>
+  <td>空载：<br>可持续行走3.5小时以上，里程约35km<br>负载25kg：<br>可持续行走1.5小时以上，里程约15km</td>
+</tr> 
+<tr>
+  <td>极限站立负载</td>
+  <td>约100kg</td>
+  <td>约100kg</td>
+</tr> 
+<tr>
+  <td>持续行走负载</td>
+  <td>约25kg</td>
+  <td>约25kg</td>
+</tr> 
+<tr>
+  <td>斜坡行走能力</td>
+  <td>约45°</td>
+  <td>约45°</td>
+</tr> 
+<tr>
+  <td>楼梯行走能力</td>
+  <td>最大台阶高度 30cm</td>
+  <td>最大台阶高度 30cm°</td>
+</tr> 
+<tr>
+  <td>最大攀爬高度</td>
+  <td>约0.5m~1m</td>
+  <td>约0.5m~1m</td>
+</tr>
+<tr>
+  <td>运动速度</td>
+  <td>0~3.7m/s (极限约5m/s)</td>
+  <td>0~3.7m/s (极限约5m/s)</td>
+</tr>
+<tr>
+  <td>替换轮足</td>
+  <td>可选配轮足</td>
+  <td>可选配轮足</td>
+</tr>
+<tr>
+  <td>防护等级</td>
+  <td>IP56</td>
+  <td>IP56~IP67（核心部件IP67防护等级）</td>
+</tr>
+<tr>
+  <td rowspan="3&quot;">其他</td>
+  <td>智能OTA升级</td>
+  <td>持续升级</td>
+  <td>持续升级</td>
+</tr>
+<tr>
+  <td>二次开发</td>
+  <td>支持</td>
+  <td>支持</td>
+</tr>
+<tr>
+  <td>保修期</td>
+  <td>1年</td>
+  <td>1年</td>
+</tr>
+</tbody></table>
+</div>
+<p data-line="227">[1]以上性能数据基于特定实验室环境测得。实际表现因使用环境与工况而异，请以实测为准。</p>
+<p data-line="229">[2]详细功能，请查看二次开发手册</p>
+<p data-line="231">[3]更详细保修条款，请参见产品保修手册</p>
+<p data-line="233">[4]以上配置，在不同型号/方案中存在差异，购买前请务必咨询销售</p>
+<p data-line="235">[5]四足机器人结构复杂，动力极其强劲，为保障人身安全，请与四足机器人保持安全距离，谨慎操作</p>
+<p data-line="237">[6]产品外观后续可能会有升级调整，请以届时实物为准</p>
+<p data-line="239">[7]本页面有些示例功能，还在开发测试完善，后续陆续开放给用户</p>
+<p data-line="241">[8]本产品为民用机器人产品，请各位用户不要危险性改造和使用机器人。</p>
+<p data-line="243">[9]请访问宇树科技官网了解更多产品相关条款与政策，请遵守各地区法律法规。</p>
+<h2 data-line="245" id="heading-2">部件名称</h2>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/46dfd41c254f4d0c98a63d161db5ea8e_1831x1160.png" alt="" class="medium-zoom-image"></figure>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/78e4941763aa44208674f88cc1205521_1831x1256.png" alt="" class="medium-zoom-image"></figure>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="254">
+<p class="md-editor-admonition-title">注意:</p>
+<p>A2W标准版标配1个激光雷达，A2W PRO版本标配2个激光雷达。</p>
+</div>
+<p data-line="261">背部负载安装孔位图（单位mm）：</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/10/2c14b1e085b94f14b41d08fa69b8cc6f_2919x1416.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="265">轮足尺寸示意图（单位mm）：</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/3/2/b711431a670a450eb18369db1e971a08_856x441.png" alt="" class="medium-zoom-image"></figure>
+<h3 data-line="269" id="heading-3">电气接口</h3>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/4/20/189f68e7179d439ab19da35fbe71ace6_3177x1152.png" alt="" class="medium-zoom-image"></figure>
+<table data-line="276">
+<thead>
+<tr>
+<th style="text-align:center"><strong>序号</strong></th>
+<th><div style="width:80px"><strong>接口类型</strong> </div></th>
+<th><strong>接口名称</strong></th>
+<th><strong>接口规格</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">[1]</td>
+<td>RS485 2+2 PIN 航空插头</td>
+<td>左前腿功率线</td>
+<td>58V</td>
+</tr>
+<tr>
+<td style="text-align:center">[2]</td>
+<td>USB 2.0 Type-C</td>
+<td>PC2 USB2.0接口，支持DP</td>
+<td>USB2.0，限制功率20W</td>
+</tr>
+<tr>
+<td style="text-align:center">[3]</td>
+<td>USB 3.0 Type-C</td>
+<td>PC2 USB3.0接口</td>
+<td>限制电流1A</td>
+</tr>
+<tr>
+<td style="text-align:center">[4]</td>
+<td>USB 3.0 Type-C</td>
+<td>PC1 USB接口</td>
+<td>单个限制电流2A</td>
+</tr>
+<tr>
+<td style="text-align:center">[5]</td>
+<td>USB 3.0 Type-C</td>
+<td>PC1 USB接口</td>
+<td>单个限制电流2A</td>
+</tr>
+<tr>
+<td style="text-align:center">[6]</td>
+<td>T568 8+2 PIN 航空插头</td>
+<td>PC2交换机网口</td>
+<td>12V</td>
+</tr>
+<tr>
+<td style="text-align:center">[7]</td>
+<td>T568 8+2 PIN 航空插头</td>
+<td>PC1交换机网口</td>
+<td>12V</td>
+</tr>
+<tr>
+<td style="text-align:center">[8]</td>
+<td>RS485 2+2 PIN 航空插头</td>
+<td>左后腿功率线</td>
+<td>58V</td>
+</tr>
+</tbody>
+</table>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/4/20/d6f071c051f442d08e9be03286b25dd3_3177x1274.png" alt="" class="medium-zoom-image"></figure>
+<table data-line="290">
+<thead>
+<tr>
+<th style="text-align:center"><strong>序号</strong></th>
+<th><div style="width:80px"><strong>接口类型</strong></div></th>
+<th><strong>接口名称</strong></th>
+<th><strong>接口规格</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">[9]</td>
+<td>RS485 2+2 PIN 航空插头</td>
+<td>右后腿功率线</td>
+<td>58V</td>
+</tr>
+<tr>
+<td style="text-align:center">[10]</td>
+<td>CAN 2+2 PIN 航空插头</td>
+<td>稳压电源输出</td>
+<td>24V 5A</td>
+</tr>
+<tr>
+<td style="text-align:center">[11]</td>
+<td>CAN 2+2 PIN 航空插头</td>
+<td>电池电源输出</td>
+<td>电池电压（58V）</td>
+</tr>
+<tr>
+<td style="text-align:center">[12]</td>
+<td>485 2+2 PIN 航空插头</td>
+<td>稳压电源输出</td>
+<td>12V 6A</td>
+</tr>
+<tr>
+<td style="text-align:center">[13]</td>
+<td>485 2+2 PIN 航空插头</td>
+<td>稳压电源输出</td>
+<td>24V 6A</td>
+</tr>
+<tr>
+<td style="text-align:center">[14]</td>
+<td>RS485 2+2 PIN 航空插头</td>
+<td>右后腿功率线</td>
+<td>58V</td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="299">
+<p class="md-editor-admonition-title">关于CAN和485接口的说明</p>
+<pre><code class="language-" language=""><span class="code-block">sudo <span class="hljs-built_in">ls</span> /dev/ttyACM*</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p>您可以使用此命令来查看设备上通过透传芯片（USB-CAN/485）接入的CAN或者485接口。这两个接口接在PC2上。具体连接方式请参考<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/about_a2#heading-16">内部设备</a></p>
+</div>
+<h3 data-line="306" id="heading-4">(2+2) 功率线接口含义</h3>
+<center data-line="308">
+<figure><img src="https://doc-cdn.unitree.com/static/2024/3/4/0953a73aeca14d93a69bc34ff3885ec4_1167x1084.png" alt="1" class="medium-zoom-image"></figure>
+</center>
+<table data-line="314">
+<thead>
+<tr>
+<th style="text-align:left"><div style="width:100px">针脚号</div></th>
+<th style="text-align:left"><div style="width:100px">线缆颜色</div></th>
+<th style="text-align:left"><div style="width:200px">电气含义</div></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">1</td>
+<td style="text-align:left">黑（14AWG）</td>
+<td style="text-align:left">Power-</td>
+</tr>
+<tr>
+<td style="text-align:left">2</td>
+<td style="text-align:left">红（24AWG）</td>
+<td style="text-align:left">485A</td>
+</tr>
+<tr>
+<td style="text-align:left">3</td>
+<td style="text-align:left">黑（24AWG）</td>
+<td style="text-align:left">485B</td>
+</tr>
+<tr>
+<td style="text-align:left">4</td>
+<td style="text-align:left">白（14AWG）</td>
+<td style="text-align:left">Power+</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="322" id="heading-5">(8+2) 信号线接口含义</h3>
+<center data-line="324">
+<figure><img src="https://doc-cdn.unitree.com/static/2024/3/4/cf6393326af44931b544e444fcc5365e_1167x1084.png" alt="1" class="medium-zoom-image"></figure>
+</center>
+<table data-line="329">
+<thead>
+<tr>
+<th style="text-align:left"><div style="width:80px">针脚号</div></th>
+<th style="text-align:left"><div style="width:80px">线缆颜色</div></th>
+<th style="text-align:left"><div style="width:150px">电气含义</div></th>
+<th style="text-align:left"><div style="width:150px">T568标准网线</div></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">1</td>
+<td style="text-align:left">黑</td>
+<td style="text-align:left">Power-</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">2</td>
+<td style="text-align:left">橙</td>
+<td style="text-align:left">4N</td>
+<td style="text-align:left">棕色</td>
+</tr>
+<tr>
+<td style="text-align:left">3</td>
+<td style="text-align:left">紫</td>
+<td style="text-align:left">4P</td>
+<td style="text-align:left">白棕</td>
+</tr>
+<tr>
+<td style="text-align:left">4</td>
+<td style="text-align:left">棕</td>
+<td style="text-align:left">1P</td>
+<td style="text-align:left">白橙</td>
+</tr>
+<tr>
+<td style="text-align:left">5</td>
+<td style="text-align:left">蓝</td>
+<td style="text-align:left">1N</td>
+<td style="text-align:left">橙色</td>
+</tr>
+<tr>
+<td style="text-align:left">6</td>
+<td style="text-align:left">白</td>
+<td style="text-align:left">3N</td>
+<td style="text-align:left">蓝色</td>
+</tr>
+<tr>
+<td style="text-align:left">7</td>
+<td style="text-align:left">绿</td>
+<td style="text-align:left">3P</td>
+<td style="text-align:left">白蓝</td>
+</tr>
+<tr>
+<td style="text-align:left">8</td>
+<td style="text-align:left">粉</td>
+<td style="text-align:left">2N</td>
+<td style="text-align:left">绿色</td>
+</tr>
+<tr>
+<td style="text-align:left">9</td>
+<td style="text-align:left">灰</td>
+<td style="text-align:left">2P</td>
+<td style="text-align:left">白绿</td>
+</tr>
+<tr>
+<td style="text-align:left">10</td>
+<td style="text-align:left">红</td>
+<td style="text-align:left">Power+(12V)</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">/</td>
+<td style="text-align:left">深蓝</td>
+<td style="text-align:left">无</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">/</td>
+<td style="text-align:left">黄色</td>
+<td style="text-align:left">无</td>
+<td style="text-align:left"></td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="344">
+<p class="md-editor-admonition-title">注意</p>
+<p>8+2共12根线，其中深蓝和黄色无含义！</p>
+</div>
+<h3 data-line="351" id="heading-6">雷达</h3>
+<p data-line="353">A2头部与尾部搭载<a href="https://www.hesaitech.com/cn/product/jt128/">禾赛JT128</a>激光雷达，为机器人提供了全面的环境感知能力。其点云频率高达1152000/s，在10%反射率的基准下探测距离可达40m、至多60m，视场角可达360° x 189°，分辨率高达0.4° (H) x 0.74° (V)。<br>
+可靠性上，禾赛JT128可适应高温运行、机械与碎石冲击、盐雾环境等多种恶劣环境，是A2在工业应用上的最佳伴侣。</p>
+<h3 data-line="356" id="heading-7">照明灯</h3>
+<p data-line="358">A2头部配置了照明灯，可用于照明、补光。</p>
+<h3 data-line="360" id="heading-8">摄像头</h3>
+<p data-line="362">A2头部配置了一个光学相机，可提供高清图传和视频，支持分辨率最高为2568*1448 15fps。FOV为D153° H132° V77°。</p>
+<h3 data-line="364" id="heading-9">音频</h3>
+<p data-line="366">A2配备了5W的扬声器和麦克风阵列，可有效的播报和沟通。</p>
+<h3 data-line="368" id="heading-10">关节序号与关节限位</h3>
+<table data-line="370">
+<thead>
+<tr>
+<th style="text-align:left">腿和关节的序号：</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Leg&nbsp;0&nbsp;：FR，右前腿</td>
+</tr>
+<tr>
+<td style="text-align:left">Leg&nbsp;1&nbsp;：FL，左前腿</td>
+</tr>
+<tr>
+<td style="text-align:left">Leg&nbsp;2&nbsp;：RR，右后腿</td>
+</tr>
+<tr>
+<td style="text-align:left">Leg&nbsp;3&nbsp;：RL，左后腿</td>
+</tr>
+<tr>
+<td style="text-align:left">Joint&nbsp;0&nbsp;：Hip，机身关节</td>
+</tr>
+<tr>
+<td style="text-align:left">Joint&nbsp;1&nbsp;：Thigh，大腿关节</td>
+</tr>
+<tr>
+<td style="text-align:left">Joint&nbsp;2&nbsp;：Calf，小腿关节</td>
+</tr>
+<tr>
+<td style="text-align:left">Joint 3 , Wheel，轮足关节</td>
+</tr>
+<tr>
+<td style="text-align:left">e.g.FR_thigth：右前腿大腿关节</td>
+</tr>
+</tbody>
+</table>
+<table data-line="382">
+<thead>
+<tr>
+<th style="text-align:left">各关节限位：</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">机身关节：-48°~48°</td>
+</tr>
+<tr>
+<td style="text-align:left">大腿关节：竖直方向为0°，前进方向为正，后腿-260°~30°，前腿-200°~90°</td>
+</tr>
+<tr>
+<td style="text-align:left">小腿关节：&nbsp;-156°~-48°</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="388" id="heading-11">坐标系，关节旋转轴与关节零点</h3>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/2/24/67b629c76f494d3c91cf76a667f32fd3_839x828.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="394">机身关节旋转轴为 x 轴，大腿关节和小腿关节的旋转轴为 y 轴，旋转正方向符合右手定则。</p>
+<p data-line="396">当各个关节均为零度时，各坐标系如上图。红色为 x 轴，绿色为 y 轴，蓝色为 z 轴。小腿关节由于限位，实际到不了这个位置，这里仅为了指明零点位置。可以看出，各个关节坐标系的初始姿态都是一致的，只是位置和旋转轴不同。</p>
+<h2 data-line="398" id="heading-12">电池与充电器</h2>
+<h3 data-line="400" id="heading-13">电池基础信息</h3>
+<table data-line="402">
+<thead>
+<tr>
+<th>规格</th>
+<th>参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>电池型号</td>
+<td>BT3-02</td>
+</tr>
+<tr>
+<td>电池重量</td>
+<td>3.3KG</td>
+</tr>
+<tr>
+<td>电池容量</td>
+<td>9000mAh（453.6Wh）</td>
+</tr>
+<tr>
+<td>标准电压</td>
+<td>50.4V</td>
+</tr>
+<tr>
+<td>充电限制电压</td>
+<td>58.8V</td>
+</tr>
+<tr>
+<td>防水等级</td>
+<td>IP67</td>
+</tr>
+<tr>
+<td>尺寸</td>
+<td>99.1 × 82.6 × 266.2 （mm）</td>
+</tr>
+<tr>
+<td>标准电池使用温度</td>
+<td>充电时：0℃~65℃ <br> 放电时：-20℃~70℃</td>
+</tr>
+<tr>
+<td>特性</td>
+<td>双仓位，可热插拔</td>
+</tr>
+</tbody>
+</table>
+<h3 data-line="414" id="heading-14">充电器基础信息</h3>
+<table data-line="416">
+<thead>
+<tr>
+<th>规格</th>
+<th>参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入电压范围</td>
+<td>AC 100V~240V</td>
+</tr>
+<tr>
+<td>输入电流</td>
+<td>最大 AC 5A</td>
+</tr>
+<tr>
+<td>空载功耗</td>
+<td>&lt;2.0W</td>
+</tr>
+<tr>
+<td>工作环境温度</td>
+<td>-29℃~35℃</td>
+</tr>
+<tr>
+<td>储存温度</td>
+<td>-40℃~75℃</td>
+</tr>
+<tr>
+<td>防水等级</td>
+<td>IP67</td>
+</tr>
+<tr>
+<td>输出电压</td>
+<td>DC 58.8V±0.3V</td>
+</tr>
+<tr>
+<td>输出电流</td>
+<td>DC 7.0A ± 0.7A</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="428" id="heading-15">内部设备</h2>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/1/5/be449fe59e3e44d7bc71613b86bbee77_8192x4270.png" alt="" class="medium-zoom-image"></figure>
+<center data-line="433">
+  内部硬件架构图
+</center>
+<table data-line="437">
+<thead>
+<tr>
+<th><strong>设备名称</strong></th>
+<th><strong>配置信息</strong></th>
+<th><strong>IP地址</strong></th>
+<th><strong>备注</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运控计算单元</td>
+<td>8核高性能计算板卡</td>
+<td>192.168.123.161</td>
+<td>需通过PC1网口通讯，不允许SSH登录</td>
+</tr>
+<tr>
+<td>用户开发单元</td>
+<td>Intel Core i7</td>
+<td>192.168.123.162<br>192.168.124.162</td>
+<td>需通过PC2网口通讯，可登录<br>默认用户名：unitree<br>默认密码：Unitree#24226 或 Unitree0408</td>
+</tr>
+<tr>
+<td>交换机1</td>
+<td>/</td>
+<td>192.168.123.0/24</td>
+<td>通过PC1网口访问，DDS控制信号在此局域网通讯</td>
+</tr>
+<tr>
+<td>交换机2</td>
+<td>/</td>
+<td>192.168.124.0/24</td>
+<td>通过PC2网口访问，雷达点云数据在此局域网通讯</td>
+</tr>
+<tr>
+<td>前部雷达</td>
+<td>Hesai JT128</td>
+<td>192.168.124.20</td>
+<td>/</td>
+</tr>
+<tr>
+<td>后部雷达</td>
+<td>Hesai JT128</td>
+<td>192.168.124.21</td>
+<td>/</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-line="446">
+<p>[*] 由于部分模块生产计划变动，模块可能发生变更，请以发货版本为准。</p>
+</blockquote>
+</article></div></div></div>
+</body>
+</html>

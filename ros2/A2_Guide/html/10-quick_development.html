@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>快速开发</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>快速开发</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/quick_development">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/quick_development</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">快速开发</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-22 16:01:57</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><p data-line="0">本文介绍如何利用Unitree SDK2快速上手A2的开发。</p>
+<p data-line="2">注：本页面截图中例程的名称和数量会随着Unitree SDK2的更新而改变。请以最新版为准。</p>
+<h2 data-line="4" id="heading-1">环境依赖</h2>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="6">
+<p class="md-editor-admonition-title">Note</p>
+<p>您也可以使用板载用户开发单元（Ubuntu 22.04）。默认用户名：unitree。默认密码：Unitree0408。</p>
+</div>
+<p data-line="10">推荐使用以下配置构建A2的开发环境。</p>
+<table data-line="12">
+<thead>
+<tr>
+<th><strong>规格</strong></th>
+<th><strong>参数</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>操作系统</td>
+<td>Ubuntu 20.04/22.04 [1]</td>
+</tr>
+<tr>
+<td>ROS2</td>
+<td>Foxy/Humble [2]</td>
+</tr>
+<tr>
+<td>硬件形式</td>
+<td>实机安装 [3]</td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="18">
+<p class="md-editor-admonition-title">注释</p>
+<p>[1] 目前，Unitre SDK2只能在Linux环境中运行。推荐使用Ubuntu。<strong>不支持Windows和MacOS</strong>。<br>
+[2] Unitree SDK2不依赖ROS2。此处的依赖为Unitree ROS2的依赖。<br>
+[3] 若您对VMWare和WSL的网络穿透与配置不熟悉，建议不要使用这类平台。</p>
+</div>
+<div class="md-editor-admonition md-editor-admonition-tip" data-line="24">
+<p class="md-editor-admonition-title">提示</p>
+<p>为了保证您的开发体验流畅顺利，除了以上硬件依赖外，我们还推荐您至少具备以下基础知识。</p>
+<ul>
+<li>Linux终端的基础命令和工具。
+<ul>
+<li>A2需要在Linux上进行开发，这意味着大部分时间您都需要和终端进行互动。一些基础的命令如cd、cat及一些基础工具如apt、git、ifconfig等能够帮助您使用Linux系统的基础功能。</li>
+</ul>
+</li>
+<li>C++或Python编程基础。
+<ul>
+<li>A2支持使用这两种语言来进行开发。建议您具备至少其中一种语言的代码理解与编写能力，帮助您更快速地上手开发。</li>
+</ul>
+</li>
+<li>ROS2及其相关机器人基础知识
+<ul>
+<li>虽然Unitree SDK2与ROS2之间没有依赖关系，但还是建议您了解一下ROS2。在这个过程中，您不仅能学习ROS2的相关使用方法、大大扩张您的经验池，也能让您在实践中了解到与机器人相关的拓展基础知识，方便您后续的开发更加顺利。</li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 data-line="34" id="heading-2">获取SDK</h2>
+<p data-line="36"><a href="https://github.com/unitreerobotics/unitree_sdk2">Unitree SDK2获取（Github）</a></p>
+<p data-line="38">除了SDK2外，还可以在此获取<a href="https://github.com/unitreerobotics/unitree_sdk2_python">Python</a>和<a href="https://github.com/unitreerobotics/unitree_ros2">ROS2</a>的SDK。您可按照SDK根目录下ReadMe中的教程来安装这些SDK。</p>
+<p data-line="40">您可以使用git来克隆我们在Github上开源的SDK。比如：</p>
+<pre data-line="42"><code class="language-bash" language="bash"><span class="code-block">git <span class="hljs-built_in">clone</span> https://github.com/unitreerobotics/unitree_sdk2.git</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/fefa6682981443f286877436d0b57d7e_922x149.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="48">您也可以使用这两种方法获取Unitree Python SDK2和Unitree ROS2。</p>
+<h2 data-line="50" id="heading-3">安装SDK</h2>
+<p data-line="52">进入Unitree SDK2文件夹。编译SDK中的例程。</p>
+<pre data-line="54"><code class="language-bash" language="bash"><span class="code-block"><span class="hljs-built_in">cd</span> unitree_sdk2
+<span class="hljs-built_in">mkdir</span> build
+<span class="hljs-built_in">cd</span> build
+cmake ..
+make</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="63">
+<p class="md-editor-admonition-title"><strong>这些步骤做了什么？</strong></p>
+<ol>
+<li>使用cd命令进入了unitree_sdk2目录</li>
+<li>使用mkdir新建了一个文件夹build（构建产物，此文件夹的名称和位置固定的，程序的产物都会放在此处）</li>
+<li>使用cd命令进入了刚刚创建的build文件夹。</li>
+<li>使用cmake（..代表上级文件夹，即为项目的根目录）读取CMakeLists.txt中关于编译的配置，并递归读取项目每个文件夹中的CMakeLists配置文件，分析项目结构、依赖关系、编译选项等。</li>
+<li>按照配置文件编译程序，将.cpp程序文件编译为可执行的产物。</li>
+</ol>
+</div>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/04217768afe548f5a9d1b114eadc6842_1288x1074.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="73">成功后，你可以在<code>unitree_sdk2/build/bin</code>下看到SDK中包含的所有产物。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/a45a4d7032704959aa0fd3f7618ecfdb_739x725.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="78">对了，如果您想在任何位置的项目中都能使用这一版本的Unitree SDK2，可以选择在<code>make</code>之后使用<code>sudo make install</code>将<strong>这一版本</strong>的Unitree API安装到您的系统中（非必选）。</p>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="80">
+<p class="md-editor-admonition-title">如果我将这一版本的Unitree API安装到系统中了，我该如何更新呢？</p>
+<p>克隆新版本的Unitree SDK2之后，再执行sudo make install即可。<br>
+特别需要注意，当你执行过sudo make install将Unitree API安装到系统后，cmake将优<strong>先使用你安装的这个版本来进行编译</strong>，而不是你下载的新版本。需要特别注意。</p>
+</div>
+<h2 data-line="85" id="heading-4">连接A2</h2>
+<p data-line="87">首先，使用T45六角扳手/螺丝刀拆开机身左侧（电池一侧）的接口上盖板。轻轻向上推，然后向外取出。注意保管盖板和螺丝，不要遗失。</p>
+<p data-line="89">随后，将连接线较窄的一头插入A2的8+2航插千兆网口。注意插口不是盲插接口，需要对齐右下角的定位凸起才能正常插入。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/23/60f9c4fc29064224bbdcc56a6632fe3f_2036x428.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="93">使用Unitree航插网口转换器连接到您的开发设备。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/5/22/e9490ddac3624f58909ccc83ef70e5fa_4031x1890.png" alt="" class="medium-zoom-image"></figure>
+<h2 data-line="98" id="heading-5">设置网络</h2>
+<p data-line="100">进入Ubuntu的设置界面，在左侧选择选择“网络”板块，右侧进入有线网络配置。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/d5931429adfe4265982efd1944221aa6_977x818.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="104">进入“IPV4“选项，选择“手动”。按图中的设置配置网络。最后点击右上角的“应用”。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/41b76cf8487347a3bab7dedcb0064624_977x822.png" alt="" class="medium-zoom-image"></figure>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="108">
+<p class="md-editor-admonition-title">测试与A2之间的连接</p>
+<p>使用工具ping可以测试您的设备与局域网中某个设备的连接情况。要检查与A2之间的连接情况，可以尝试ping它的主板IP地址：<code>192.168.123.161</code>。等待程序尝试5～6次保证连接无误的情况下，按下Control(CTRL) + C(Cancel)来终止ping程序，得到一个总结。</p>
+<pre><code class="language-bash" language="bash"><span class="code-block">ping 192.168.123.161</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/ce60d2163c784a0fb37e4c7ca459c92e_766x240.png" alt="" class="medium-zoom-image"></figure>
+</div>
+<h2 data-line="120" id="heading-6">例程运行</h2>
+<p data-line="122">我们选择一个高层例程运行。首先，我们使用<code>ifconfig</code>工具查看当前的网卡。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/f7c052e32eaa46bda59d167941d6285f_709x489.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="126">如图所示，<code>enx00e04c36021f</code>就是目前连接到A2的网卡。请记住您电脑上这个网卡的名字。进入例程后，使用命令list查看当前支持的动作。</p>
+<p data-line="128">使用命令运行高层例程。</p>
+<pre data-line="130"><code class="language-bash" language="bash"><span class="code-block">./a2_sport_client 网卡名词
+list</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/6e44bb0f06894500b123ab76666747b4_956x287.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="136">输入<code>3</code>并按下回车，使A2趴下。再输入<code>4</code>并按下回车，使A2站起。</p>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/22/5361b1d138414ffabbe094039c287e91_488x111.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="140">您也可以尝试一下其他动作，但需要注意，使用前请在<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/sport_client_interface">高层服务接口</a>中先确认该动作的具体功能。</p>
+</article></div></div></div>
+</body>
+</html>

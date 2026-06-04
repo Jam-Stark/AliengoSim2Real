@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>软件架构说明</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>软件架构说明</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/architectural_description">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/architectural_description</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">软件架构说明</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-01-04 15:33:24</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><h1 data-line="1" id="heading-1">云服务</h1>
+<p data-line="3"><strong>云服务主要有几个功能</strong>：</p>
+<ol data-line="5">
+<li>
+<p>收集&nbsp;A2&nbsp;运行数据（不涉及隐私），进行故障检测和统计。</p>
+</li>
+<li>
+<p>帮助用户实现远程操作，主要通过&nbsp;WebRTC&nbsp;实现。图像和控制流量可以点对点或通过&nbsp;turn&nbsp;server&nbsp;转发，服务器不会收集或分析这些流量。</p>
+</li>
+<li>
+<p>系统升级迭代。</p>
+</li>
+</ol>
+<p data-line="13"><strong>云服务的通信</strong>：</p>
+<ol data-line="15">
+<li>
+<p>mqtt&nbsp;用来建立与每条机器狗的物联网通信，负责监控故障、系统升级、传递&nbsp;WebRTC&nbsp;信令。</p>
+</li>
+<li>
+<p>http&nbsp;服务连接&nbsp;App&nbsp;和&nbsp;Web&nbsp;前端，建立用户与狗的绑定关系。</p>
+</li>
+<li>
+<p>turn/stun&nbsp;服务器用来帮助&nbsp;WebRTC&nbsp;点对点连接，并在无法实现点对点连接时提供服务器数据转发。</p>
+</li>
+</ol>
+<h1 data-line="22" id="heading-2">A2</h1>
+<ol data-line="24">
+<li>
+<p>OTA&nbsp;模块通过&nbsp;mqtt&nbsp;与云服务器通信，负责上传故障信息、系统升级、并转发&nbsp;WebRTC&nbsp;信令。</p>
+</li>
+<li>
+<p>WebRTC&nbsp;&nbsp;模块实现与&nbsp;App&nbsp;的主要数据管道，包括音视频流、雷达点云、运动状态及控制指令。</p>
+</li>
+<li>
+<p>蓝牙(&nbsp;BLE&nbsp;)部分用来和&nbsp;App&nbsp;建立联系，主要用于配置网络和安全验证。</p>
+</li>
+<li>
+<p>各个功能模块之间的通信主要采用DDS实现，DDS&nbsp;IDL&nbsp;兼容&nbsp;ROS2（需要选择适配的RMW），EDU&nbsp;版本可以通过&nbsp;DDS&nbsp;或&nbsp;ROS2&nbsp;调用接口。</p>
+</li>
+<li>
+<p>电机、雷达、UWB&nbsp;等传感器数据通过串口收集再转发到&nbsp;DDS&nbsp;中间层。</p>
+</li>
+<li>
+<p>EDU&nbsp;及以上版本的多媒体模块面向二次开发，支持&nbsp;GST&nbsp;推流。</p>
+</li>
+</ol>
+<h1 data-line="37" id="heading-3">App</h1>
+<ol data-line="39">
+<li>
+<p>用户管理模块，通过&nbsp;HTTP&nbsp;Web&nbsp;API&nbsp;连接宇树管理平台。负责绑定狗、&nbsp;WebRTC&nbsp;建连等功能。</p>
+</li>
+<li>
+<p>A2&nbsp;的蓝牙模块，用来配置网络。</p>
+</li>
+<li>
+<p>WebRTC&nbsp;模块，主要数据流量都是通过&nbsp;WebRTC&nbsp;实现，包括图传、点云、运动状态及控制指令下发。</p>
+</li>
+</ol>
+<h1 data-line="46" id="heading-4">开发接口</h1>
+<ol data-line="48">
+<li>
+<p>DDS，支持C++&nbsp;以及&nbsp;Python。</p>
+</li>
+<li>
+<p>ROS2&nbsp;接口。</p>
+</li>
+<li>
+<p>GST，仅用于图传。</p>
+</li>
+</ol>
+</article></div></div></div>
+</body>
+</html>

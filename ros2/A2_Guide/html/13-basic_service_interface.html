@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>底层服务接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>底层服务接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/basic_service_interface">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/basic_service_interface</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">底层服务接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-06 14:55:44</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><p data-line="0">底层通信提供了用户端PC（PC2/外部 PC）与机器人之间的数据交互功能。底层通信采用 DDS 协议。</p>
+<ul data-line="2">
+<li>
+<p>订阅话题 <code>rt/lowstate</code>(类型: <code>unitree_hg::msg::dds_::LowState_</code>) 获取 A2 当前状态。</p>
+</li>
+<li>
+<p>发布话题 <code>rt/lowcmd</code>(类型: <code>unitree_hg::msg::dds_::LowCmd_</code>)&nbsp;控制全身关节电机、电池等设备。</p>
+</li>
+</ul>
+<div class="md-editor-admonition md-editor-admonition-warning" data-line="6">
+<p class="md-editor-admonition-title">温馨提示</p>
+<p>要使用底层服务接口控制A2，需要先关闭Unitree内置的运动控制服务。当前的运动控制服务名称为：ai_sports。您可以使用<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/motion_witcher_service_interface">运控切换服务接口</a>或App关闭服务。</p>
+</div>
+<h1 data-line="12" id="heading-1">接口说明</h1>
+<h2 data-line="14" id="heading-2">关节电机顺序</h2>
+<p data-line="16">A2全身共12个电机。</p>
+<p data-line="18">Mode Machine = 1时：</p>
+<table data-line="19">
+<thead>
+<tr>
+<th><strong>控制序号</strong></th>
+<th><strong>关节名称</strong></th>
+<th><strong>备注</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>FR_BODY</td>
+<td>右前腿机身电机</td>
+</tr>
+<tr>
+<td>1</td>
+<td>FR_THIGH</td>
+<td>右前腿大腿电机</td>
+</tr>
+<tr>
+<td>2</td>
+<td>FR_CALF</td>
+<td>右前腿小腿电机</td>
+</tr>
+<tr>
+<td>3</td>
+<td>FL_BODY</td>
+<td>左前腿机身电机</td>
+</tr>
+<tr>
+<td>4</td>
+<td>FL_THIGH</td>
+<td>左前腿大腿电机</td>
+</tr>
+<tr>
+<td>5</td>
+<td>FL_CALF</td>
+<td>左前腿小腿电机</td>
+</tr>
+<tr>
+<td>6</td>
+<td>RR_BODY</td>
+<td>右后腿机身电机</td>
+</tr>
+<tr>
+<td>7</td>
+<td>RR_THIGH</td>
+<td>右后腿大腿电机</td>
+</tr>
+<tr>
+<td>8</td>
+<td>RR_CALF</td>
+<td>右后腿小腿电机</td>
+</tr>
+<tr>
+<td>9</td>
+<td>RL_BODY</td>
+<td>左后腿机身电机</td>
+</tr>
+<tr>
+<td>10</td>
+<td>RL_THIGH</td>
+<td>左后腿大腿电机</td>
+</tr>
+<tr>
+<td>11</td>
+<td>RL_CALF</td>
+<td>左后腿小腿电机</td>
+</tr>
+</tbody>
+</table>
+<p data-line="34">A2W全身共16个电机。</p>
+<p data-line="36">Mode Machine = 1时：</p>
+<table data-line="37">
+<thead>
+<tr>
+<th><strong>控制序号</strong></th>
+<th><strong>关节名称</strong></th>
+<th><strong>备注</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>FR_BODY</td>
+<td>右前腿机身电机</td>
+</tr>
+<tr>
+<td>1</td>
+<td>FR_THIGH</td>
+<td>右前腿大腿电机</td>
+</tr>
+<tr>
+<td>2</td>
+<td>FR_CALF</td>
+<td>右前腿小腿电机</td>
+</tr>
+<tr>
+<td>3</td>
+<td>FL_BODY</td>
+<td>左前腿机身电机</td>
+</tr>
+<tr>
+<td>4</td>
+<td>FL_THIGH</td>
+<td>左前腿大腿电机</td>
+</tr>
+<tr>
+<td>5</td>
+<td>FL_CALF</td>
+<td>左前腿小腿电机</td>
+</tr>
+<tr>
+<td>6</td>
+<td>RR_BODY</td>
+<td>右后腿机身电机</td>
+</tr>
+<tr>
+<td>7</td>
+<td>RR_THIGH</td>
+<td>右后腿大腿电机</td>
+</tr>
+<tr>
+<td>8</td>
+<td>RR_CALF</td>
+<td>右后腿小腿电机</td>
+</tr>
+<tr>
+<td>9</td>
+<td>RL_BODY</td>
+<td>左后腿机身电机</td>
+</tr>
+<tr>
+<td>10</td>
+<td>RL_THIGH</td>
+<td>左后腿大腿电机</td>
+</tr>
+<tr>
+<td>11</td>
+<td>RL_CALF</td>
+<td>左后腿小腿电机</td>
+</tr>
+<tr>
+<td>12</td>
+<td>FR_WHEEL</td>
+<td>右前腿轮足电机</td>
+</tr>
+<tr>
+<td>13</td>
+<td>FL_WHEEL</td>
+<td>左前腿轮足电机</td>
+</tr>
+<tr>
+<td>14</td>
+<td>RR_WHEEL</td>
+<td>右后腿轮足电机</td>
+</tr>
+<tr>
+<td>15</td>
+<td>RL_WHEEL</td>
+<td>左后腿轮足电机</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="56" id="heading-3">底层控制指令</h2>
+<p data-line="58">用户可通过发布&nbsp;DDS&nbsp;话题&nbsp;“<strong>rt/lowcmd</strong>”&nbsp;来发送电机、电池、自动充电、电机电源开关的控制指令。</p>
+<pre data-line="60"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">LowCmd_</span> {
+          octet mode_pr;                                          <span class="hljs-comment">//命令模式位。</span>
+          octet mode_machine;                                     <span class="hljs-comment">//命令机型位。</span>
+          unitree_hg::msg::dds_::MotorCmd_ motor_cmd[<span class="hljs-number">35</span>];         <span class="hljs-comment">//电机控制命令数据。</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> reserve[<span class="hljs-number">4</span>];                               <span class="hljs-comment">//保留，目前不用。</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> crc;                                      <span class="hljs-comment">//CRC32校验。</span>
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="75">
+<p class="md-editor-admonition-title">参数说明：</p>
+<ul>
+<li><code>mode_pr</code>：命令<strong>模式</strong>位。可以设置lowstate中关于 特殊关节 是按宇树算法处理，还是原始数据。（0：设置为宇树算法处理。1：原始数据，用户需自行处理。无特殊关节数据时，此位数据无效。）</li>
+<li><code>mode_machine</code>：命令<strong>机型</strong>位。必须和lowstate中mode_machine对齐，否则不响应控制命令。</li>
+<li><code>motor_cmd</code>：电机控制命令数据。</li>
+<li><code>reserve</code>：保留。</li>
+<li><code>crc</code>：CRC32校验。</li>
+</ul>
+</div>
+<p data-line="82">其中，电机数据的格式如下：</p>
+<pre data-line="83"><code class="language-" language=""><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">MotorCmd_</span> {
+          octet mode;                                                 <span class="hljs-comment">//电机控制模式  STOP模式-&gt;0x00 ; FOC模式-&gt;0x01</span>
+          <span class="hljs-type">float</span> q;                                                    <span class="hljs-comment">//关节目标位置</span>
+          <span class="hljs-type">float</span> dq;                                                   <span class="hljs-comment">//关节目标速度</span>
+          <span class="hljs-type">float</span> tau;                                                  <span class="hljs-comment">//关节目标力矩</span>
+          <span class="hljs-type">float</span> kp;                                                   <span class="hljs-comment">//关节刚度系数</span>
+          <span class="hljs-type">float</span> kd;                                                   <span class="hljs-comment">//关节阻尼系数</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> reserve;                                      <span class="hljs-comment">//保留，目前不用。</span>
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="100">
+<p class="md-editor-admonition-title">参数说明</p>
+<ul>
+<li>mode：电机控制模式。0x00=待机模式；0x01=FOC模式。</li>
+<li>q：目标位置</li>
+<li>dq：目标速度</li>
+<li>tau：前馈力矩</li>
+<li>kp：刚度系数</li>
+<li>kd：阻尼系数</li>
+<li>reserve：保留</li>
+</ul>
+</div>
+<p data-line="110"><strong>关于PD控制器</strong></p>
+<p data-line="112">关节电机作为一个高度集成的动力单元，其内部已经封装了电机底层的控制算法。作为用户，只需要给关节电机发送相关的命令，电机就能完成从接收命令到关节力矩输出的全部工作。<br><br>
+对于电机的底层控制算法，唯一需要的控制目标就是输出力矩。可是对于机器人，我们通常需要给关节设定位置、速度和力矩。这时就需要对关节电机进行混合控制。<br><br>
+宇树科技的关节电机包含如下 5 个控制指令：</p>
+<ol data-line="115">
+<li>前馈力矩：<span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mi>a</mi><mi>u</mi></mrow><annotation encoding="application/x-tex">tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mord mathnormal">a</span><span class="mord mathnormal">u</span></span></span></span></span></li>
+<li>期望角度位置：<span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub></mrow><annotation encoding="application/x-tex">q_{des}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></li>
+<li>期望角速度：<span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub></mrow><annotation encoding="application/x-tex">dq_{des}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">d</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></li>
+<li>位置刚度：<span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi>p</mi></mrow><annotation encoding="application/x-tex">kp</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">p</span></span></span></span></span></li>
+<li>阻尼系数：<span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi>d</mi></mrow><annotation encoding="application/x-tex">kd</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">d</span></span></span></span></span></li>
+</ol>
+<p data-line="123">在关节电机的混合控制中，使用 PD 控制器将电机在输出位置的偏差反馈到力矩输出上：<br></p>
+<p class="md-editor-katex-block" data-line="125" data-processed=""><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>τ</mi><mo>=</mo><mi>t</mi><mi>a</mi><mi>u</mi><mo>+</mo><mi>k</mi><mi>p</mi><mo>∗</mo><mo stretchy="false">(</mo><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub><mo>−</mo><mi>q</mi><mo stretchy="false">)</mo><mo>+</mo><mi>k</mi><mi>d</mi><mo>∗</mo><mo stretchy="false">(</mo><mi>d</mi><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub><mo>−</mo><mi>d</mi><mi>q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">τ=tau+kp∗(q_{des} −q)+kd∗(dq_{des} −dq)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6984em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">t</span><span class="mord mathnormal">a</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="mclose">)</span></span></span></span></span></p>
+<p data-line="127">上式中:</p>
+<ul data-line="128">
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">τ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span></span></span></span></span> 为电机转子的期望输出力矩，单位为<code>N.m</code></li>
+<li>tau 为电机转子的前馈力矩，单位为<code>N.m</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub></mrow><annotation encoding="application/x-tex">q_{des}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 为电机转子期望的角度位置，单位为<code>rad</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span> 为电机转子当前的角度位置，单位为<code>rad</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><msub><mi>q</mi><mrow><mi>d</mi><mi>e</mi><mi>s</mi></mrow></msub></mrow><annotation encoding="application/x-tex">dq_{des}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">d</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">es</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> 为电机转子期望的转子角速度。单位为<code>rad/s</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>q</mi></mrow><annotation encoding="application/x-tex">dq</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span> 为电机转子当前的转子角速度。单位为<code>rad/s</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi>p</mi></mrow><annotation encoding="application/x-tex">kp</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">p</span></span></span></span></span>  为电机位置误差比例系数，也可以看作<code>刚度系数</code></li>
+<li><span class="md-editor-katex-inline" data-processed=""><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi>d</mi></mrow><annotation encoding="application/x-tex">kd</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">d</span></span></span></span></span> 为电机速度误差比例系数，也可以看作<code>阻尼系数</code></li>
+</ul>
+<p data-line="137">机器人身上的关节电机指令会经过底层服务进行二次分发处理，不需要考虑减速比。上文提到的角度与速度均为输出侧数据。</p>
+<h2 data-line="139" id="heading-4">底层状态数据</h2>
+<p data-line="141">用户可通过订阅DDS 话题 “rt/lowstate” 来获取电机、电池、IMU等数据。</p>
+<pre data-line="143"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+    <span class="hljs-keyword">struct</span> <span class="hljs-title class_">LowState_</span> {
+      <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> version[<span class="hljs-number">2</span>];                                   <span class="hljs-comment">//保留，目前不用。</span>
+      octet mode_pr;                                              <span class="hljs-comment">//状态模式位，默认是0。表示当前 特殊关节 数据是宇树算法处理，还是原始数据。（0：宇树算法处理。1：原始数据，用户需自行处理。无特殊关节数据时，此位数据无效。）</span>
+      octet mode_machine;                                         <span class="hljs-comment">//表示当前是那种机型</span>
+      <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> tick;                                         <span class="hljs-comment">//1ms计时，按1ms递增。</span>
+      unitree_hg::msg::dds_::IMUState_ imu_state;                 <span class="hljs-comment">//IMU数据。</span>
+      unitree_hg::msg::dds_::MotorState_ motor_state[<span class="hljs-number">35</span>];         <span class="hljs-comment">//电机数据。</span>
+      octet wireless_remote[<span class="hljs-number">40</span>];                                  <span class="hljs-comment">//宇树实体遥控器原始数据。</span>
+      <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> reserve[<span class="hljs-number">4</span>];                                   <span class="hljs-comment">//保留，目前不用。</span>
+      <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> crc;                                          <span class="hljs-comment">//CRC32校验。</span>
+    };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="163">
+<p class="md-editor-admonition-title">参数说明</p>
+<ul>
+<li>version：保留</li>
+<li>mode_pr：状态<strong>模式</strong>位。</li>
+<li>mode_machine：状态<strong>机型</strong>位。</li>
+<li>tick：时间。从Basic Service启动开始以1ms为单位进行计时的值。</li>
+<li>imu_state：IMU数据。</li>
+<li>motor_state：电机数据。</li>
+<li>wireless_remote：遥控器数据。</li>
+<li>reserve：保留。</li>
+<li>crc：CRC32校验。</li>
+</ul>
+</div>
+<p data-line="175">其中，IMU反馈数据如下：</p>
+<pre data-line="176"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">IMUState_</span> {
+          <span class="hljs-type">float</span> quaternion[<span class="hljs-number">4</span>];                    <span class="hljs-comment">//四元数数据（0-&gt;w，1-&gt;x，2-&gt;y，3-&gt;z）。</span>
+          <span class="hljs-type">float</span> gyroscope[<span class="hljs-number">3</span>];                     <span class="hljs-comment">//角速度数据（0-&gt;x，1-&gt;y，2-&gt;z）。</span>
+          <span class="hljs-type">float</span> accelerometer[<span class="hljs-number">3</span>];                 <span class="hljs-comment">//加速度数据（0-&gt;x，1-&gt;y，2-&gt;z）。</span>
+          <span class="hljs-type">float</span> rpy[<span class="hljs-number">3</span>];                           <span class="hljs-comment">//欧拉角数据（0-&gt;roll，1-&gt;pitch，2-&gt;yaw）。</span>
+          <span class="hljs-type">short</span> temperature;                      <span class="hljs-comment">//温度数据。</span>
+      
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="192">
+<p class="md-editor-admonition-title">参数说明</p>
+<ul>
+<li>quaternion：四元数，描述机器狗姿态在三维空间中的旋转姿态。</li>
+<li>gyroscope：角速度，描述机器狗转动的速度。</li>
+<li>accelerometer：加速度，描述机器狗在空间中各个方向的速度变化率。</li>
+<li>rpy：欧拉角，使用三个角度（偏航、俯仰、滚转）描述机器狗在三维空间中的旋转姿态。</li>
+<li>temperature：IMU传感器温度。</li>
+</ul>
+</div>
+<p data-line="200">电机反馈数据如下：</p>
+<pre data-line="202"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">MotorState_</span> {
+          octet mode;                         <span class="hljs-comment">//电机当前模式。</span>
+          <span class="hljs-type">float</span> q;                            <span class="hljs-comment">//关节反馈位置数据，默认为弧度值。</span>
+          <span class="hljs-type">float</span> dq;                           <span class="hljs-comment">//关节反馈速度数据。</span>
+          <span class="hljs-type">float</span> ddq;                          <span class="hljs-comment">//关节反馈加速度数据。</span>
+          <span class="hljs-type">float</span> tau_est;                      <span class="hljs-comment">//关节反馈力矩数据。</span>
+          <span class="hljs-type">short</span> temperature[<span class="hljs-number">2</span>];               <span class="hljs-comment">//温度数据。机型不同电机型号不同，此位数据不同，需参考实际情况。</span>
+          <span class="hljs-type">float</span> vol;                          <span class="hljs-comment">//电机端电压数据 。 机型不同电机型号不同，此位数据不同，需参考实际情况。</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> sensor[<span class="hljs-number">2</span>];            <span class="hljs-comment">//扩展传感器数据 机型不同电机型号不同，此位数据不同，需参考实际情况。。</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> motorstate;           <span class="hljs-comment">//电机状态数据。机型不同电机型号不同，此位数据不同，需参考实际情况。</span>
+          <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> reserve[<span class="hljs-number">4</span>];           <span class="hljs-comment">//保留位（ 0-&gt;电机总丢包，1-&gt;电机通信频率， 2-&gt;电机型号，3-&gt;电机警告）。</span>
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="223">
+<p class="md-editor-admonition-title">参数说明</p>
+<ul>
+<li>mode：电机控制模式。0x00=待机模式；0x01=FOC模式。</li>
+<li>q：当前位置</li>
+<li>dq：当前速度</li>
+<li>ddq：当前加速度</li>
+<li>tau_est：当前输出力矩</li>
+<li>temperature：当前温度</li>
+<li>sensor：扩展传感器数据</li>
+<li>motorstate：电机状态数据</li>
+<li>reserve：反馈数组
+<ul>
+<li>reserve[0]：电机累计丢包数</li>
+<li>reserve[1]：电机通信频率</li>
+<li>reserve[2]：电机型号</li>
+<li>reserve[3]：电机当前警告</li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 data-line="239" id="heading-5">主板状态信息</h2>
+<p data-line="241">用户可通过订阅DDS话题 “rt/lf/mainboardstate” 来获取风扇转速、温度数据、电压电流数据与状态信息等数据。</p>
+<pre data-line="243"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">MainBoardState_</span> {
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span>      fan_state[<span class="hljs-number">6</span>];         <span class="hljs-comment">//风扇转速。</span>
+        <span class="hljs-type">short</span>               temperature[<span class="hljs-number">6</span>];       <span class="hljs-comment">//温度数据（ 0-&gt;主板温度，单位：℃。1-&gt;主电源温度，范围：-20-85，单位：℃ 。2-&gt;主板温度2，单位：℃。3-&gt;主板温度3，单位：℃。4-&gt;主板温度4，单位：℃）。</span>
+        <span class="hljs-type">float</span>               value[<span class="hljs-number">6</span>];             <span class="hljs-comment">//电压电流数据（ 0-&gt;电池电压，单位：V。 1-&gt;电机电压，单位：V。 2-&gt;电机电流，单位：A。 ）。</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span>       state[<span class="hljs-number">6</span>];             <span class="hljs-comment">//(0-&gt;机器总状态信息。)</span>
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="259">
+<p class="md-editor-admonition-title">参数说明（此处有疑惑，主板传感器123分别对应？电机电压具体是？）</p>
+<ul>
+<li>fan_state：风扇转速</li>
+<li>temperature：温度数据
+<ul>
+<li>temperature[0]：主板传感器1温度，单位℃</li>
+<li>temperature[1]：主电源温度，范围-20~85，单位℃</li>
+<li>temperature[2]：主板传感器2温度，单位℃</li>
+<li>temperature[3]：主板传感器3温度，单位℃</li>
+</ul>
+</li>
+<li>value：电压电流数据
+<ul>
+<li>value[0]：电池电压，单位：V</li>
+<li>value[1]：电机电压，单位：V</li>
+<li>value[2]：电机电流，单位：A</li>
+</ul>
+</li>
+<li>state：总状态信息（报错信息）</li>
+</ul>
+</div>
+<p data-line="273">主板报错信息一览：</p>
+<table data-line="275">
+<thead>
+<tr>
+<th style="text-align:left">值 (Bit Shift)</th>
+<th style="text-align:left">十六进制 (Hex)</th>
+<th style="text-align:left">十进制 (Dec)</th>
+<th style="text-align:left">状态信息变量名</th>
+<th style="text-align:left">含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 0</td>
+<td style="text-align:left">0x00000001</td>
+<td style="text-align:left">1</td>
+<td style="text-align:left">timeout_upperlevel_data_flag</td>
+<td style="text-align:left">上层控制命令超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 1</td>
+<td style="text-align:left">0x00000002</td>
+<td style="text-align:left">2</td>
+<td style="text-align:left">timeout_underlying_data_flag</td>
+<td style="text-align:left">下层反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 2</td>
+<td style="text-align:left">0x00000004</td>
+<td style="text-align:left">4</td>
+<td style="text-align:left">timeout_imu_data_flag</td>
+<td style="text-align:left">IMU反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 3</td>
+<td style="text-align:left">0x00000008</td>
+<td style="text-align:left">8</td>
+<td style="text-align:left">timeout_motor_data_flag</td>
+<td style="text-align:left">电机反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 4</td>
+<td style="text-align:left">0x00000010</td>
+<td style="text-align:left">16</td>
+<td style="text-align:left">timeout_bms_data_flag</td>
+<td style="text-align:left">电池反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 5</td>
+<td style="text-align:left">0x00000020</td>
+<td style="text-align:left">32</td>
+<td style="text-align:left">timeout_rf_data_flag</td>
+<td style="text-align:left">宇树实体遥控器反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 6</td>
+<td style="text-align:left">0x00000040</td>
+<td style="text-align:left">64</td>
+<td style="text-align:left">error_bms_model_flag</td>
+<td style="text-align:left">电池型号错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 7</td>
+<td style="text-align:left">0x00000080</td>
+<td style="text-align:left">128</td>
+<td style="text-align:left">error_softstart_flag</td>
+<td style="text-align:left">软启动错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 8</td>
+<td style="text-align:left">0x00000100</td>
+<td style="text-align:left">256</td>
+<td style="text-align:left">error_motor_flag</td>
+<td style="text-align:left">电机状态错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 9</td>
+<td style="text-align:left">0x00000200</td>
+<td style="text-align:left">512</td>
+<td style="text-align:left">error_motor_oip_lowlimit_flag</td>
+<td style="text-align:left">电机过流保护，触发低限位保护</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 10</td>
+<td style="text-align:left">0x00000400</td>
+<td style="text-align:left">1024</td>
+<td style="text-align:left">error_motor_ulp_highlimit_flag</td>
+<td style="text-align:left">电机欠压保护，触发高限位保护</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 11</td>
+<td style="text-align:left">0x00000800</td>
+<td style="text-align:left">2048</td>
+<td style="text-align:left">error_motor_oip_highlimit_flag</td>
+<td style="text-align:left">电机过流保护，触发高限位保护</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 12</td>
+<td style="text-align:left">0x00001000</td>
+<td style="text-align:left">4096</td>
+<td style="text-align:left">state_soft_emergency_stop_flag</td>
+<td style="text-align:left">软急停开关被按下</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 13</td>
+<td style="text-align:left">0x00002000</td>
+<td style="text-align:left">8192</td>
+<td style="text-align:left">error_sn_flag</td>
+<td style="text-align:left">SN错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 14</td>
+<td style="text-align:left">0x00004000</td>
+<td style="text-align:left">16384</td>
+<td style="text-align:left">error_upperlevel_machine_flag</td>
+<td style="text-align:left">上层机型错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 15</td>
+<td style="text-align:left">0x00008000</td>
+<td style="text-align:left">32768</td>
+<td style="text-align:left">error_underlying_machine_flag</td>
+<td style="text-align:left">下层机型错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 16</td>
+<td style="text-align:left">0x00010000</td>
+<td style="text-align:left">65536</td>
+<td style="text-align:left">error_usb_device_flag</td>
+<td style="text-align:left">USB设备错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 17</td>
+<td style="text-align:left">0x00020000</td>
+<td style="text-align:left">131072</td>
+<td style="text-align:left">error_overjointlimit_flag</td>
+<td style="text-align:left">关节超限位错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 18</td>
+<td style="text-align:left">0x00040000</td>
+<td style="text-align:left">262144</td>
+<td style="text-align:left">timeout_double_imu_data_flag</td>
+<td style="text-align:left">Double IMU反馈数据超时</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 19</td>
+<td style="text-align:left">0x00080000</td>
+<td style="text-align:left">524288</td>
+<td style="text-align:left">error_battery_UVP_flag</td>
+<td style="text-align:left">主板判断电池UVP错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 20</td>
+<td style="text-align:left">0x00100000</td>
+<td style="text-align:left">1048576</td>
+<td style="text-align:left">error_motor_UVP_flag</td>
+<td style="text-align:left">主板判断电机UVP错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 21</td>
+<td style="text-align:left">0x00200000</td>
+<td style="text-align:left">2097152</td>
+<td style="text-align:left">error_underlying_machinesect_flag</td>
+<td style="text-align:left">下层机器大类错误</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 22</td>
+<td style="text-align:left">0x00400000</td>
+<td style="text-align:left">4194304</td>
+<td style="text-align:left">error_eJSpecialmove_start_flag</td>
+<td style="text-align:left">特殊关节开机检测失败</td>
+</tr>
+<tr>
+<td style="text-align:left">1 &lt;&lt; 23</td>
+<td style="text-align:left">0x00800000</td>
+<td style="text-align:left">8388608</td>
+<td style="text-align:left">timeout_bms_data_flag_2</td>
+<td style="text-align:left">第二电池反馈数据超时</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="302" id="heading-6">电池状态信息</h2>
+<figure><img src="https://doc-cdn.unitree.com/static/2025/12/23/a9b2c896e88a47fc9a814abbef66645f_700x392.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="306">用户可通过订阅DDS话题 “lf/bmsstate”（②号电池） 与 “lf/secondary_bmsstate”（①号电池）来获取风扇转速、温度数据、电压电流数据与状态信息等数据。</p>
+<pre data-line="308"><code class="language-idl" language="idl"><span class="code-block"><span class="hljs-keyword">module</span> unitree_hg {
+  <span class="hljs-keyword">module</span> msg {
+    <span class="hljs-keyword">module</span> dds_ {
+      <span class="hljs-keyword">struct</span> <span class="hljs-title class_">BmsState_</span> {
+        octet               version_high;         <span class="hljs-comment">// 电池软件版本高位</span>
+        octet               version_low;          <span class="hljs-comment">// 电池软件版本低位</span>
+        octet               fn;                   <span class="hljs-comment">// 数据帧型号</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span>      cell_vol[<span class="hljs-number">40</span>];         <span class="hljs-comment">// 单节电池电压。</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span>       bmsvoltage[<span class="hljs-number">3</span>];        <span class="hljs-comment">// 电压信息，（ 0-&gt;bat_voltage， 单位：mV , 1-&gt;pack_voltage，单位：mV ）。</span>
+        <span class="hljs-type">long</span>                current;              <span class="hljs-comment">// 充放电电流，单位：mA。</span>
+        octet               soc;                  <span class="hljs-comment">// 电量，数值范围（0-100%）。</span>
+        octet               soh;                  <span class="hljs-comment">// 电池健康状态 ，数值范围（0-100%）。</span>
+        <span class="hljs-type">short</span>               temperature[<span class="hljs-number">12</span>];      <span class="hljs-comment">// 温度。</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span>      cycle;                <span class="hljs-comment">// 循环数</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span>      manufacturer_date;    <span class="hljs-comment">// 时间</span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span>       bmsstate[<span class="hljs-number">5</span>];          <span class="hljs-comment">// 电池状态数据（数据帧型号不同，需参考实际情况）。              </span>
+        <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span>       reserve[<span class="hljs-number">3</span>];           <span class="hljs-comment">// 保留，目前不用。</span>
+      };
+    };  <span class="hljs-comment">// module dds_</span>
+  };  <span class="hljs-comment">// module msg</span>
+};  <span class="hljs-comment">// module unitree_hg</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="332">
+<p class="md-editor-admonition-title">参数说明</p>
+<ul>
+<li>version_high：电池软件版本高位</li>
+<li>version_low：电池软件版本低位</li>
+<li>fn：数据帧型号</li>
+<li>cell_vol：单节电池电压（共40节）</li>
+<li>bmsvoltage：电池电压信息，单位mV
+<ul>
+<li>bmsvoltage[0]：BAT电压信息，即电池组内部总电压</li>
+<li>bmsvoltage[1]：PACK电压信息，即电池组对外输出的电压。</li>
+</ul>
+</li>
+<li>current：输出电流，单位mA。</li>
+<li>soc：电量百分比。0%~100%</li>
+<li>soh：电池健康度，0%~100%</li>
+<li>temperature：电池温度，单位℃</li>
+<li>cycle：循环数</li>
+<li>manufactuere_dare：生产时间</li>
+<li>bmsstate：电池状态数据</li>
+<li>reserve：保留</li>
+</ul>
+</div>
+<p data-line="350">电池状态数据(bmsstate[5])</p>
+<table data-line="352">
+<thead>
+<tr>
+<th style="text-align:left">索引 (Index)</th>
+<th style="text-align:left">变量名称</th>
+<th style="text-align:left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">bmsstate[0]</td>
+<td style="text-align:left">battery_type</td>
+<td style="text-align:left">电池包类型</td>
+</tr>
+<tr>
+<td style="text-align:left">bmsstate[1]</td>
+<td style="text-align:left">-</td>
+<td style="text-align:left">留空 / 未定义</td>
+</tr>
+<tr>
+<td style="text-align:left">bmsstate[2]</td>
+<td style="text-align:left">alarms</td>
+<td style="text-align:left">报警状态字 (详细位定义见下表)</td>
+</tr>
+<tr>
+<td style="text-align:left">bmsstate[3]</td>
+<td style="text-align:left">-</td>
+<td style="text-align:left">留空 / 未定义</td>
+</tr>
+<tr>
+<td style="text-align:left">bmsstate[4]</td>
+<td style="text-align:left">battery_number</td>
+<td style="text-align:left">电池有效串数</td>
+</tr>
+</tbody>
+</table>
+<p data-line="360">Alarms 报警位详细定义表</p>
+<table data-line="362">
+<thead>
+<tr>
+<th style="text-align:left">位 (Bit)</th>
+<th style="text-align:left">字段名</th>
+<th style="text-align:left">故障描述</th>
+<th style="text-align:left">备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Bit 0</td>
+<td style="text-align:left">OVC</td>
+<td style="text-align:left">单节电芯过压</td>
+<td style="text-align:left">&gt; 4.25V</td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 1</td>
+<td style="text-align:left">UVC</td>
+<td style="text-align:left">单节电芯欠压</td>
+<td style="text-align:left">&lt; 2.9V</td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 2</td>
+<td style="text-align:left">DeadC</td>
+<td style="text-align:left">单节电芯死电池</td>
+<td style="text-align:left">&lt; 2.5V</td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 3</td>
+<td style="text-align:left">OVP</td>
+<td style="text-align:left">整体过压</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 4</td>
+<td style="text-align:left">UVP</td>
+<td style="text-align:left">整体欠压</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 5</td>
+<td style="text-align:left">COC1</td>
+<td style="text-align:left">充电过流1</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 6</td>
+<td style="text-align:left">COC2</td>
+<td style="text-align:left">充电过流2</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 7</td>
+<td style="text-align:left">DOC1</td>
+<td style="text-align:left">放电过流1</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 8</td>
+<td style="text-align:left">DOC2</td>
+<td style="text-align:left">放电过流2</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 9</td>
+<td style="text-align:left">CSC</td>
+<td style="text-align:left">充电短路</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 10</td>
+<td style="text-align:left">DSC</td>
+<td style="text-align:left">放电短路</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 11</td>
+<td style="text-align:left">Tchip</td>
+<td style="text-align:left">MOS过温</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 12</td>
+<td style="text-align:left">BatOT</td>
+<td style="text-align:left">电池过温</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 13</td>
+<td style="text-align:left">BatUT</td>
+<td style="text-align:left">电池低温</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 14</td>
+<td style="text-align:left">TPCB</td>
+<td style="text-align:left">平衡过温</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 15</td>
+<td style="text-align:left">OW</td>
+<td style="text-align:left">电芯开路</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 16</td>
+<td style="text-align:left">MSMT</td>
+<td style="text-align:left">电芯过度不平衡</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 17</td>
+<td style="text-align:left">FET_Drv</td>
+<td style="text-align:left">MOS驱动器故障</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 18</td>
+<td style="text-align:left">ChipSystemError</td>
+<td style="text-align:left">芯片系统故障</td>
+<td style="text-align:left">初始化故障或IC无法访问</td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 19</td>
+<td style="text-align:left">ChipSenseError</td>
+<td style="text-align:left">模拟部分偏差过大故障</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 20</td>
+<td style="text-align:left">DuplexError</td>
+<td style="text-align:left">并联失败错误</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">Bit 21-31</td>
+<td style="text-align:left">reserve1</td>
+<td style="text-align:left">保留位</td>
+<td style="text-align:left">共11位</td>
+</tr>
+</tbody>
+</table>
+</article></div></div></div>
+</body>
+</html>

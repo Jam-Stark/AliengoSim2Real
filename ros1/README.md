@@ -53,7 +53,8 @@ ros1/
 ├── launch/
 │   ├── aliengo_deploy.launch              # 实机部署
 │   └── test_deploy.launch                 # 无实机测试
-└── scripts/
+└── scripts/                               # ros1-local scripts, not legacy/stale top-level scripts/
+    ├── deploy/                             # canonical Aliengo deploy docs
     ├── setup_and_build.sh
     └── start_aliengo_deploy.sh
 ```
@@ -152,7 +153,9 @@ sudo env LD_LIBRARY_PATH=/home/unitree/unitree_legged_sdk/lib ./aliengo_relay
 
 ## Docker 环境搭建
 
-见 `scripts/ros1ENV.MD`。核心要点：
+见 `scripts/deploy/ros1ENV.MD`。`scripts/deploy/` 是本 `ros1/` 目录内的 canonical Aliengo deploy docs location；legacy/stale 顶层 `scripts/` references 应改指向 `ros1/scripts/deploy/`。
+
+核心要点：
 - 使用 `noetic-gpu:2026-04` Docker 镜像
 - 容器内安装 LibTorch CPU 版到 `/opt/libtorch`
 - catkin workspace 通过软链接组装

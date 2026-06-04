@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>A2W轮足运动服务接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>A2W轮足运动服务接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/wheeled_sport_client_interface">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/wheeled_sport_client_interface</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">A2W轮足运动服务接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-02-24 14:47:56</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><style data-line="0">
+table th:first-of-type {
+    width: 80pt;
+    text-align: center;
+}
+/* table th:nth-of-type(2) 
+{   
+    width: 500pt;
+}
+table th:nth-of-type(3) 
+{   
+    width: 200pt;
+} */
+</style>
+<h1 data-line="15" id="heading-1">轮足运动服务接口</h1>
+<p data-line="17">轮足运动服务接口的主要功能为A2W轮足机器人整机动作控制。</p>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="19">
+<p class="md-editor-admonition-title">注意：</p>
+<p>轮足运动服务依赖于内置运控，进入调试模式后内置运控完全退出，轮足运动服务失效。</p>
+</div>
+<h1 data-line="23" id="heading-2">介绍</h1>
+<p data-line="25">轮足运动服务分为两个部分：高层控制接口、高层状态接口。</p>
+<ul data-line="27">
+<li><strong>高层控制接口</strong>：通过调用 &nbsp;SDK&nbsp;&nbsp; 的 sport_client，来给 A2W&nbsp; 发送速度控制、轨迹跟踪等运动指令。</li>
+<li><strong>高层状态接口</strong>：通过订阅 &nbsp;SDK&nbsp; 中的 HigState 消息，来获取 &nbsp;A2W&nbsp; 的位置、速度、姿态等运动状态。</li>
+</ul>
+<h2 data-line="30" id="heading-3">轮足运动控制接口介绍</h2>
+<p data-line="32">轮足控制接口可以实现 &nbsp;A2W&nbsp; 的姿态、速度、跳跃、倒立等控制。下面列出运动控制接口的相关函数。</p>
+<table data-line="34">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Damp</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;Damp()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>进入阻尼状态。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>所有电机关节停止运动并进入阻尼状态。该模式具有最高的优先级，用于突发情况下的急停。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="42">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>BalanceStand</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;BalanceStand()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>解除锁定。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>解除关节电机锁定，从正常站立、趴下、持续踏步状态切换到平衡站立模式。该模式下，拨动遥控器摇杆，机器人会移动。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="50">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>StopMove</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;StopMove()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>停下当前动作，将绝大多数指令恢复成默认值。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>停下当前的运动，并将 A2W 内部的运动参数恢复到默认值。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="58">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>StandUp</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;StandUp()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>关节锁定，站高。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>机器狗正常站高，电机关节保持锁定。相比于平衡站立模式，该模式下机器狗的姿态不会始终保持平衡。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="66">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>StandDown</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;StandDown()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>关节锁定，站低。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>机器狗趴下，电机关节保持锁定。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="74">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>RecoveryStand</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;RecoveryStand()</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>恢复站立。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>无</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>从翻倒状态恢复至平衡站立状态。为了安全，只会在阻尼/趴下状态下，才会响应恢复至站立。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="82">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Move</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;Move(float&nbsp;vx,&nbsp;float&nbsp;vy,&nbsp;float&nbsp;vyaw)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>移动。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>参数<br>● vx： 机体坐标系x速度<br>● vy： 机体坐标系y速度<br>● vyaw： 机体坐标系yaw速度<br><table><tbody><tr><th>模式</th><th>档位</th><th>速度</th></tr><tr><td rowspan="2">走路</td><td>低速</td><td>[±0.8,±0.5,±2.0]</td></tr><tr><td>高速</td><td>[±1.5,±0.5,±2.5]</td></tr><tr><td rowspan="2">跑步</td><td>低速</td><td>[±2.5,±0.3,±1.5]</td></tr><tr><td>高速</td><td>[±4.0,±0.3,±1.0]</td></tr><tr><td>攀爬模式</td><td>/</td><td>[±0.6,±0.3,±1.0]</td></tr></tbody></table></td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>走路、跑步和攀爬模式可以通过 SwitchGait 接口切换，速度档位的切换可以通过 SpeedLevel 接口实现。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="91">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>BodyHeight</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;BodyHeight(float&nbsp;height)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置站立和行走时的机身离地高度相对值。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>height：</strong> 与默认机身高度相对值，取值[0.3～0.5] (m)</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>调节平衡站立或行走时的机身相对与默认状态的高度。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="99">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>Euler</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;Euler(float roll, float pitch, float yaw)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>摆姿势</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>roll：取值范围[-0.6~0.6],pitch：取值范围[-0.6~0.6],yaw：取值范围[-0.6~0.6]</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>调用Euler之前，建议先调用一次BalanceStand。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="107">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>SwitchGait</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;SwitchGait(int&nbsp;d)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>切换步态。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>d：</strong> 步态枚举值，取值 &nbsp;0~2，0&nbsp; 为 &nbsp;默认行走，&nbsp;1&nbsp; 为 &nbsp;跑步模式，2&nbsp; 为 &nbsp;攀爬模式。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>为了安全，步态切换需要在可移动状态才生效。调用SwitchGait前，需先调用一次BalenceStand。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="116">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>SpeedLevel</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t&nbsp;SpeedLevel(int&nbsp;level)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置速度档位。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>level</strong>：速度档位枚举值，取值 &nbsp;0&nbsp; 为低速，1&nbsp; 为高速。</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 &nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="124">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>SetAutoRecover</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t SetAutoRecovery(int switch_on)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置自动翻身是否生效。</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>int：设置0，自动翻身失效；设置1，自动翻身生效</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回  0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>当设备有背载时，建议您关闭该配置。因为如果设备摔倒并剧烈翻转，可能会损坏背载设备，像机身头部安装的云台、相机等传感器等都容易受到影响。为了避免这种情况，请您务必注意关闭该配置。</td>
+</tr>
+</tbody>
+</table>
+<table data-line="132">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th><strong>GetState</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t GetState(std::map&lt;std::string, std::string&gt; &amp;state_map)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>获取当前A2W的状态机ID、状态机名、速度挡位、自动翻身设置与是否正在做动作</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td>state_map：包括：<br>fsm_id：状态机ID<br>fsm_name：状态机名称<br>speed_level：速度挡位<br>auto_recovery_switch：自动翻身开关<br>process_state：是否正在做动作</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回  0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="140">
+<p class="md-editor-admonition-title">GetState接口使用方法示例</p>
+<p>获取当前fsm_id</p>
+<pre><code class="language-cpp" language="cpp"><span class="code-block">std::map&lt;std::string, std::string&gt; state_map;
+
+std::map&lt;std::string&gt; state_name = {<span class="hljs-string">"state_map"</span>,
+                                    <span class="hljs-string">"fsm_id"</span>,
+                                    <span class="hljs-string">"fsm_name"</span>,
+                                    <span class="hljs-string">"speed_level"</span>,
+                                    <span class="hljs-string">"auto_recovery_switch"</span>.
+                                    <span class="hljs-string">"process_state"</span>};
+sport_client.<span class="hljs-built_in">GetState</span>(state_map);
+std::cout &lt;&lt; state_map[<span class="hljs-string">"fsm_id"</span>] &lt;&lt; std::endl</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+</div>
+<p data-line="156">接口错误码如下：</p>
+<table data-line="158">
+<thead>
+<tr>
+<th>错误码</th>
+<th>错误描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4201</td>
+<td>动作超时错误，在期望的时间内没有完成指定动作</td>
+</tr>
+<tr>
+<td>4205</td>
+<td>状态机未初始化结束</td>
+</tr>
+<tr>
+<td>3104</td>
+<td>DDS 超时</td>
+</tr>
+</tbody>
+</table>
+<h1 data-line="164" id="heading-4">高层状态接口</h1>
+<h2 data-line="166" id="heading-5">高层状态接口调用方式</h2>
+<p data-line="168">通过订阅<code>rt/sportmodestate</code>或<code>rt/oddommodestate</code>话题可以实现对机器人当前的里程计信息、速度、当前模式、是否正在执行动作。</p>
+<h2 data-line="170" id="heading-6">运控模式的状态机ID和说明</h2>
+<table data-line="172">
+<thead>
+<tr>
+<th><strong>ID</strong></th>
+<th><strong>运控名称</strong></th>
+<th><strong>备注</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>PASSIVE</td>
+<td>阻尼模式</td>
+</tr>
+<tr>
+<td>1</td>
+<td>STAND_DOWN</td>
+<td>站低</td>
+</tr>
+<tr>
+<td>2</td>
+<td>STAND_UP</td>
+<td>站高</td>
+</tr>
+<tr>
+<td>3</td>
+<td>DEFAULT_MODE</td>
+<td>默认步态</td>
+</tr>
+<tr>
+<td>4</td>
+<td>RUNNING_MODE</td>
+<td>跑步模式</td>
+</tr>
+<tr>
+<td>5</td>
+<td>CLIMB_MODE</td>
+<td>攀爬模式</td>
+</tr>
+<tr>
+<td>8</td>
+<td>HANDSTAND</td>
+<td>倒立</td>
+</tr>
+<tr>
+<td>9</td>
+<td>BIPED_STAND</td>
+<td>直立</td>
+</tr>
+<tr>
+<td>12</td>
+<td>RECOVERY</td>
+<td>翻身</td>
+</tr>
+<tr>
+<td>13</td>
+<td>BASE_HEIGHT_CTRL</td>
+<td>机身高度控制步态</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="185" id="heading-7">高层状态类型介绍</h2>
+<table data-line="187">
+<thead>
+<tr>
+<th style="text-align:center"><strong>状态名</strong></th>
+<th style="text-align:center"><strong>IMU State</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>定义</strong></td>
+<td style="text-align:center"><code>const ::unitree_go::msg::dds_::IMUState_&amp; imu_state</code></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>内容</strong></td>
+<td style="text-align:center">IMU数据</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:center">具体数据类型和内容可参考<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/basic_service_interface">底层服务接口</a></td>
+</tr>
+</tbody>
+</table>
+<table data-line="193">
+<thead>
+<tr>
+<th style="text-align:center"><strong>状态名</strong></th>
+<th style="text-align:center"><strong>Mode</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>定义</strong></td>
+<td style="text-align:center"><code>uint8_t mode</code></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>内容</strong></td>
+<td style="text-align:center">当前运控模式状态机ID</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:center">具体ID见上文运控模式的状态机ID和说明</td>
+</tr>
+</tbody>
+</table>
+<table data-line="199">
+<thead>
+<tr>
+<th style="text-align:center"><strong>状态名</strong></th>
+<th style="text-align:center"><strong>Position</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>定义</strong></td>
+<td style="text-align:center"><code>const std::array&lt;float, 3&gt;&amp; position</code></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>内容</strong></td>
+<td style="text-align:center">里程计数据，xyz</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:center"></td>
+</tr>
+</tbody>
+</table>
+<table data-line="205">
+<thead>
+<tr>
+<th style="text-align:center"><strong>状态名</strong></th>
+<th style="text-align:center"><strong>Velocity</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>定义</strong></td>
+<td style="text-align:center"><code>const std::array&lt;float, 3&gt;&amp; velocity</code></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>内容</strong></td>
+<td style="text-align:center">速度数据，xyz</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:center"></td>
+</tr>
+</tbody>
+</table>
+<table data-line="211">
+<thead>
+<tr>
+<th style="text-align:center"><strong>状态名</strong></th>
+<th style="text-align:center"><strong>Progress</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>定义</strong></td>
+<td style="text-align:center"><code>float progress_;</code></td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>内容</strong></td>
+<td style="text-align:center">是否正在执行动作</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:center"></td>
+</tr>
+</tbody>
+</table>
+</article></div></div></div>
+</body>
+</html>

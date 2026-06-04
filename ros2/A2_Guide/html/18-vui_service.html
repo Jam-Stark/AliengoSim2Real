@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <base href="https://support.unitree.com/">
+  <title>多媒体服务接口</title>
+  <style>
+    @page { size: A4; margin: 13mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      line-height: 1.3;
+      margin: 1.2em 0 .55em;
+      page-break-after: avoid;
+    }
+    h1 {
+      border-bottom: 1px solid #ddd;
+      font-size: 26px;
+      padding-bottom: 8px;
+    }
+    h2 {
+      border-bottom: 1px solid #eee;
+      font-size: 21px;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 18px; }
+    p { margin: .7em 0; }
+    a { color: #0645ad; overflow-wrap: anywhere; }
+    img {
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+      page-break-inside: avoid;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 14px 0;
+      page-break-inside: auto;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #d9d9d9;
+      padding: 6px 8px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    pre {
+      background: #282c34;
+      border-radius: 4px;
+      color: #abb2bf;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      page-break-inside: avoid;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    code {
+      font-family: Menlo, Consolas, "Courier New", monospace;
+      font-size: .92em;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      color: #444;
+      margin-left: 0;
+      padding-left: 12px;
+    }
+    .source {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+    .MuiBreadcrumbs-root,
+    .css-1ie4tom,
+    .MuiStack-root img.css-13og8q6 {
+      display: none !important;
+    }
+    .md-editor,
+    .md-editor-preview-wrapper,
+    .md-editor-preview {
+      border: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>多媒体服务接口</h1>
+  <div class="source">来源：<a href="https://support.unitree.com/home/zh/A2_SDK_Development_Guide/vui_service">https://support.unitree.com/home/zh/A2_SDK_Development_Guide/vui_service</a></div>
+  <div class="MuiStack-root css-1ialerq"><p class="MuiTypography-root MuiTypography-body1 css-19z3q4e">多媒体服务接口</p></div><div class="MuiStack-root css-a2u5fw"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAYAAADE6YVjAAAAAXNSR0IArs4c6QAAAqJJREFUSEu9lk1IVFEUx3/nqaGWYIs2UpDtNTFbRkFB0KY2bSKTBAfK+ZLAgmq6jhXlZpwPyyy0L1rYJlsEEUS1Fitbh0HUokUI5kej804802F0vt5AdlePd+89v/s/555zj1Bk+HzXt6mVPKywF6VeoEphHmEKtcdTSevl4KD5UciM5Jv0esMNlNmXgWNABTCNMqXCrCibEeqBWmAReIZl9SYioU+57GVBPB5PRUVV3TWBLmAG5a6o9SQeD00CmmFEfL5wo4p9AqEDqFGILM5/vzg0NOSA02MNpL29u6ZqS/WYCAeAe+VCd3+/mS7m0mDQ1C7BTZQOVd7M/5o7OjzcN7O6Lw1xFGyqrHuBsB9oT0TN42LG1897A+YkMIzyNrnw/ciqojSkM2BuCHSr2qcHYuEHuQBef4/P+Z+IXYnnO0CnP9QmYo0I9MWj5oKzbhni7Qo3YNsTwEgiajx5L4PfvFKhciBq9hVS6Q2aOyjtKdhzO2om/0ICZhQ4VC7sKhQDr0vIcoyUz6q8HoiZ47KSB98QIol+c77gCV1CHBsr7j+3QHK7rATrkdhWUzwe+vivID5feLda9gegVTr9JoZwaiBqtq7LgyyeW3etbHQE/FR46HyMoexIxExzsStbIgSv30wgfJVSNpaydvlC+c074HfJShBaUMazVcvz9fmTVuLERETbEtEep9hl1qYsO76AiQAtudyqKqNrIeoImFbkfvp2Ldmp5sF47/ticXE7fzZomizFsdeazhNbidyKFc4Tt4CsPFn+4TdPRThYLOPdQrIyvpTa5RaSs3ZlyCtYhd1A8lZhZ/N/eU8c0Ia/jKuu2PA3PtPnZwKmsQwure9WRJjVHN1KCq46D1SuuOVtiVYXZ/ZdAjtRqhHmFL647bv+APUWkGJzjKERAAAAAElFTkSuQmCC" class="css-13og8q6"><span>更新时间：2026-05-25 17:06:16</span></div><div class="MuiBox-root css-1ie4tom"></div><div class="MuiBox-root css-8atqhb"><div id="unitree" class="md-editor   md-editor-previewOnly"><div id="unitree-preview-wrapper" class="md-editor-preview-wrapper" data-show="true"><article id="unitree-preview" class="md-editor-preview default-theme"><h2 data-line="0" id="heading-1">介绍</h2>
+<figure><img src="https://doc-cdn.unitree.com/static/2026/1/4/e54d532fbb644279a786c54138ed7dec_2467x1562.png" alt="" class="medium-zoom-image"></figure>
+<p data-line="4">A2内嵌的音频/灯光相关的硬件设施，使得机器人本体具备了实现语音交互的能力,包括:</p>
+<ul data-line="6">
+<li>灯条（绿色与白色）</li>
+<li>扬声器</li>
+<li>麦克风</li>
+</ul>
+<h2 data-line="10" id="heading-2">二次开发</h2>
+<p data-line="12">软件服务版本要求：Vui Service &gt; 1.253.0.3。若内置服务版本不符合此要求，请联系技术支持升级至正确版本。</p>
+<p data-line="14">音频灯光相关接口目前主要提供以下能力，用户可以使用以下组合来开发自己的语音交互程序。</p>
+<ul data-line="16">
+<li>ASR(Automatic Speech Recognition语音识别)， 默认非流式模型，本地离线式。输出结果包含方位角，情感，说话人角色等信息，部分字段在开发中，请注意官网更新。</li>
+<li>TTS(Text-to-Speech 文本转语音)，本地离线合成，发音角色可选，支持中文和英文两种语言</li>
+<li>音频流控制</li>
+<li>音量控制</li>
+<li>灯带颜色控制</li>
+</ul>
+<h2 data-line="22" id="heading-3">AudioClient 类</h2>
+<p data-line="24">AudioClient类可以实现文本转语音，音频控制/播放，灯光控制等功能。</p>
+<h3 data-line="27" id="heading-4">接口列表：</h3>
+<table data-line="30">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>TtsMaker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t TtsMaker(const std::string&amp; text, int32_t speaker_id)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>文字转语音</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>text</strong>：文字<br><strong>speaker_id</strong>：角色id</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>speaker_id中文角色填0  英文角色填1，暂不支持中英文混合模式。</td>
+</tr>
+<tr>
+<td><em>speaker_id</em> 0</td>
+<td>你好。我是宇树科技的机器人。例程启动成功<video src="https://doc-cdn.unitree.com/static/2025/4/24/d92cb5205d6140dd90ae915e791e5d57.wav" controls=""></video></td>
+</tr>
+<tr>
+<td><em>speaker_id</em> 1</td>
+<td>Hello. I'm a robot from Unitree Robotics. The example has started successfully. <video src="https://doc-cdn.unitree.com/static/2025/4/24/621e65f12cbb47c6ba8fa62ccc28bfa2.wav" controls=""></video></td>
+</tr>
+</tbody>
+</table>
+<table data-line="40">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>GetVolume</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t GetVolume(uint8_t &amp;volume）</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>获取系统音量</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>volume</strong>：音量大小(0-100)</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="48">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>SetVolume</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t SetVolume(uint8_t volume)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>设置系统音量</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>volume</strong>：音量大小(0-100)</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table data-line="56">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>LedControl</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t LedControl(uint8_t R, uint8_t G, uint8_t B)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>灯带控制</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>R</strong>：红色(0-255)<br><strong>G</strong>：绿色(0-255)<br><strong>B</strong>：蓝色(0-255)</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>此接口调用间隔需大于200ms</td>
+</tr>
+</tbody>
+</table>
+<table data-line="64">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>PlayStream</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t PlayStream(std::string app_name, std::string stream_id, std::vector&lt;uint8_t&gt; pcm_data)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>音频流播放</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>app_name</strong>：应用名称<br><strong>stream_id</strong>：标识id,  相同为缓存续播，不同则打断播放<br><strong>pcm_data</strong>：PCM格式  采样率16K 单通道  16bit</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td>注意音频格式</td>
+</tr>
+</tbody>
+</table>
+<table data-line="72">
+<thead>
+<tr>
+<th><strong>函数名</strong></th>
+<th>PlayStop</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>函数原型</strong></td>
+<td>int32_t PlayStop(std::string app_name)</td>
+</tr>
+<tr>
+<td><strong>功能概述</strong></td>
+<td>停止播放</td>
+</tr>
+<tr>
+<td><strong>参数</strong></td>
+<td><strong>app_name</strong>：应用名称</td>
+</tr>
+<tr>
+<td><strong>返回值</strong></td>
+<td>调用成功返回 0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td><strong>备注</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="80" id="heading-5">ASR消息 / 播放状态</h2>
+<p data-line="82">在麦克风打开状态下(可使用APP或者遥控器切换到唤醒模式)，内置麦克风+ASR模块会识别环境中的人声并进行识别。</p>
+<p data-line="84">订阅话题 <code>rt/audio_msg</code>(类型: <code>std_msgs::msg::dds_::String_</code>) 获取内置离线式ASR模块提供的识别信息</p>
+<p data-line="86"><strong>ASR消息</strong></p>
+<pre data-line="88"><code class="language-" language=""><span class="code-block"><span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"index"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"timestamp"</span><span class="hljs-punctuation">:</span><span class="hljs-number">29319303490</span>
+    <span class="hljs-attr">"text"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"你好"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"angle"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">90</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"speaker_id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"sense"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"unknown"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"confidence"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.95</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"language"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"zh-CN"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"is_final"</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span>
+<span class="hljs-punctuation">}</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<table data-line="103">
+<thead>
+<tr>
+<th>参数名</th>
+<th>参数类型</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>index</td>
+<td>整形</td>
+<td>消息唯一序号</td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>整形</td>
+<td>时间戳</td>
+</tr>
+<tr>
+<td>text</td>
+<td>字符串</td>
+<td>语音识别结果</td>
+</tr>
+<tr>
+<td>angle</td>
+<td>整形</td>
+<td>方位角度 0-180</td>
+</tr>
+<tr>
+<td>speaker_id</td>
+<td>整形</td>
+<td>说话人识别结果</td>
+</tr>
+<tr>
+<td>sense</td>
+<td>字符串</td>
+<td>情绪识别结果</td>
+</tr>
+<tr>
+<td>confidence</td>
+<td>浮点型</td>
+<td>置信度</td>
+</tr>
+<tr>
+<td>language</td>
+<td>字符串</td>
+<td>语言种类</td>
+</tr>
+<tr>
+<td>is_final</td>
+<td>整形</td>
+<td>结束标志位 (用于流式识别模式，默认非流式)</td>
+</tr>
+</tbody>
+</table>
+<p data-line="117"><strong>播放状态</strong></p>
+<pre data-line="119"><code class="language-" language=""><span class="code-block"><span class="hljs-punctuation">{</span>
+   <span class="hljs-attr">"play_state"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span>
+<span class="hljs-punctuation">}</span></span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<table data-line="126">
+<thead>
+<tr>
+<th>参数名</th>
+<th>参数类型</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>play_state</td>
+<td>整形</td>
+<td>0:停止播放  1:开始播放</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="132" id="heading-6">麦克风音频</h2>
+<p data-line="134">在麦克风<strong>打开</strong>状态下(可使用APP或者遥控器切换到唤醒模式)，在组播地址239.168.123.161 端口5555会输出<strong>降噪</strong>后的音频数据。</p>
+<p data-line="136">音频数据格式为单通道/16K采样率/16bit</p>
+<h2 data-line="138" id="heading-7">图像获取接口</h2>
+<h3 data-line="140" id="heading-8">接口说明</h3>
+<p data-line="141"><strong>JPEG&nbsp;拍照服务接口</strong><br>
+利用该接口，发送方发送拍照请求，随后获得响应，即JPEG照片。具体实践是通过 VideoClient 类完成，VideoClient 类是 Video 服务提供的 Client，VideoClient 类可以通过 RPC 方式实现对 Go2 图像的获取。</p>
+<p data-line="145"><strong>h264&nbsp;图传服务接口</strong></p>
+<p data-line="147">在接收端，如需直接查看图传视频流，可以通过在<strong>命令行</strong>中输入如下指令实现：</p>
+<pre data-line="149"><code class="language-C++" language="C++"><span class="code-block">gst-launch<span class="hljs-number">-1.0</span> udpsrc address=<span class="hljs-number">230.1</span><span class="hljs-number">.1</span><span class="hljs-number">.1</span> port=<span class="hljs-number">1720</span> multicast-iface=&lt;interface_name&gt; ! queue !  application/x-rtp, media=video, encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="152">其中 230.1.1.1是多播地址。<br>
+&lt;interface_name&gt; 是用户主机连接 Go2 的网络接口名称，例如 eth0， 设置成 <code>multicast-iface=eth0</code> 即可。</p>
+<p data-line="155">目前只支持 UDP，未来会加入其他图传协议的支持。<br>
+视频帧率为15Hz。相机分辨率为1280*720，水平视角100度，垂直视角56度。</p>
+<h3 data-line="158" id="heading-9">JPEG&nbsp;拍照服务接口</h3>
+<h2 data-line="159" id="heading-10">VideoClient 类</h2>
+<p data-line="160">接口错误码列表：<br>
+暂无</p>
+<p data-line="163">类与接口描述：</p>
+<table data-line="164">
+<thead>
+<tr>
+<th style="text-align:center">类名</th>
+<th style="text-align:left">构造与析构</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">VideoClient</td>
+<td style="text-align:left">VideoClient::~VideoClient()</td>
+</tr>
+</tbody>
+</table>
+<table data-line="168">
+<thead>
+<tr>
+<th style="text-align:center"><strong>函数名</strong></th>
+<th style="text-align:left"><strong>GetImageSample</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>函数原型</strong></td>
+<td style="text-align:left">int32_t GetImageSample(std::vector&lt;uint8_t&gt;&amp; image_sample)</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>功能概述</strong></td>
+<td style="text-align:left">获取照片</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>参数</strong></td>
+<td style="text-align:left"><strong>image_sample</strong>：照片内容</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>返回值</strong></td>
+<td style="text-align:left">调用成功返回&nbsp;0，否则返回相关错误码。</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>备注</strong></td>
+<td style="text-align:left"></td>
+</tr>
+</tbody>
+</table>
+<h4 data-line="176" id="heading-11">案例</h4>
+<p data-line="177">本案例展示如何通过JPEG拍照服务接口获取图片并保存。</p>
+<pre data-line="178"><code class="language-C++" language="C++"><span class="code-block"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;unitree/robot/go2/video/video_client.hpp&gt;</span></span>
+<span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;iostream&gt;</span></span>
+<span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;fstream&gt;</span></span>
+<span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;ctime&gt;</span></span>
+
+
+<span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">main</span><span class="hljs-params">(<span class="hljs-type">int</span> argc, <span class="hljs-type">char</span> **argv)</span>
+</span>{
+    <span class="hljs-comment">/*
+     * Initilaize ChannelFactory
+     */</span>
+    <span class="hljs-keyword">if</span> (argc &lt; <span class="hljs-number">2</span>)
+    {
+      std::cout &lt;&lt; <span class="hljs-string">"Usage: "</span> &lt;&lt; argv[<span class="hljs-number">0</span>] &lt;&lt; <span class="hljs-string">" networkInterface"</span> &lt;&lt; std::endl;
+      <span class="hljs-built_in">exit</span>(<span class="hljs-number">-1</span>);
+    }
+    unitree::robot::ChannelFactory::<span class="hljs-built_in">Instance</span>()-&gt;<span class="hljs-built_in">Init</span>(<span class="hljs-number">0</span>, argv[<span class="hljs-number">1</span>]);
+    unitree::robot::go2::VideoClient video_client;
+
+    <span class="hljs-comment">/*
+     * Set request timeout 1.0s
+     */</span>
+    video_client.<span class="hljs-built_in">SetTimeout</span>(<span class="hljs-number">1.0f</span>);
+    video_client.<span class="hljs-built_in">Init</span>();
+
+    <span class="hljs-comment">//Test Api</span>
+
+    std::vector&lt;<span class="hljs-type">uint8_t</span>&gt; image_sample;
+    <span class="hljs-type">int</span> ret;
+
+    <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>)
+    {
+        ret = video_client.<span class="hljs-built_in">GetImageSample</span>(image_sample);
+
+        <span class="hljs-keyword">if</span> (ret == <span class="hljs-number">0</span>) {
+            <span class="hljs-type">time_t</span> rawtime;
+            <span class="hljs-keyword">struct</span> <span class="hljs-title class_">tm</span> *timeinfo;
+            <span class="hljs-type">char</span> buffer[<span class="hljs-number">80</span>];
+
+            <span class="hljs-built_in">time</span>(&amp;rawtime);
+            timeinfo = <span class="hljs-built_in">localtime</span>(&amp;rawtime);
+
+            <span class="hljs-built_in">strftime</span>(buffer, <span class="hljs-built_in">sizeof</span>(buffer), <span class="hljs-string">"%Y%m%d%H%M%S.jpg"</span>, timeinfo);
+            <span class="hljs-function">std::string <span class="hljs-title">image_name</span><span class="hljs-params">(buffer)</span></span>;
+
+            <span class="hljs-function">std::ofstream <span class="hljs-title">image_file</span><span class="hljs-params">(image_name, std::ios::binary)</span></span>;
+            <span class="hljs-keyword">if</span> (image_file.<span class="hljs-built_in">is_open</span>()) {
+                image_file.<span class="hljs-built_in">write</span>(<span class="hljs-built_in">reinterpret_cast</span>&lt;<span class="hljs-type">const</span> <span class="hljs-type">char</span>*&gt;(image_sample.<span class="hljs-built_in">data</span>()), image_sample.<span class="hljs-built_in">size</span>());
+                image_file.<span class="hljs-built_in">close</span>();
+                std::cout &lt;&lt; <span class="hljs-string">"Image saved successfully as "</span> &lt;&lt; image_name &lt;&lt; std::endl;
+            } <span class="hljs-keyword">else</span> {
+                std::cerr &lt;&lt; <span class="hljs-string">"Error: Failed to save image."</span> &lt;&lt; std::endl;
+            }
+        }
+
+        <span class="hljs-built_in">sleep</span>(<span class="hljs-number">3</span>);
+    }
+
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<h3 data-line="242" id="heading-12">h264 图传服务接口</h3>
+<p data-line="244">图传推荐使用&nbsp;Gst 的定向&nbsp;UDP&nbsp;接口。若您打算使用&nbsp;Gst 来拉流，可参考以下内容，实现在 OpenCV 中使用&nbsp;Gst 进行拉流。</p>
+<p data-line="246">Gst 支持嵌入&nbsp;OpenCV&nbsp;的&nbsp;VideoCapture&nbsp;函数中以&nbsp;Gst&nbsp;pipeline&nbsp;的方法进行拉流。同时它也支持嵌入&nbsp;<strong>VideoWriter</strong>&nbsp;函数中以&nbsp;Gst&nbsp;pipeline&nbsp;的方式进行推流。</p>
+<h3 data-line="248" id="heading-13">依赖相关</h3>
+<h4 data-line="250" id="heading-14">Gst&nbsp;安装</h4>
+<p data-line="252">Ubuntu&nbsp;Linux&nbsp;环境下安装：</p>
+<pre data-line="253"><code class="language-C++" language="C++"><span class="code-block">sudo apt-get install libgstreamer1<span class="hljs-number">.0</span>-dev libgstreamer-plugins-base1<span class="hljs-number">.0</span>-dev libgstreamer-plugins-bad1<span class="hljs-number">.0</span>-dev gstreamer1<span class="hljs-number">.0</span>-plugins-base gstreamer1<span class="hljs-number">.0</span>-plugins-good gstreamer1<span class="hljs-number">.0</span>-plugins-bad gstreamer1<span class="hljs-number">.0</span>-plugins-ugly gstreamer1<span class="hljs-number">.0</span>-libav gstreamer1<span class="hljs-number">.0</span>-tools gstreamer1<span class="hljs-number">.0</span>-x gstreamer1<span class="hljs-number">.0</span>-alsa gstreamer1<span class="hljs-number">.0</span>-gl gstreamer1<span class="hljs-number">.0</span>-gtk3 gstreamer1<span class="hljs-number">.0</span>-qt5 gstreamer1<span class="hljs-number">.0</span>-pulseaudio</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="256">
+<p class="md-editor-admonition-title"> 说明：</p>
+<p>Windows&nbsp;环境可以参考官方文档：<a href="https://gstreamer.freedesktop.org/documentation/installing/on-windows.html?gi-language=c">https://gstreamer.freedesktop.org/documentation/installing/on-windows.html?gi-language=c</a></p>
+</div>
+<h4 data-line="259" id="heading-15">OpenCV&nbsp;编译</h4>
+<div class="md-editor-admonition md-editor-admonition-note" data-line="261">
+<p class="md-editor-admonition-title">帮助</p>
+<p>如果无法使用cmake gui、出现无法使用configure的情况，或需要使用Python，可参考<a href="https://serviceconsole.unitree.com/#/help/030102">帮助中心</a>，使用命令行编译的方法安装。</p>
+</div>
+<p data-line="267">为了实现上述功能，需要在编译&nbsp;OpenCV&nbsp;时勾选&nbsp;<strong>WITH_GSTREAMER</strong>&nbsp;选项。OpenCV源码编译过程请参考以下步骤：</p>
+<p data-line="269">1、Github&nbsp;中下载&nbsp;OpenCV4.1.1源码&nbsp;<a href="https://github.com/opencv/opencv/tree/4.1.1">https://github.com/opencv/opencv/tree/4.1.1</a></p>
+<p data-line="271">2、安装</p>
+<pre data-line="273"><code class="language-C++" language="C++"><span class="code-block">mkdir build              
+cd build
+cmake-gui ..
+ 
+####此时进入gui对话框
+####点击configure
+####勾选 with cuda 和 with Gstreamer 
+####再次点击configure
+####之后点击generate
+####关闭gui对话框
+ 
+make 
+sudo make install</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="288">3、OpenCV&nbsp;中可以通过调用&nbsp;getBuildInformance&nbsp;函数查看&nbsp;OpenCV&nbsp;的编译情况，具体如下所示：</p>
+<pre data-line="289"><code class="language-C++" language="C++"><span class="code-block"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;opencv2/opencv.hpp&gt;</span></span>
+
+<span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">main</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span>
+</span>{
+  std::cout &lt;&lt; cv::<span class="hljs-built_in">getBuildInformation</span>() &lt;&lt; std::endl;
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="297">4、&nbsp;通过运行上述函数，可以得到如下输出，其中&nbsp;Video&nbsp;I/O&nbsp;中可以查看&nbsp;Gstreamer&nbsp;选项是否打开。</p>
+<center data-line="299">
+<figure><img src="https://doc-cdn.unitree.com/static/2023/8/8/9e8da0c99c53459985ae715b3b2d7b7a_707x245.png" alt="" class="medium-zoom-image"></figure>
+<figure><img src="https://doc-cdn.unitree.com/static/2023/8/8/4af46daae113422ca1ff2233ca4bacc7_756x212.png" alt="" class="medium-zoom-image"></figure>
+</center>
+<h3 data-line="310" id="heading-16">视频拉流</h3>
+<p data-line="312">OpenCV&nbsp;的&nbsp;<strong>VideoCapture</strong>&nbsp;类支持视频文件，图像序列或者摄像头作为输入，获取数据。通过调用如下的 <strong>VideoCapture</strong>&nbsp;构造函数能实现对&nbsp;USB&nbsp;相机数据流的拉取：</p>
+<pre data-line="313"><code class="language-C++" language="C++"><span class="code-block">cv::VideoCapture::<span class="hljs-built_in">VideoCapture</span>(<span class="hljs-type">const</span> String &amp; filename,<span class="hljs-type">int</span> apiPreference)</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<table data-line="316">
+<thead>
+<tr>
+<th style="text-align:center">变量</th>
+<th style="text-align:left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong>filename</strong></td>
+<td style="text-align:left">该参数可以是以下几类：<br> *   视频文件路径；  <br>    *   图像序列，例如图像序列名为&nbsp;image_00.jpg,&nbsp;image_01.jpg,&nbsp;image_02.jpg,&nbsp;则可以设置为&nbsp;image_%02d.jpg；  <br>    *   视频流的&nbsp;URL，例如：rtsp://admin@password:192.168.170.XXX；   <br>   *   Gstreamer&nbsp;的&nbsp;<strong>pipeline&nbsp;string</strong>，该&nbsp;pipeline&nbsp;可以使用&nbsp;<strong>gst-launch-1.0</strong>&nbsp;测试可用性；</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong>apiPreference</strong></td>
+<td style="text-align:left">Capture&nbsp;API&nbsp;使用何种后端，包括&nbsp;CAP_GSTREAMER&nbsp;or&nbsp;CAP_FFMPEG&nbsp;or&nbsp;CAP_IMAGES&nbsp;or&nbsp;CAP_DSHOW&nbsp;等。</td>
+</tr>
+</tbody>
+</table>
+<h2 data-line="321" id="heading-17">参考案例</h2>
+<p data-line="323">若您使用&nbsp;C++&nbsp;，可参考如下代码</p>
+<pre data-line="324"><code class="language-C++" language="C++"><span class="code-block"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;opencv2/opencv.hpp&gt;</span></span>
+<span class="hljs-keyword">using</span> <span class="hljs-keyword">namespace</span> cv;
+
+<span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;iostream&gt;</span></span>
+<span class="hljs-keyword">using</span> <span class="hljs-keyword">namespace</span> std;
+
+<span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">main</span><span class="hljs-params">()</span>
+</span>{
+
+  <span class="hljs-function">VideoCapture <span class="hljs-title">cap</span><span class="hljs-params">(<span class="hljs-string">"udpsrc address=230.1.1.1 port=1720 multicast-iface=&lt;interface_name&gt; ! application/x-rtp, media=video, encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! video/x-raw,width=1280,height=720,format=BGR ! appsink drop=1"</span>, 
+            CAP_GSTREAMER)</span></span>;
+    
+  <span class="hljs-keyword">if</span> (!cap.<span class="hljs-built_in">isOpened</span>()) {
+        cerr &lt;&lt;<span class="hljs-string">"VideoCapture not opened"</span>&lt;&lt;endl;
+        <span class="hljs-built_in">exit</span>(<span class="hljs-number">-1</span>);
+    }
+    
+    <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) {
+
+        Mat frame;
+
+        cap.<span class="hljs-built_in">read</span>(frame);
+
+        <span class="hljs-built_in">imshow</span>(<span class="hljs-string">"receiver"</span>, frame);
+
+        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">waitKey</span>(<span class="hljs-number">1</span>) == <span class="hljs-number">27</span>) {
+            <span class="hljs-keyword">break</span>;
+        }
+    }
+
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+}</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+<p data-line="358">若您使用&nbsp;Python&nbsp;，可参考如下代码</p>
+<pre data-line="359"><code class="language-Python" language="Python"><span class="code-block"><span class="hljs-keyword">import</span> cv2
+gstreamer_str = <span class="hljs-string">"udpsrc address=230.1.1.1 port=1720 multicast-iface=&lt;interface_name&gt; ! application/x-rtp, media=video, encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! video/x-raw,width=1280,height=720,format=BGR ! appsink drop=1"</span>
+cap = cv2.VideoCapture(gstreamer_str, cv2.CAP_GSTREAMER)
+<span class="hljs-keyword">while</span>(cap.isOpened()):
+    ret, frame = cap.read()
+    <span class="hljs-keyword">if</span> ret:
+        cv2.imshow(<span class="hljs-string">"Input via Gstreamer"</span>, frame)
+        <span class="hljs-keyword">if</span> cv2.waitKey(<span class="hljs-number">25</span>) &amp; <span class="hljs-number">0xFF</span> == <span class="hljs-built_in">ord</span>(<span class="hljs-string">'q'</span>):
+            <span class="hljs-keyword">break</span>
+    <span class="hljs-keyword">else</span>:
+        <span class="hljs-keyword">break</span>
+cap.release()
+cv2.destroyAllWindows()</span></code><span class="copy-button" data-tips="复制代码"><svg class="md-editor-icon" aria-hidden="true"><use xlink:href="#md-editor-icon-copy"></use></svg></span></pre>
+</article></div></div></div>
+</body>
+</html>
