@@ -18,6 +18,7 @@
 
 - `connected-preflight`、`no-lowcmd`、`lowstate`、`joints-live`、`joints`、`remote-live`、`remote`、`smoke-remote`、`motion-check`、`policy-listen-remote` 默认不发布 configured LowCmd topic message。
 - `motion-release` 会调用 Unitree `MotionSwitcherClient::ReleaseMode()`，必须显式设置 `A2_ALLOW_RELEASE_MODE=1`。
+- `motion-select` / `motion-restore` 会调用 Unitree `MotionSwitcherClient::SelectMode()` 恢复内置 motion service，必须先停止 policy/LowCmd publisher、重新运行 `no-lowcmd` pass，并显式设置 `A2_ALLOW_SELECT_MODE=1`。
 - `zero-lowcmd` 会发布 zero `LowCmd`，必须显式设置 `A2_ALLOW_ZERO_LOWCMD=1`。
 - `policy-enable-remote` 是最后阶段，会设置 `enable_motion:=true`；first `A` 才开始 stand-up/hold `LowCmd`，second `A` 才进入 warmup/policy handover，必须显式设置 `A2_ALLOW_ENABLE_MOTION=1`。
 - 不运行 `stand_test`。
@@ -31,6 +32,12 @@
 - `no-lowcmd` observe-only check 已确认 configured LowCmd topic（默认 `/lowcmd`）当前没有 active command messages。
 - 现场只保留一个低层控制 publisher，不要并行运行其他 configured LowCmd topic
   publisher（默认 `/lowcmd`）。
+
+恢复 Unitree 内置 motion service 前必须满足：
+
+- 已停止 `a2_policy_deploy`、`a2_lowlevel_smoke publish_zero` 或任何其他 LowCmd publisher。
+- 已重新运行 `A2/scripts/a2_real_robot_test.sh no-lowcmd 5`，并看到 pass。
+- 只使用 guarded `motion-select` / `motion-restore` 或 Unitree App 恢复；不要在 LowCmd publisher 仍 active 时恢复内置 motion service。
 
 重要说明：当前 `a2_policy_deploy command_source=remote` 已取消 `L2` locomotion gate；
 PolicyActive 中 valid sticks 会在 deadzone 后直接映射 locomotion command。`enable_motion=true`
@@ -356,7 +363,7 @@ Ideal result：
 - `timeout` exit `124` 被脚本接受；该 node 正常 spin，不是 crash。
 - 不发布 configured LowCmd topic（默认 `/lowcmd`）。
 
-## 7. MotionSwitcher Check and Guarded Release
+## 7. MotionSwitcher Check, Guarded Release, and Guarded Restore
 
 官方 A2 low-level 文档要求在 low-level control 前关闭 Unitree 内置 motion service，当前服务名为 `ai_sports`；MotionSwitcher guide 也列出 `ai_sport`。先只做 check：
 
@@ -424,6 +431,31 @@ Ideal result：
 - 最终 `CheckMode` 的 `name=''`，并输出 `Motion mode released.` 或 `Motion mode already released.`。
 
 如果 MotionSwitcher RPC 不可用，按官方文档可用 Unitree App 关闭内置运动服务；关闭后重新运行 `motion-check`，确认 `name=''`。
+
+完成 low-level / policy 测试后，如用户已经停止 policy 和 LowCmd publisher，可通过 guarded
+`SelectMode` 恢复 Unitree 内置 motion service。默认恢复 mode 是 `ai_sport`；如果现场确认
+服务名不同，可用 `A2_MOTION_RESTORE_MODE` 或 `motion-select IFACE MODE` 显式指定。
+
+部署机 container 内推荐顺序：
+
+```bash
+cd /work/projects/AliengoSim2Real/ros2
+source install/setup.bash
+A2/scripts/a2_real_robot_test.sh no-lowcmd 5
+A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0
+A2/scripts/a2_real_robot_test.sh motion-check enp131s0
+```
+
+Ideal restore result：
+
+- `no-lowcmd` 输出 `PASS: no /lowcmd messages observed`，或显示 operator 配置的 `A2_LOWCMD_TOPIC` 并 pass。
+- `motion-restore` 输出 `SelectMode('ai_sport') ret=0`。
+- `motion-restore` 的 after `CheckMode ret=0 form='...' name='ai_sport'`。
+- 随后的 `motion-check` 也显示 `name='ai_sport'`。
+
+如果 `SelectMode` ret 非 `0`、after `CheckMode` 不是 `ai_sport`，或 MotionSwitcher RPC 不稳定，
+不要继续脚本恢复；使用 Unitree App fallback 恢复内置 motion service，并再次运行
+`motion-check` 确认当前 mode。
 
 ## 8. Guarded Zero-LowCmd CRC Validation
 
@@ -542,6 +574,8 @@ Ideal result：
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`
   stand-up、holder default pose、second `A` warmup/handover、local stop 和 `B` cancel。
+- 测试结束恢复内置 motion service 前，已停止 policy/LowCmd publisher、`no-lowcmd` 重新 pass，
+  并通过 guarded `motion-restore` / `motion-select` 或 Unitree App 恢复。
 
 ## 12. Failure Logs to Collect
 
@@ -578,6 +612,7 @@ find /tmp/a2_real_robot_tests -maxdepth 1 -type f -name '*.log' -print
 - `smoke_remote_*.log`
 - `motion_check_*.log`
 - `motion_release_*.log`
+- `motion_select_*.log`
 - `zero_lowcmd_observer_*.log`
 - `zero_lowcmd_smoke_*.log`
 - `policy_listen_remote_*.log`
@@ -595,7 +630,7 @@ find /tmp/a2_real_robot_tests -maxdepth 1 -type f -name '*.log' -print
 - `ros2/A2_Guide/html/13-basic_service_interface.html`
   - A2 low-level service 使用 DDS；订阅 `rt/lowstate` type `unitree_hg::msg::dds_::LowState_`；发布 `rt/lowcmd` type `unitree_hg::msg::dds_::LowCmd_`；low-level control 前必须通过 MotionSwitcherClient 或 App 关闭 `ai_sports`；`mode_machine` 必须和 lowstate 对齐；`MotorCmd.mode` STOP `0x00`、FOC `0x01`；`wireless_remote[40]`；`tick` 是 1ms counter；`crc` 是 CRC32。
 - `ros2/A2_Guide/html/17-motion_witcher_service_interface.html`
-  - `MotionSwitcherClient` supports `CheckMode`、`SelectMode`、`ReleaseMode`；`ReleaseMode` 用于 release motion mode。
+  - `MotionSwitcherClient` supports `CheckMode`、`SelectMode`、`ReleaseMode`；`ReleaseMode` 用于 release motion mode，`SelectMode` 用于恢复指定 motion mode。
 - `ros2/A2_Guide/html/05-a2_remote_control.html`
   - A2 R3 remote button concepts，包括 `L2+B` damping、Start resume 和 binding notes。
 - `/Users/caobaoquan/Downloads/python/projects/third_party/unitree/unitree_sdk2_python/example/wireless_controller/wireless_controller.py`

@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 23:18 HKT"
+last_updated: "2026-06-05 23:38 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -51,6 +51,7 @@ read_when:
 - 同一 preflight result 显示 `/lf/lowstate` type 为 `['unitree_go/msg/LowState', 'unitree_hg/msg/LowState']`，存在 type ambiguity；它只作为 diagnostic info，不作为默认 A2 policy / lowlevel backend topic，默认继续使用 `/lowstate`。
 - real robot validation script/docs 已 harden：`connected-preflight` 额外校验 configured lowstate / lowcmd topic type；新增 standalone `no-lowcmd` observe-only step，进入任何 configured LowCmd publish path 前必须确认无 active LowCmd traffic。
 - `a2_real_robot_test.sh` MotionSwitcher helper compile/runtime 已适配部署机 SDK2 DDS nested include/lib layout：自动加入 `install/include/ddscxx`、`thirdparty/include/ddscxx`、`install/lib`、`thirdparty/lib/$(uname -m)` 等候选，显式链接 `-lddscxx -lddsc`，并通过 wrapper 将 SDK2 lib dirs 放到 `LD_LIBRARY_PATH` 前面以避免 ROS2/CycloneDDS libs shadow；`motion-check` 仍只调用 `CheckMode`，`motion-release` 仍需 `A2_ALLOW_RELEASE_MODE=1`。
+- 已新增 guarded MotionSwitcher restore/select：`motion-select IFACE MODE` 和 `motion-restore IFACE` 都要求 `A2_ALLOW_SELECT_MODE=1`，默认 restore mode 为 `A2_MOTION_RESTORE_MODE:-ai_sport`；helper action `select` 会在 `SelectMode` 前后 `CheckMode`，要求 `SelectMode ret==0` 且 after `CheckMode name==mode`。恢复前必须先停止 policy/LowCmd publisher，并运行 `no-lowcmd` pass。
 
 当前 blocker：
 
@@ -59,7 +60,7 @@ read_when:
 - 部署机 host 是 Ubuntu 24.04.3，因此 A2 deploy 采用 Ubuntu 22.04 + ROS2 Humble Docker container；不要要求 host 原生安装 Humble。
 - A2 CRC 仍需和部署机 `unitree_hg` generated messages、Unitree SDK2 sample 或实机 low-level command 行为对照验证。
 - A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 configured lowstate（默认 `/lowstate`）的 `wireless_remote[40]` 验证 stick/button 方向、无 `L2` locomotion gate 的 command mapping、`Select` primary local stop 和 `L2+B` 附加 stop path。
-- 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；A2 runtime node 不自动调用 `MotionSwitcherClient`，real robot validation script 已提供 guarded `motion-check` / `motion-release` helper，但仍需部署机实机验证。
+- 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；测试结束恢复内置服务前必须先停止 policy/LowCmd publisher 并 `no-lowcmd` pass。A2 runtime node 不自动调用 `MotionSwitcherClient`；real robot validation script 已提供 guarded `motion-check` / `motion-release` / `motion-select` / `motion-restore` helper，但仍需部署机实机验证。
 - 进入任何 real configured LowCmd topic publish path 前，必须先运行 `A2/scripts/a2_real_robot_test.sh no-lowcmd 5`；如果观察到 LowCmd message，说明现场已有 active LowCmd traffic，必须停止该 publisher 后再继续。
 
 ## When Codex/AI Should Read This Entry
@@ -102,10 +103,10 @@ read_when:
 ## TODO Summary
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
-- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / `CheckMode` 和 guarded release、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / `CheckMode`、guarded release、测试结束后的 guarded restore/select、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
-- 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
+- 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
 - 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` primary local stop、`L2+B` 附加 stop path 和 `enable_motion` 分流。
 - 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
 
@@ -131,6 +132,7 @@ read_when:
 - 2026-06-05 22:32 HKT 已针对部署机 `motion-check` helper runtime `free(): invalid pointer` 加固：helper 通过 wrapper 前置 SDK2 `LD_LIBRARY_PATH`，打印 `ldd` 结果和 `ChannelFactory::Init` / `MotionSwitcherClient::Init` / `CheckMode` / `ChannelFactory::Release` 阶段日志，并在成功路径显式 release SDK2 channel factory。
 - 2026-06-05 22:54 HKT 已实现 A2 Stand-Up + Policy Handover gate：默认 remote two-A handover，stand-up/holder/warmup command 只走 `publish_joint_commands()`，static motion 默认 blocked unless `require_standup_before_policy=false`，并更新 real robot script/docs/README/memory。
 - 2026-06-05 23:18 HKT 已取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，PolicyActive 中 valid sticks 在 deadzone 后直接映射 command；`Select` 是 primary local stop，`L2+B` 仅为附加 stop path；two-A handover 的 second `A` 仍要求 `lx/rx/ly` centered。
+- 2026-06-05 23:38 HKT 已新增 A2 内置 motion service guarded restore/select：`motion-select IFACE MODE` 调用 `MotionSwitcherClient::SelectMode(MODE)` 并前后 `CheckMode`，`motion-restore IFACE` 默认恢复 `ai_sport`；恢复前要求停止 policy/LowCmd 并通过 `no-lowcmd`。
 
 ## Recommended Next Files To Read
 

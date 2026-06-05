@@ -165,3 +165,11 @@
 - [x] stand-up second-`A` handover 不再要求 `L2` release；仍要求 `lx/rx/ly` sticks 在 deadzone 后为 zero，才进入 `PolicyWarmupHold`。
 - [x] 保留 local stop safety：`Select` 是 primary local stop；`L2+B` 仅保留为附加 stop path；stand-up / hold / warmup 阶段 `B` rising edge cancel 不变。
 - [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md`、`README.md` 和 A2 memory TODO/DONE/description，移除旧 `L2` gate 文案。
+
+## 2026-06-05 23:38 HKT
+
+- [x] 新增 A2 内置 motion service guarded restore/select：`a2_real_robot_test.sh motion-select IFACE MODE` 要求 `A2_ALLOW_SELECT_MODE=1`，调用 `MotionSwitcherClient::SelectMode(MODE)`，并在 Select 前后 `CheckMode`。
+- [x] 新增 `motion-restore IFACE`，默认恢复 `A2_MOTION_RESTORE_MODE:-ai_sport`；成功条件为 `SelectMode ret==0` 且 after `CheckMode ret==0 name==mode`。
+- [x] 保留 `motion-check` observe-only 和 guarded `motion-release` 行为，未引入 LowCmd publish、policy attach 或 `a2_policy_deploy` 修改。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`，要求恢复前停止 policy/LowCmd publisher、运行 `no-lowcmd` pass，并给出部署机内 restore 命令与 Unitree App fallback。
+- [x] 更新 A2 memory TODO/description：关闭和恢复内置 service 已有 guarded script，但实机流程仍需 operator 执行和验证。

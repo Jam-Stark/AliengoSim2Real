@@ -5,7 +5,7 @@
 - [ ] 用 Unitree SDK2 sample 或实机 low-level smoke 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - [ ] 首次实机前增加或确认安全流程：
 
-  - 关闭 `ai_sport` / `ai_sports`。
+  - low-level control 前关闭 `ai_sport` / `ai_sports`；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按 `A2_REAL_ROBOT_TEST.md` 在实机执行和验证。
   - 离地或限功率 smoke。
   - 准备 hardware emergency stop。
 
@@ -37,6 +37,7 @@
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
   - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` primary local stop、`L2+B` 附加 stop path 和 `B` cancel。
+  - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认。
 
 ## 2026-06-05 20:10 HKT
 

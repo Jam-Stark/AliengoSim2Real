@@ -117,6 +117,8 @@ Usage:
   a2_real_robot_test.sh smoke-remote [duration]
   a2_real_robot_test.sh motion-check IFACE
   A2_ALLOW_RELEASE_MODE=1 a2_real_robot_test.sh motion-release IFACE
+  A2_ALLOW_SELECT_MODE=1 a2_real_robot_test.sh motion-select IFACE MODE
+  A2_ALLOW_SELECT_MODE=1 a2_real_robot_test.sh motion-restore IFACE
   A2_ALLOW_ZERO_LOWCMD=1 a2_real_robot_test.sh zero-lowcmd [duration]
   a2_real_robot_test.sh policy-listen-remote [duration]
   A2_ALLOW_ENABLE_MOTION=1 a2_real_robot_test.sh policy-enable-remote [duration]
@@ -468,13 +470,12 @@ ModeResult check_mode(unitree::robot::b2::MotionSwitcherClient &client) {
 
 int main(int argc, char **argv) {
   if (argc < 3) {
-    std::cerr << "Usage: a2_motion_switcher_helper check|release IFACE [max_attempts]" << std::endl;
+    std::cerr << "Usage: a2_motion_switcher_helper check|release|select IFACE [mode|max_attempts]" << std::endl;
     return 2;
   }
 
   const std::string action = argv[1];
   const std::string iface = argv[2];
-  const int max_attempts = argc >= 4 ? std::stoi(argv[3]) : 5;
 
   std::cerr << "[a2-motion-helper] ChannelFactory::Init(domain=0, iface='"
             << iface << "')" << std::endl;
@@ -492,6 +493,7 @@ int main(int argc, char **argv) {
   }
 
   if (action == "release") {
+    const int max_attempts = argc >= 4 ? std::stoi(argv[3]) : 5;
     for (int attempt = 1; attempt <= max_attempts; ++attempt) {
       std::cout << "Release attempt " << attempt << "/" << max_attempts << std::endl;
       const ModeResult before = check_mode(client);
@@ -514,6 +516,35 @@ int main(int argc, char **argv) {
       }
     }
     std::cerr << "ReleaseMode did not produce an empty CheckMode name within max attempts." << std::endl;
+    return 4;
+  }
+
+  if (action == "select") {
+    if (argc < 4 || std::string(argv[3]).empty()) {
+      std::cerr << "Usage: a2_motion_switcher_helper select IFACE MODE" << std::endl;
+      return 2;
+    }
+    const std::string mode = argv[3];
+    std::cout << "Select target mode='" << mode << "'" << std::endl;
+    const ModeResult before = check_mode(client);
+    if (before.ret != 0) {
+      return 3;
+    }
+
+    std::cerr << "[a2-motion-helper] SelectMode('" << mode << "')" << std::endl;
+    const int32_t select_ret = client.SelectMode(mode);
+    std::cout << "SelectMode('" << mode << "') ret=" << select_ret << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    const ModeResult after = check_mode(client);
+    if (select_ret == 0 && after.ret == 0 && after.name == mode) {
+      std::cout << "Motion mode selected: '" << after.name << "'" << std::endl;
+      return 0;
+    }
+
+    std::cerr << "SelectMode did not produce expected CheckMode name='"
+              << mode << "'; after ret=" << after.ret
+              << " name='" << after.name << "'" << std::endl;
     return 4;
   }
 
@@ -592,6 +623,34 @@ motion_release() {
     exit 2
   fi
   run_logged motion_release "$helper" release "$iface" "${A2_RELEASE_MAX_ATTEMPTS:-5}"
+}
+
+motion_select() {
+  local iface="${1:-}"
+  local mode="${2:-}"
+  if [ -z "$iface" ] || [ -z "$mode" ]; then
+    echo "ERROR: motion-select requires IFACE and MODE, e.g. enp131s0 ai_sport" >&2
+    exit 2
+  fi
+  require_env_flag A2_ALLOW_SELECT_MODE "SelectMode restores a Unitree built-in motion service. Stop policy/LowCmd first, then run no-lowcmd until PASS before restoring."
+  echo "WARNING: SelectMode('$mode') restores Unitree built-in motion service."
+  echo "WARNING: stop a2_policy_deploy and every LowCmd publisher first."
+  echo "WARNING: run 'A2/scripts/a2_real_robot_test.sh no-lowcmd 5' and require PASS before restoring."
+  local helper
+  if ! helper="$(compile_motion_helper)"; then
+    echo "ERROR: motion-select cannot continue without a compiled MotionSwitcher helper." >&2
+    exit 2
+  fi
+  run_logged motion_select "$helper" select "$iface" "$mode"
+}
+
+motion_restore() {
+  local iface="${1:-}"
+  if [ -z "$iface" ]; then
+    echo "ERROR: motion-restore requires IFACE, e.g. enp131s0" >&2
+    exit 2
+  fi
+  motion_select "$iface" "${A2_MOTION_RESTORE_MODE:-ai_sport}"
 }
 
 zero_lowcmd() {
@@ -716,6 +775,12 @@ case "$command" in
     ;;
   motion-release)
     motion_release "$@"
+    ;;
+  motion-select)
+    motion_select "$@"
+    ;;
+  motion-restore)
+    motion_restore "$@"
     ;;
   zero-lowcmd)
     zero_lowcmd "$@"

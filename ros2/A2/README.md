@@ -271,8 +271,12 @@ SDK2 include/lib dirs, includes nested DDS headers such as `install/include/ddsc
 `thirdparty/lib/$(uname -m)`, links `-lddscxx -lddsc`, and runs through a wrapper that prefixes
 `LD_LIBRARY_PATH` with SDK2 lib dirs so ROS2/CycloneDDS libraries do not shadow SDK2 DDS libs.
 `motion-check` prints helper stages and still does not publish LowCmd. `motion-release` still
-requires `A2_ALLOW_RELEASE_MODE=1`; see `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` before any
-release or publish path.
+requires `A2_ALLOW_RELEASE_MODE=1`. After low-level/policy testing, stop every policy/LowCmd
+publisher, run `A2/scripts/a2_real_robot_test.sh no-lowcmd 5` until pass, then use guarded
+`A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0` to restore
+the built-in service. `motion-restore` defaults to `A2_MOTION_RESTORE_MODE=ai_sport`; use
+`motion-select IFACE MODE` for an explicit mode. See `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`
+before any release, restore, or publish path.
 
 ## Docker Migration
 
@@ -632,6 +636,18 @@ stand-up / hold / warmup 阶段额外支持 `B` rising edge cancel，cancel 后�
 
 真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。`a2_policy_deploy` 现在只在 remote two-A handover 下执行 stand-up，不会自动关闭 `ai_sport` / `ai_sports`。
 
+测试结束需要恢复 Unitree 内置 motion service 时，先停止 `a2_policy_deploy`、`a2_lowlevel_smoke publish_zero` 或任何其他 LowCmd publisher，并重新运行 observe-only `no-lowcmd` 直到 pass。随后使用 guarded MotionSwitcher restore：
+
+```bash
+cd /work/projects/AliengoSim2Real/ros2
+source install/setup.bash
+A2/scripts/a2_real_robot_test.sh no-lowcmd 5
+A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0
+A2/scripts/a2_real_robot_test.sh motion-check enp131s0
+```
+
+理想输出包括 `SelectMode('ai_sport') ret=0`，after `CheckMode name='ai_sport'`。如果 `SelectMode` 失败或 after `CheckMode` 不匹配，使用 Unitree App fallback 恢复，并再次 `motion-check` 确认。
+
 `stand_test` 只是接口 smoke，不包含起身流程、姿态保护、limit check 或 emergency stop；首次运行应离地、限功率、有人值守，并准备硬件急停。
 
 `a2_policy_deploy` 的 publish refusal 条件：
@@ -684,4 +700,4 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 - `Select` 是 primary local stop；`L2+B` 只是附加 local stop path。local stop 会要求重新
   two-A handover；stand-up / hold / warmup 阶段 `B` 可 cancel；只有 `enable_motion=true`
   的 motion path 会发布 zero LowCmd。
-- 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop。
+- 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop；结束后恢复内置 service 前先停止 policy/LowCmd、运行 `no-lowcmd` pass，再用 guarded `motion-restore` / Unitree App 恢复。
