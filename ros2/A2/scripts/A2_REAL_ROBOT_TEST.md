@@ -392,6 +392,20 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 `/opt/unitree/unitree_sdk2/thirdparty/lib/x86_64`。如果 compile 仍失败，脚本会停止，
 不会继续执行不存在的 helper。
 
+如果 helper 运行时出现 `free(): invalid pointer` 这类进程内 abort，优先检查 log 中的
+`ldd with SDK2 LD_LIBRARY_PATH prefix`。因为 container 已 source ROS2 Humble，
+`LD_LIBRARY_PATH` 里可能有 ROS2/CycloneDDS 的 `libddsc*.so`；新版脚本会生成 wrapper，
+运行 helper 前把 SDK2 `install/lib` / `thirdparty/lib/$(uname -m)` 放到
+`LD_LIBRARY_PATH` 最前面，并打印 helper 内部阶段：
+
+- `ChannelFactory::Init(domain=0, iface='...')`
+- `MotionSwitcherClient::Init()`
+- `CheckMode()`
+- `ChannelFactory::Release()`
+
+如果仍 abort，把该段 log 回传，用阶段日志判断是 SDK2 DDS init、MotionSwitcher RPC init、
+CheckMode call 还是 shutdown release 阶段的问题。
+
 确认 robot 安全状态后，显式 release：
 
 ```bash

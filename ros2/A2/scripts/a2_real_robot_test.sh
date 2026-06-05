@@ -317,12 +317,14 @@ smoke_remote() {
 compile_motion_helper() {
   local helper_src="${A2_MOTION_HELPER_SRC:-/tmp/a2_motion_switcher_helper.cpp}"
   local helper_bin="${A2_MOTION_HELPER_BIN:-/tmp/a2_motion_switcher_helper}"
+  local helper_wrapper="${A2_MOTION_HELPER_WRAPPER:-${helper_bin}.run}"
   local sdk_root="${UNITREE_SDK2_ROOT:-/opt/unitree/unitree_sdk2}"
   local arch
   arch="$(uname -m)"
   local include_dirs=()
   local lib_dirs=()
   local sdk_lib_dir=""
+  local helper_ld_path=""
 
   add_include_dir() {
     local dir="$1"
@@ -374,8 +376,6 @@ compile_motion_helper() {
     "$sdk_root/build/lib" \
     "$sdk_root/build" \
     "$sdk_root/lib/$arch" \
-    "$sdk_root/lib/x86_64" \
-    "$sdk_root/lib/aarch64" \
     "$sdk_root/lib"; do
     if dir_has_lib "$candidate" "unitree_sdk2"; then
       sdk_lib_dir="$candidate"
@@ -393,14 +393,19 @@ compile_motion_helper() {
     "$sdk_root/build/lib" \
     "$sdk_root/build" \
     "$sdk_root/lib/$arch" \
-    "$sdk_root/lib/x86_64" \
-    "$sdk_root/lib/aarch64" \
     "$sdk_root/lib" \
     "$sdk_root/thirdparty/lib/$arch" \
-    "$sdk_root/thirdparty/lib/x86_64" \
-    "$sdk_root/thirdparty/lib/aarch64" \
     "$sdk_root/thirdparty/lib"; do
     add_lib_dir "$candidate"
+  done
+
+  local candidate
+  for candidate in "${lib_dirs[@]}"; do
+    if [ -z "$helper_ld_path" ]; then
+      helper_ld_path="$candidate"
+    else
+      helper_ld_path="${helper_ld_path}:$candidate"
+    fi
   done
 
   cat > "$helper_src" <<'CPP'
@@ -414,6 +419,13 @@ compile_motion_helper() {
 
 namespace {
 
+struct ChannelFactoryReleaseGuard {
+  ~ChannelFactoryReleaseGuard() {
+    std::cerr << "[a2-motion-helper] ChannelFactory::Release()" << std::endl;
+    unitree::robot::ChannelFactory::Instance()->Release();
+  }
+};
+
 struct ModeResult {
   int32_t ret = -1;
   std::string form;
@@ -422,6 +434,7 @@ struct ModeResult {
 
 ModeResult check_mode(unitree::robot::b2::MotionSwitcherClient &client) {
   ModeResult result;
+  std::cerr << "[a2-motion-helper] CheckMode()" << std::endl;
   result.ret = client.CheckMode(result.form, result.name);
   std::cout << "CheckMode ret=" << result.ret
             << " form='" << result.form << "'"
@@ -441,7 +454,12 @@ int main(int argc, char **argv) {
   const std::string iface = argv[2];
   const int max_attempts = argc >= 4 ? std::stoi(argv[3]) : 5;
 
+  std::cerr << "[a2-motion-helper] ChannelFactory::Init(domain=0, iface='"
+            << iface << "')" << std::endl;
   unitree::robot::ChannelFactory::Instance()->Init(0, iface);
+  ChannelFactoryReleaseGuard release_guard;
+
+  std::cerr << "[a2-motion-helper] MotionSwitcherClient::Init()" << std::endl;
   unitree::robot::b2::MotionSwitcherClient client;
   client.SetTimeout(5.0f);
   client.Init();
@@ -500,18 +518,29 @@ CPP
   echo "[a2-real-test] lib_dirs:" >&2
   printf '[a2-real-test]   %s\n' "${lib_dirs[@]}" >&2
   echo "[a2-real-test] link_libs=-lunitree_sdk2 -lddscxx -lddsc -pthread" >&2
-  rm -f "$helper_bin"
+  echo "[a2-real-test] runtime LD_LIBRARY_PATH prefix=$helper_ld_path" >&2
+  rm -f "$helper_bin" "$helper_wrapper"
   set +e
   "${compile_args[@]}" >&2
   local compile_status=$?
   set -e
   if [ "$compile_status" -ne 0 ]; then
-    rm -f "$helper_bin"
+    rm -f "$helper_bin" "$helper_wrapper"
     echo "ERROR: failed to compile MotionSwitcher helper from $helper_src" >&2
     echo "ERROR: check the SDK2 include/lib dirs above; DDS headers usually need install/include/ddscxx or thirdparty/include/ddscxx." >&2
     return "$compile_status"
   fi
-  echo "$helper_bin"
+  if command -v ldd >/dev/null 2>&1; then
+    echo "[a2-real-test] ldd with SDK2 LD_LIBRARY_PATH prefix:" >&2
+    LD_LIBRARY_PATH="${helper_ld_path}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$helper_bin" >&2 || true
+  fi
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'export LD_LIBRARY_PATH=%q${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\n' "$helper_ld_path"
+    printf 'exec %q "$@"\n' "$helper_bin"
+  } > "$helper_wrapper"
+  chmod +x "$helper_wrapper"
+  echo "$helper_wrapper"
 }
 
 motion_check() {
