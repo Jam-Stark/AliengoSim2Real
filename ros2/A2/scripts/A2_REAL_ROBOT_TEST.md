@@ -1,0 +1,416 @@
+# A2 Real Robot Validation Guide
+
+本文档面向部署机 operator。前提是 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`
+中的无 robot Docker virtual tests 已通过，且即将连接真实 A2。部署机 workspace：
+
+```text
+/home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+```
+
+本文所有 connected tests 默认只 observe。任何会 publish `/rt/lowcmd` 或释放内置运动服务的步骤，都需要显式 env guard。
+
+## 0. Scope and Safety Boundary
+
+本流程连接 real A2，但默认不做 motion。
+
+硬性边界：
+
+- `connected-preflight`、`lowstate`、`joints`、`remote`、`smoke-remote`、`motion-check`、`policy-listen-remote` 默认不发布 motion command。
+- `motion-release` 会调用 Unitree `MotionSwitcherClient::ReleaseMode()`，必须显式设置 `A2_ALLOW_RELEASE_MODE=1`。
+- `zero-lowcmd` 会发布 zero `LowCmd`，必须显式设置 `A2_ALLOW_ZERO_LOWCMD=1`。
+- `policy-enable-remote` 是最后阶段，会设置 `enable_motion:=true` 并在 policy warmup 后发布 motion `LowCmd`，必须显式设置 `A2_ALLOW_ENABLE_MOTION=1`。
+- 不运行 `stand_test`。
+- 不使用 `192.168.124.x` 做 SDK development；A2 SDK development 只走 `192.168.123.0/24`。
+
+进入任何 publish path 前必须满足：
+
+- A2 离地、绑扎、限功率或处于其他可控测试状态。
+- 周围清空，operator 手边有 hardware emergency stop。
+- `ai_sports` / `ai_sport` 已确认关闭或准备通过 `motion-release` 关闭。
+- 现场只保留一个低层控制 publisher，不要并行运行其他 `/rt/lowcmd` publisher。
+
+重要说明：当前 `a2_policy_deploy command_source=remote` 中，`L2` release 会把 locomotion command 强制为 `[0,0,0]`；但如果 `enable_motion=true` 且 history warmup 完成，policy 仍可能发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion path。
+
+## 1. Host Network and Docker Entry
+
+Host 上执行，`enp131s0` 是当前部署机报告中的 A2 Ethernet NIC。用户/operator 自己负责确认 NIC 名称和 IP 配置。
+
+```bash
+cd /home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+sudo ip link set enp131s0 up
+sudo ip addr flush dev enp131s0
+sudo ip addr add 192.168.123.99/24 dev enp131s0
+ip -4 addr show enp131s0
+ping -c 5 192.168.123.161
+```
+
+Ideal result：
+
+- `ip -4 addr show enp131s0` 显示 `192.168.123.99/24`。
+- `ping -c 5 192.168.123.161` 有 reply，packet loss 接近 `0%`。
+
+进入 Docker container：
+
+```bash
+cd /home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+A2_NET_IFACE=enp131s0 bash ros2/A2/docker/run_container.sh bash
+```
+
+Ideal result：
+
+- container entrypoint 显示 `A2_NET_IFACE=enp131s0`。
+- `CYCLONEDDS_URI` 指向 `NetworkInterface name="enp131s0"`。
+- 当前目录是 `/work/projects/AliengoSim2Real/ros2`。
+
+确认 A2 package 已 build：
+
+```bash
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+ros2 pkg prefix a2_lowlevel
+test -x /work/projects/AliengoSim2Real/ros2/install/a2_lowlevel/lib/a2_lowlevel/a2_lowlevel_smoke
+test -x /work/projects/AliengoSim2Real/ros2/install/a2_lowlevel/lib/a2_lowlevel/a2_policy_deploy
+```
+
+Ideal result：
+
+- `ros2 pkg prefix a2_lowlevel` 返回 `/work/projects/AliengoSim2Real/ros2/install/a2_lowlevel`。
+- 两个 `test -x` 都 exit `0`。
+
+如 container 里还没 build：
+
+```bash
+/opt/a2/build_a2_workspace.sh --policy --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+```
+
+## 2. Connected Preflight and Topic Visibility
+
+在 container 内执行：
+
+```bash
+A2/scripts/a2_real_robot_test.sh connected-preflight enp131s0
+```
+
+Ideal result：
+
+- log 写入 `/tmp/a2_real_robot_tests/connected_preflight_*.log`。
+- 输出 `ROS_DISTRO=humble`、`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`。
+- `A2_NET_IFACE=enp131s0`。
+- `ping -c 5 192.168.123.161` 成功。
+- `ros2 topic list` 能看到 `/rt/lowstate`；脚本会显式检查该 topic，缺失时 fail。
+- 未运行 publish path 前可没有 `/rt/lowcmd`。
+- `ros2 interface show unitree_hg/msg/LowState` 和 `LowCmd` 正常输出。
+
+失败时先不要运行任何 publish path；回传 preflight log。
+
+## 3. Continuous LowState Rate / Tick / Freshness
+
+观察真实 robot 是否持续发布 `/rt/lowstate`：
+
+```bash
+A2/scripts/a2_real_robot_test.sh lowstate 15
+```
+
+Ideal result：
+
+- `lowstate_count` 大于 0。
+- `lowstate_rate_hz` >= `50.00`。
+- `max_interarrival_gap_ms` <= `250.00`。
+- `mode_pr_values`、`mode_machine_values` 有稳定值。
+- `tick_delta_ms` 有统计输出；`tick` 是 Unitree 1ms counter。
+- `nonfinite_message_count=0`。
+- 最后一行 `PASS: lowstate freshness/rate/finiteness checks passed`。
+
+可通过 env 调整阈值：
+
+```bash
+A2_LOWSTATE_MIN_HZ=50 A2_LOWSTATE_MAX_GAP_MS=250 \
+A2/scripts/a2_real_robot_test.sh lowstate 15
+```
+
+## 4. Joint State Mapping / Direction Observe-Only
+
+本步骤只订阅 `/rt/lowstate`，不创建 `/rt/lowcmd` publisher，不做任何 control。目的
+是在进入 remote、MotionSwitcher release、zero `LowCmd` 或 policy 之前，先确认真实
+A2 的 first-12 `motor_state` 对应当前 low-level joint order 和 sign direction 假设。
+
+固定 A2 low-level joint labels：
+
+```text
+00 FR_BODY   01 FR_THIGH   02 FR_CALF
+03 FL_BODY   04 FL_THIGH   05 FL_CALF
+06 RR_BODY   07 RR_THIGH   08 RR_CALF
+09 RL_BODY   10 RL_THIGH   11 RL_CALF
+```
+
+静态 observe 可先运行：
+
+```bash
+A2/scripts/a2_real_robot_test.sh joints 15
+```
+
+Ideal result：
+
+- 输出 `joints_observe_only_no_lowcmd_publish=True`。
+- `lowstate_count` 和 `valid_joint_sample_count` 大于 0。
+- `motor_state_lengths_seen` 至少为 `12`；如果 generated sequence 大于 `12`，脚本只读取前 `12` 个。
+- `short_motor_state_count=0`。
+- `nonfinite_joint_message_count=0`。
+- 输出 `joint_sample` 周期性快照，每个 label 都有 `q`、`dq`、`delta_from_start`。
+- 输出 `joint_summary_by_range_desc`，包含每个 joint 的 `start/end/min/max/range/max_abs_dq`。
+- 最后一行 `PASS: joint mapping/direction observe-only checks passed; no /rt/lowcmd was published`。
+
+逐关节手动验证建议每次只移动一个关节的小角度。仅在 robot 已安全支撑、operator
+确认该状态允许手动移动时执行；如果现场条件不允许移动，静态记录不会 fail，但无法
+完成 mapping/direction 判定。
+
+推荐逐个关节运行，每次把 CSV 文件名写清楚：
+
+```bash
+A2_JOINT_PRINT_PERIOD=0.25 \
+A2_JOINT_MIN_DELTA=0.03 \
+A2_JOINT_CSV=/tmp/a2_real_robot_tests/joints_FR_BODY.csv \
+A2/scripts/a2_real_robot_test.sh joints 20
+```
+
+如何判断 joint mapping：
+
+- 只移动一个目标关节时，`candidate_changed_joints` 中理想情况下只出现目标 label。
+- 如果另一个 label 的 `range` 最大或超过 `A2_JOINT_MIN_DELTA`，说明 `motor_state`
+  index/order 和当前 label 假设不一致；不要进入任何 control path。
+- 如果多个非目标 joint 明显超过阈值，先排除机械联动、支撑状态、operator 是否同时
+  带动了相邻关节；无法解释时按 mapping mismatch 处理。
+- 如果没有 joint 超过阈值，脚本会打印提示但不 fail；这通常表示测试期间没有足够
+  movement，调小 `A2_JOINT_MIN_DELTA` 或重新逐关节移动验证。
+
+如何判断 sign direction：
+
+- 对每个 joint，沿着和 sim/training convention 中 `+q` 相同的物理方向做小角度
+  movement，并观察目标 label 的 `delta_from_start` 正负号。
+- 如果目标 joint 在物理 `+q` 方向移动时 `delta_from_start` 为正，当前 sign direction
+  与 no-inversion 假设一致。
+- 如果目标 joint 在物理 `+q` 方向移动时 `delta_from_start` 为负，记录该 joint 需要
+  sign inversion；在修正 mapping/sign 前不要运行 `zero-lowcmd` 之后的 motion path。
+- 对 BODY、THIGH、CALF 都按同一方法记录；最终需要形成 12 个 joint 的 order/sign
+  validation 记录。
+
+## 5. Remote Raw Decode and Smoke Logging
+
+先用 Python observer 验证 `wireless_remote[40]` raw layout。测试期间移动 sticks，并按 `L2`、`A/B/Start/Select` 等按钮做变化。
+
+```bash
+A2/scripts/a2_real_robot_test.sh remote 20
+```
+
+Ideal result：
+
+- log 写入 `/tmp/a2_real_robot_tests/remote_*.log`。
+- `remote_change` 行随按钮变化输出。
+- stick raw range 中至少一个方向出现非零变化。
+- `remote_invalid_count=0`。
+- 最后一行 `PASS: remote decode checks passed`。
+
+如果只想确认 packet 可解析、不要求移动遥控器：
+
+```bash
+A2_REMOTE_ALLOW_ZERO=1 A2/scripts/a2_real_robot_test.sh remote 10
+```
+
+再验证 C++ smoke node 的 `log_remote` 输出：
+
+```bash
+A2/scripts/a2_real_robot_test.sh smoke-remote 20
+```
+
+Ideal result：
+
+- log 写入 `/tmp/a2_real_robot_tests/smoke_remote_*.log`。
+- `a2_lowlevel_smoke` 打印 `tick=... mode_pr=... mode_machine=...`。
+- `remote_sticks=[lx=..., rx=..., ry=..., ly=...] buttons=...` 随遥控器变化。
+- `timeout` exit `124` 被脚本接受；该 node 正常 spin，不是 crash。
+- 不发布 `/rt/lowcmd`。
+
+## 6. MotionSwitcher Check and Guarded Release
+
+官方 A2 low-level 文档要求在 low-level control 前关闭 Unitree 内置 motion service，当前服务名为 `ai_sports`；MotionSwitcher guide 也列出 `ai_sport`。先只做 check：
+
+```bash
+A2/scripts/a2_real_robot_test.sh motion-check enp131s0
+```
+
+Ideal result：
+
+- 脚本在 `/tmp` 编译临时 `MotionSwitcherClient` helper。
+- 输出 `CheckMode ret=0 form='...' name='...'`。
+- 如果 `name` 非空，表示仍有内置 motion mode active。
+- 此步骤不调用 `ReleaseMode`。
+
+确认 robot 安全状态后，显式 release：
+
+```bash
+A2_ALLOW_RELEASE_MODE=1 A2/scripts/a2_real_robot_test.sh motion-release enp131s0
+```
+
+Ideal result：
+
+- 输出每次 `Release attempt`。
+- 每次都打印 `CheckMode ret=... form='...' name='...'` 和 `ReleaseMode ret=...`。
+- 最终 `CheckMode` 的 `name=''`，并输出 `Motion mode released.` 或 `Motion mode already released.`。
+
+如果 MotionSwitcher RPC 不可用，按官方文档可用 Unitree App 关闭内置运动服务；关闭后重新运行 `motion-check`，确认 `name=''`。
+
+## 7. Guarded Zero-LowCmd CRC Validation
+
+本步骤会 publish zero `/rt/lowcmd`，用于验证：
+
+- `LowCmd.crc` 与 official raw layout CRC32 一致。
+- `LowCmd.mode_machine` 跟随最新 `LowState.mode_machine`。
+- 35 个 `MotorCmd` 全部为 STOP mode `0x00`，且 `q/dq/tau/kp/kd` 全零。
+
+必须先完成 `lowstate` pass、`joints` order/sign 判定，以及 `motion-release` / App 关闭 motion service。
+
+```bash
+A2_ALLOW_ZERO_LOWCMD=1 A2/scripts/a2_real_robot_test.sh zero-lowcmd 8
+```
+
+Ideal result：
+
+- observer log 写入 `/tmp/a2_real_robot_tests/zero_lowcmd_observer_*.log`。
+- smoke log 写入 `/tmp/a2_real_robot_tests/zero_lowcmd_smoke_*.log`。
+- `a2_lowlevel_smoke` warning 明确显示 `publish_zero will publish zero/stop LowCmd frames`。
+- observer 至少收到一条 `/rt/lowcmd`。
+- 每条输出 `crc_ok=True zero_ok=True mode_ok=True`。
+- 最后一行 `PASS: LowCmd CRC/zero/mode checks passed`。
+
+失败时立即停止，不进入 policy motion path。
+
+## 8. Policy Listen-Only Remote Gate
+
+此步骤加载 policy、使用 real `/rt/lowstate` 和 remote command source，但 `enable_motion=false`，同时 observer 确认没有任何 `/rt/lowcmd`。
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-listen-remote 20
+```
+
+Ideal result：
+
+- policy log 写入 `/tmp/a2_real_robot_tests/policy_listen_remote_*.log`。
+- observer log 写入 `/tmp/a2_real_robot_tests/policy_listen_no_lowcmd_*.log`。
+- policy 输出 `Validated A2 policy contract...`。
+- policy 输出 `enable_motion=false` 和 `command_source=remote`。
+- policy history warmup 后仍输出 `A2 policy publish refused because enable_motion=false.`。
+- no-lowcmd observer 会以 `policy duration + 2s` 运行，覆盖完整 policy runtime 和收尾窗口。
+- no-lowcmd observer 输出 `PASS: no /rt/lowcmd messages observed`。
+
+如果此步骤观察到任何 `/rt/lowcmd`，不要继续。
+
+## 9. Last Stage: enable_motion=true Remote Policy
+
+这是 motion path。只在前面所有步骤 pass，并且 robot 离地/限功率、清场、e-stop 就位后运行。
+
+再次确认：
+
+- `motion-check` 显示内置 motion mode 已 release，或 App 已关闭内置 motion service。
+- 现场没有其他 `/rt/lowcmd` publisher。
+- 遥控器 operator 知道：`L2` release 只强制 locomotion command `[0,0,0]`；policy 仍可能发布 standing joint targets。
+- `Select` 或 `L2+B` 会触发 current implementation 的 local stop / `publish_zero()` / history reset。
+
+运行小速度上限的 remote policy：
+
+```bash
+A2_ALLOW_ENABLE_MOTION=1 A2/scripts/a2_real_robot_test.sh policy-enable-remote 20
+```
+
+脚本实际运行参数：
+
+```text
+enable_motion:=true
+command_source:=remote
+max_remote_vx:=0.10
+max_remote_vy:=0.06
+max_remote_yaw:=0.15
+```
+
+Ideal result：
+
+- policy contract validate 通过。
+- lowstate fresh，history warmup 完成。
+- release `L2` 时 locomotion command 为 zero，但仍可能发布 standing target `LowCmd`。
+- held `L2` 后，遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
+
+任何异常立即松开 `L2`、按 local stop 组合或 e-stop，并保存 logs。
+
+## 10. Acceptance Checklist
+
+连接 real A2 的首轮 validation 完成需要全部 pass：
+
+- Host `enp131s0` 配置为 `192.168.123.99/24`，并能 ping `192.168.123.161`。
+- container 使用 `A2_NET_IFACE=enp131s0`，`CYCLONEDDS_URI` 指向该 NIC。
+- `/rt/lowstate` 持续可见，rate/freshness/finiteness pass。
+- `joints` observe-only 已逐关节验证 first-12 joint order 和 sign direction；如有 sign inversion 需求，已记录且未进入 motion path。
+- remote raw decode pass，并与 `a2_lowlevel_smoke -p log_remote:=true` 输出一致。
+- MotionSwitcher `CheckMode` 可读，`ReleaseMode` 或 App 能关闭 `ai_sports` / `ai_sport`。
+- `zero-lowcmd` CRC、zero shape、`mode_machine` follow state 全部 pass。
+- `policy-listen-remote` 在 `enable_motion=false` 下没有 `/rt/lowcmd`。
+- `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行。
+
+## 11. Failure Logs to Collect
+
+所有脚本默认写 log 到：
+
+```bash
+ls -l /tmp/a2_real_robot_tests
+```
+
+失败时回传：
+
+```bash
+cd /work/projects/AliengoSim2Real/ros2
+git rev-parse --short HEAD
+env | grep -E '^(ROS_DISTRO|RMW_IMPLEMENTATION|A2_NET_IFACE|CYCLONEDDS_URI|Torch_DIR)='
+ip addr show enp131s0
+ping -c 5 192.168.123.161
+ros2 topic list
+ros2 topic info /rt/lowstate -v || true
+ros2 topic info /rt/lowcmd -v || true
+find /tmp/a2_real_robot_tests -maxdepth 1 -type f -name '*.log' -print
+```
+
+需要重点回传：
+
+- `connected_preflight_*.log`
+- `lowstate_*.log`
+- `joints_*.log`
+- `remote_*.log`
+- `smoke_remote_*.log`
+- `motion_check_*.log`
+- `motion_release_*.log`
+- `zero_lowcmd_observer_*.log`
+- `zero_lowcmd_smoke_*.log`
+- `policy_listen_remote_*.log`
+- `policy_listen_no_lowcmd_*.log`
+- `policy_enable_remote_*.log`
+
+## 12. Official References
+
+- `ros2/A2_Guide/html/11-develop_module.html`
+  - A2 PC1 Ethernet one 是 `192.168.123.0/24`；SDK development 只能在 123 subnet；可 ping `192.168.123.161`；124 subnet 不是 SDK dev。
+- `ros2/A2_Guide/html/10-quick_development.html`
+  - 官方 quick development 用 `ping 192.168.123.161` 检查连接，并用 network interface 运行 examples。
+- `ros2/A2_Guide/html/12-dds_service.html`
+  - Unitree SDK2 wraps DDS；`ChannelFactory::Init(0, networkInterface, false)` 语义中 external dev 需要 `enableSharedMemory=false`；common topics 包括 `rt/lowstate` 和 `rt/lowcmd`；messages 来自 Unitree ROS2 msg。
+- `ros2/A2_Guide/html/13-basic_service_interface.html`
+  - A2 low-level service 使用 DDS；订阅 `rt/lowstate` type `unitree_hg::msg::dds_::LowState_`；发布 `rt/lowcmd` type `unitree_hg::msg::dds_::LowCmd_`；low-level control 前必须通过 MotionSwitcherClient 或 App 关闭 `ai_sports`；`mode_machine` 必须和 lowstate 对齐；`MotorCmd.mode` STOP `0x00`、FOC `0x01`；`wireless_remote[40]`；`tick` 是 1ms counter；`crc` 是 CRC32。
+- `ros2/A2_Guide/html/17-motion_witcher_service_interface.html`
+  - `MotionSwitcherClient` supports `CheckMode`、`SelectMode`、`ReleaseMode`；`ReleaseMode` 用于 release motion mode。
+- `ros2/A2_Guide/html/05-a2_remote_control.html`
+  - A2 R3 remote button concepts，包括 `L2+B` damping、Start resume 和 binding notes。
+- `/Users/caobaoquan/Downloads/python/projects/third_party/unitree/unitree_sdk2_python/example/wireless_controller/wireless_controller.py`
+  - official remote decode sample：byte2 bits `R1,L1,Start,Select,R2,L2,F1,F3`；byte3 bits `A,B,X,Y,Up,Right,Down,Left`；float offsets `lx=4`、`rx=8`、`ry=12`、`ly=20`，little-endian。
+- `/Users/caobaoquan/Downloads/python/projects/third_party/unitree/unitree_ros2/example/src/include/common/motor_crc_hg.h`
+  - official raw `LowCmd` / `MotorCmd` layout。
+- `/Users/caobaoquan/Downloads/python/projects/third_party/unitree/unitree_ros2/example/src/src/common/motor_crc_hg.cpp`
+  - official CRC32 algorithm and CRC over raw `LowCmd` words before `crc`。
+- `/Users/caobaoquan/Downloads/python/projects/third_party/unitree/unitree_sdk2/include/unitree/dds_wrapper/robots/go2/go2.h`
+  - official wrapper calls `MotionSwitcherClient::ReleaseMode()` before publishing `rt/lowcmd`。
