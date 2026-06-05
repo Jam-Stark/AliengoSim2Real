@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 22:03 HKT"
+last_updated: "2026-06-05 22:20 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -47,6 +47,7 @@ read_when:
 - 用户提供 `ros2/A2/scripts/connected_preflight_result.md`：configured `/lowstate` 可见且 type 为 `unitree_hg/msg/LowState`，configured `/lowcmd` 可见且 type 为 `unitree_hg/msg/LowCmd`；`/lowcmd` 在 preflight 阶段已有 bare DDS Publisher / Subscription endpoint，但这不等价于 active command messages。
 - 同一 preflight result 显示 `/lf/lowstate` type 为 `['unitree_go/msg/LowState', 'unitree_hg/msg/LowState']`，存在 type ambiguity；它只作为 diagnostic info，不作为默认 A2 policy / lowlevel backend topic，默认继续使用 `/lowstate`。
 - real robot validation script/docs 已 harden：`connected-preflight` 额外校验 configured lowstate / lowcmd topic type；新增 standalone `no-lowcmd` observe-only step，进入任何 configured LowCmd publish path 前必须确认无 active LowCmd traffic。
+- `a2_real_robot_test.sh` MotionSwitcher helper compile 已适配部署机 SDK2 DDS nested include/lib layout：自动加入 `install/include/ddscxx`、`thirdparty/include/ddscxx`、`install/lib`、`thirdparty/lib/$(uname -m)` 等候选，并显式链接 `-lddscxx -lddsc`；`motion-check` 仍只调用 `CheckMode`，`motion-release` 仍需 `A2_ALLOW_RELEASE_MODE=1`。
 
 当前 blocker：
 
@@ -98,7 +99,7 @@ read_when:
 ## TODO Summary
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
-- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher release、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `CheckMode` 和 guarded release、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
@@ -122,6 +123,7 @@ read_when:
 - 2026-06-05 21:43 HKT 已根据 `connected_preflight_result.md` harden real robot preflight：记录 configured `/lowstate` / `/lowcmd` visibility/type pass、`/lf/lowstate` type ambiguity，并新增 `no-lowcmd` observe-only traffic check 作为任何 publish path 前的安全检查。
 - 2026-06-05 21:52 HKT 已修复 A2 policy listen-only safety P1：remote `Select` / `L2+B` local stop 在 `enable_motion=false` 下只 reset runtime、不发布 zero LowCmd；`enable_motion=true` 下保持 zero LowCmd stop。
 - 2026-06-05 22:03 HKT 已新增 `joints-live` / `remote-live` observe-only tools、wrapper env 和 docs，用于实时人工确认 joint mapping 及 remote raw/decode；当前 TODO 已调整为先用 live tools 验证。
+- 2026-06-05 22:20 HKT 已修复 MotionSwitcher helper 手写 `g++` compile path：自动去重打印 SDK2 include/lib dirs，加入 nested DDS `ddscxx` / `ddsc` headers 和 DDS lib dirs，并链接 `ddscxx` / `ddsc`，避免 `dds/topic/TopicTraits.hpp` header 修复后继续出现 DDS unresolved symbols。
 
 ## Recommended Next Files To Read
 

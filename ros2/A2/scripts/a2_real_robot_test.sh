@@ -318,33 +318,90 @@ compile_motion_helper() {
   local helper_src="${A2_MOTION_HELPER_SRC:-/tmp/a2_motion_switcher_helper.cpp}"
   local helper_bin="${A2_MOTION_HELPER_BIN:-/tmp/a2_motion_switcher_helper}"
   local sdk_root="${UNITREE_SDK2_ROOT:-/opt/unitree/unitree_sdk2}"
-  local include_dir="$sdk_root/install/include"
-  local lib_dir=""
+  local arch
+  arch="$(uname -m)"
+  local include_dirs=()
+  local lib_dirs=()
+  local sdk_lib_dir=""
 
-  if [ ! -d "$include_dir" ]; then
-    include_dir="$sdk_root/include"
-  fi
-  if [ ! -d "$include_dir" ]; then
+  add_include_dir() {
+    local dir="$1"
+    local existing
+    [ -d "$dir" ] || return 0
+    for existing in "${include_dirs[@]}"; do
+      [ "$existing" = "$dir" ] && return 0
+    done
+    include_dirs+=("$dir")
+  }
+
+  add_lib_dir() {
+    local dir="$1"
+    local existing
+    [ -d "$dir" ] || return 0
+    for existing in "${lib_dirs[@]}"; do
+      [ "$existing" = "$dir" ] && return 0
+    done
+    lib_dirs+=("$dir")
+  }
+
+  dir_has_lib() {
+    local dir="$1"
+    local lib_name="$2"
+    [ -d "$dir" ] || return 1
+    compgen -G "$dir/lib${lib_name}.*" >/dev/null
+  }
+
+  for candidate in \
+    "$sdk_root/install/include" \
+    "$sdk_root/install/include/ddscxx" \
+    "$sdk_root/install/include/ddsc" \
+    "$sdk_root/include" \
+    "$sdk_root/include/ddscxx" \
+    "$sdk_root/include/ddsc" \
+    "$sdk_root/thirdparty/include" \
+    "$sdk_root/thirdparty/include/ddscxx" \
+    "$sdk_root/thirdparty/include/ddsc"; do
+    add_include_dir "$candidate"
+  done
+
+  if [ "${#include_dirs[@]}" -eq 0 ]; then
     echo "ERROR: Unitree SDK2 include dir not found under $sdk_root" >&2
-    exit 2
+    return 2
   fi
 
   for candidate in \
     "$sdk_root/install/lib" \
     "$sdk_root/build/lib" \
     "$sdk_root/build" \
-    "$sdk_root/lib/$(uname -m)" \
+    "$sdk_root/lib/$arch" \
     "$sdk_root/lib/x86_64" \
-    "$sdk_root/lib/aarch64"; do
-    if [ -d "$candidate" ] && compgen -G "$candidate/libunitree_sdk2.*" >/dev/null; then
-      lib_dir="$candidate"
+    "$sdk_root/lib/aarch64" \
+    "$sdk_root/lib"; do
+    if dir_has_lib "$candidate" "unitree_sdk2"; then
+      sdk_lib_dir="$candidate"
       break
     fi
   done
-  if [ -z "$lib_dir" ]; then
+  if [ -z "$sdk_lib_dir" ]; then
     echo "ERROR: libunitree_sdk2 not found under $sdk_root" >&2
-    exit 2
+    return 2
   fi
+
+  for candidate in \
+    "$sdk_lib_dir" \
+    "$sdk_root/install/lib" \
+    "$sdk_root/build/lib" \
+    "$sdk_root/build" \
+    "$sdk_root/lib/$arch" \
+    "$sdk_root/lib/x86_64" \
+    "$sdk_root/lib/aarch64" \
+    "$sdk_root/lib" \
+    "$sdk_root/thirdparty/lib/$arch" \
+    "$sdk_root/thirdparty/lib/x86_64" \
+    "$sdk_root/thirdparty/lib/aarch64" \
+    "$sdk_root/thirdparty/lib"; do
+    add_lib_dir "$candidate"
+  done
 
   cat > "$helper_src" <<'CPP'
 #include <chrono>
@@ -427,22 +484,33 @@ CPP
 
   local compile_args=(
     g++ -std=c++17 "$helper_src" -o "$helper_bin"
-    -I"$include_dir"
-    -L"$lib_dir"
-    -Wl,-rpath,"$lib_dir"
   )
-  if [ -d "$sdk_root/thirdparty/include" ]; then
-    compile_args+=(-I"$sdk_root/thirdparty/include")
-  fi
-  if [ -d "$sdk_root/thirdparty/lib" ]; then
-    compile_args+=(-L"$sdk_root/thirdparty/lib" -Wl,-rpath,"$sdk_root/thirdparty/lib")
-  fi
-  compile_args+=(-lunitree_sdk2 -pthread)
+  for candidate in "${include_dirs[@]}"; do
+    compile_args+=(-I"$candidate")
+  done
+  for candidate in "${lib_dirs[@]}"; do
+    compile_args+=(-L"$candidate" -Wl,-rpath,"$candidate")
+  done
+  compile_args+=(-lunitree_sdk2 -lddscxx -lddsc -pthread)
 
   echo "[a2-real-test] compiling MotionSwitcher helper" >&2
-  echo "[a2-real-test] include_dir=$include_dir" >&2
-  echo "[a2-real-test] lib_dir=$lib_dir" >&2
+  echo "[a2-real-test] sdk_root=$sdk_root" >&2
+  echo "[a2-real-test] include_dirs:" >&2
+  printf '[a2-real-test]   %s\n' "${include_dirs[@]}" >&2
+  echo "[a2-real-test] lib_dirs:" >&2
+  printf '[a2-real-test]   %s\n' "${lib_dirs[@]}" >&2
+  echo "[a2-real-test] link_libs=-lunitree_sdk2 -lddscxx -lddsc -pthread" >&2
+  rm -f "$helper_bin"
+  set +e
   "${compile_args[@]}" >&2
+  local compile_status=$?
+  set -e
+  if [ "$compile_status" -ne 0 ]; then
+    rm -f "$helper_bin"
+    echo "ERROR: failed to compile MotionSwitcher helper from $helper_src" >&2
+    echo "ERROR: check the SDK2 include/lib dirs above; DDS headers usually need install/include/ddscxx or thirdparty/include/ddscxx." >&2
+    return "$compile_status"
+  fi
   echo "$helper_bin"
 }
 
@@ -453,7 +521,10 @@ motion_check() {
     exit 2
   fi
   local helper
-  helper="$(compile_motion_helper)"
+  if ! helper="$(compile_motion_helper)"; then
+    echo "ERROR: motion-check cannot continue without a compiled MotionSwitcher helper." >&2
+    exit 2
+  fi
   run_logged motion_check "$helper" check "$iface"
 }
 
@@ -465,7 +536,10 @@ motion_release() {
   fi
   require_env_flag A2_ALLOW_RELEASE_MODE "ReleaseMode closes Unitree built-in motion service before low-level control."
   local helper
-  helper="$(compile_motion_helper)"
+  if ! helper="$(compile_motion_helper)"; then
+    echo "ERROR: motion-release cannot continue without a compiled MotionSwitcher helper." >&2
+    exit 2
+  fi
   run_logged motion_release "$helper" release "$iface" "${A2_RELEASE_MAX_ATTEMPTS:-5}"
 }
 

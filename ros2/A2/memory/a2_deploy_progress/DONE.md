@@ -136,3 +136,10 @@
 - [x] `a2_real_robot_test.sh` 新增 `joints-live` / `remote-live` wrapper，并暴露 `A2_LIVE_PRINT_PERIOD`、`A2_LIVE_CLEAR_SCREEN`、`A2_JOINT_MIN_DELTA`、`A2_REMOTE_DEADZONE`。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`：人工 joint mapping / remote decode 优先使用 live observe-only tools，旧 `joints` / `remote` 保留为 summary、CSV 或 pass/fail validation。
 - [x] 更新 A2 memory TODO：部署机/实机下一步先用 `joints-live` / `remote-live` 完成人工 mapping/decode 验证，再进入后续 guarded publish path。
+
+## 2026-06-05 22:20 HKT
+
+- [x] 修复 `a2_real_robot_test.sh` 中 MotionSwitcher helper 的手写 `g++` compile path：自动去重打印 SDK2 include dirs / lib dirs，覆盖 `install/include/ddscxx`、`install/include/ddsc`、`thirdparty/include/ddscxx`、`thirdparty/include/ddsc`、`install/lib`、`thirdparty/lib/$(uname -m)` 等部署机 SDK2 DDS layout candidates。
+- [x] MotionSwitcher helper compile 显式链接 `-lunitree_sdk2 -lddscxx -lddsc -pthread`，降低 header 修复后继续出现 DDS unresolved symbols 的风险。
+- [x] `motion-check` 仍保持 observe-only，只调用 `CheckMode`；`motion-release` 仍保持 `A2_ALLOW_RELEASE_MODE=1` env guard。helper compile 失败时脚本删除可能残留的 helper binary 并停止，不继续执行不存在的 helper。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`，记录 `TopicTraits.hpp` nested `ddscxx` include path 问题、DDS lib dirs、验证 `find` 命令和 compile smoke command。

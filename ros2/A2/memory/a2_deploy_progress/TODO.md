@@ -29,7 +29,7 @@
   - `joints-live` 人工逐关节 live table 验证；旧 `joints` 用作 run-end summary / CSV validation。
   - `remote-live` 人工 live raw/display sticks/buttons 验证；旧 `remote` 用作 summary validation。
   - `smoke-remote`
-  - `motion-check enp131s0`
+  - `motion-check enp131s0`，确认新版 MotionSwitcher helper compile log 中包含 SDK2 nested DDS include/lib dirs（如 `install/include/ddscxx` / `thirdparty/include/ddscxx` 和 `install/lib` / `thirdparty/lib/$(uname -m)`），并成功打印 `CheckMode`。
   - guarded `motion-release enp131s0`
   - guarded `zero-lowcmd`
   - `policy-listen-remote`

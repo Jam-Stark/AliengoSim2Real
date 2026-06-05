@@ -263,6 +263,14 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 
 Unitree SDK2 smoke binaries are built in `/opt/unitree/unitree_sdk2/build/bin` inside the image. Use them only as official SDK diagnostics, for example checking SDK2 topic/service readiness before low-level A2 policy testing. They are not linked into `a2_lowlevel`.
 
+MotionSwitcher real robot validation uses `A2/scripts/a2_real_robot_test.sh motion-check enp131s0`
+to compile a temporary SDK2 helper and call `CheckMode` only. The helper compile now prints all
+SDK2 include/lib dirs, includes nested DDS headers such as `install/include/ddscxx` or
+`thirdparty/include/ddscxx`, adds DDS lib dirs such as `install/lib` or
+`thirdparty/lib/$(uname -m)`, and links `-lddscxx -lddsc`. `motion-release` still requires
+`A2_ALLOW_RELEASE_MODE=1`; see `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` before any release or
+publish path.
+
 ## Docker Migration
 
 保存镜像：

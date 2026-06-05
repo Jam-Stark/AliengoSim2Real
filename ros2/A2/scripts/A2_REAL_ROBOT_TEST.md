@@ -362,9 +362,35 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 Ideal result：
 
 - 脚本在 `/tmp` 编译临时 `MotionSwitcherClient` helper。
+- helper compile 会打印全部 SDK2 include dirs / lib dirs。新版脚本会自动追加
+  `install/include/ddscxx`、`install/include/ddsc`、`thirdparty/include/ddscxx`、
+  `thirdparty/include/ddsc` 等 nested DDS header dirs，并追加 `install/lib`、
+  `thirdparty/lib/$(uname -m)` 等 DDS lib dirs，链接 `-lddscxx -lddsc`。
 - 输出 `CheckMode ret=0 form='...' name='...'`。
 - 如果 `name` 非空，表示仍有内置 motion mode active。
 - 此步骤不调用 `ReleaseMode`。
+
+如果旧脚本遇到 `fatal error: dds/topic/TopicTraits.hpp: No such file or directory`，
+说明 SDK2 DDS C++ headers 位于 nested `ddscxx` include dir。可在 container 内先确认：
+
+```bash
+find /opt/unitree/unitree_sdk2 -path '*/ddscxx/dds/topic/TopicTraits.hpp' -print
+find /opt/unitree/unitree_sdk2 -path '*/libddsc*' -print
+```
+
+然后重新运行：
+
+```bash
+A2_MOTION_HELPER_SRC=/tmp/a2_motion_switcher_helper_test.cpp \
+A2_MOTION_HELPER_BIN=/tmp/a2_motion_switcher_helper_test \
+A2/scripts/a2_real_robot_test.sh motion-check enp131s0
+```
+
+期望 log 中能看到类似 `/opt/unitree/unitree_sdk2/install/include/ddscxx` 或
+`/opt/unitree/unitree_sdk2/thirdparty/include/ddscxx`，以及
+`/opt/unitree/unitree_sdk2/install/lib` 或
+`/opt/unitree/unitree_sdk2/thirdparty/lib/x86_64`。如果 compile 仍失败，脚本会停止，
+不会继续执行不存在的 helper。
 
 确认 robot 安全状态后，显式 release：
 
