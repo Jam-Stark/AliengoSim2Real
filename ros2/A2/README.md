@@ -327,6 +327,46 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
   -p lowcmd_topic:=/rt/lowcmd
 ```
 
+Real robot validation 中，如果 `ros2 topic info /lowcmd -v` 显示 Publisher endpoint，
+这只说明 DDS graph 中已有 endpoint，不等于一定有 active command messages。进入
+`publish_zero`、`policy-enable-remote` 或其他任何 publish path 前，先在 connected
+container 内运行 observe-only 检查：
+
+```bash
+A2/scripts/a2_real_robot_test.sh no-lowcmd 5
+```
+
+只有看到 `PASS: no /lowcmd messages observed` 才继续。当前 `/lf/lowstate` 在
+connected preflight 中存在 `unitree_go/msg/LowState` 与 `unitree_hg/msg/LowState` type
+ambiguity，因此只作为 diagnostic topic，不作为默认 A2 policy / lowlevel backend；
+默认继续使用 `/lowstate`。
+
+## Live Observation Tools
+
+实机人工 mapping/decode 时优先使用 live observe-only tools。它们只订阅 configured
+lowstate topic（默认 `/lowstate`），不会创建或发布 `LowCmd`。
+
+```bash
+# Live joint q/dq table; duration 0 means run until Ctrl-C.
+A2/scripts/a2_real_robot_test.sh joints-live
+
+# Live remote raw/display sticks and pressed buttons.
+A2/scripts/a2_real_robot_test.sh remote-live
+```
+
+可用 env 调整刷新和显示：
+
+```bash
+A2_LIVE_PRINT_PERIOD=0.2 A2_LIVE_CLEAR_SCREEN=0 \
+A2_JOINT_MIN_DELTA=0.03 A2/scripts/a2_real_robot_test.sh joints-live 30
+
+A2_LIVE_PRINT_PERIOD=0.2 A2_REMOTE_DEADZONE=0.08 \
+A2/scripts/a2_real_robot_test.sh remote-live 30
+```
+
+旧 `joints` / `remote` subcommands 仍用于 run-end summary、CSV 或 pass/fail validation；
+具体 connected real robot 流程见 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`。
+
 `A2LowLevelInterface` 会保存最近一次 `LowState` 的 `mode_pr`、`mode_machine`、`tick`、IMU quaternion/gyroscope、前 12 个 joint q/dq 和 `wireless_remote[40]`。发送非零 joint command 时必须先收到 fresh configured lowstate topic，默认 `/lowstate`，否则拒绝发布并 log warn。
 
 ## 12 Motor Order
@@ -558,7 +598,7 @@ cmd_yaw = -rx * max_remote_yaw
 Remote safety gate：
 
 - `L2` 必须按住才允许 nonzero policy command；未按住时 active command 强制为 `[0,0,0]`。
-- `Select` 或 `L2+B` 触发 local stop：清空 policy/history/action runtime，调用 `publish_zero()`，并要求 release 后重新 fresh-state + history warmup。这个 zero LowCmd 是显式 safe stop command，即使 `enable_motion=false` 也可能发布；不会发布 policy motion command。
+- `Select` 或 `L2+B` 触发 local stop：清空 policy/history/action runtime，并要求 release 后重新 fresh-state + history warmup。`enable_motion=false` 时只 reset runtime，不发布任何 LowCmd；`enable_motion=true` 时才调用 `publish_zero()` 发布显式 zero/stop LowCmd，不发布 policy motion command。
 
 ## CRC
 
@@ -579,5 +619,5 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 - `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印对应 `lx/rx/ry/ly` 和 button names。
 - `L2` gate release 时 `a2_policy_deploy command_source=remote` 只给 policy command `[0,0,0]`。
 - `L2` held 时 mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
-- `Select` 与 `L2+B` 会触发 local stop、发布 zero LowCmd，并要求 history 重新 warm 到 `32` fresh frames。
+- `Select` 与 `L2+B` 会触发 local stop 并要求 history 重新 warm 到 `32` fresh frames；只有 `enable_motion=true` 的 motion path 会发布 zero LowCmd。
 - 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop。

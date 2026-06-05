@@ -79,6 +79,18 @@ def add_lowcmd_topic_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lowcmd-topic", default=DEFAULT_LOWCMD_TOPIC)
 
 
+def add_clear_screen_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--clear-screen", dest="clear_screen", action="store_true")
+    group.add_argument("--no-clear-screen", dest="clear_screen", action="store_false")
+    parser.set_defaults(clear_screen=True)
+
+
+def clear_terminal(enabled: bool) -> None:
+    if enabled:
+        print("\033[2J\033[H", end="")
+
+
 def bytes_from_uint8_sequence(data: Sequence[int]) -> bytes:
     return bytes(int(value) & 0xFF for value in data)
 
@@ -174,6 +186,102 @@ def print_joint_snapshot(
             f"dq={float(dq_values[index]):+8.4f} "
             f"delta_from_start={delta:+8.4f}"
         )
+
+
+def print_joints_live_table(
+    args: argparse.Namespace,
+    started_at: float,
+    stats: Dict[str, object],
+    joint_stats: List[Dict[str, float]],
+) -> None:
+    now = time.monotonic()
+    latest = stats.get("latest")
+    clear_terminal(bool(args.clear_screen))
+    duration_text = "until Ctrl-C" if args.duration <= 0.0 else f"{args.duration:g}s"
+    print(
+        "joints_live observe_only_no_lowcmd_publish=True "
+        f"lowstate_topic={args.lowstate_topic} duration={duration_text} "
+        f"elapsed={now - started_at:.1f}s print_period={args.print_period:g}s "
+        f"min_delta={args.min_delta:.4f}"
+    )
+    print(
+        f"lowstate_count={int(stats['lowstate_count'])} "
+        f"valid_samples={int(stats['valid_sample_count'])} "
+        f"short_motor_state_count={int(stats['short_motor_state_count'])} "
+        f"nonfinite_joint_message_count={int(stats['nonfinite_message_count'])}"
+    )
+    motor_lengths = sorted(int(value) for value in stats["motor_state_lengths"])
+    print(f"motor_state_lengths_seen={motor_lengths if motor_lengths else 'none'}")
+
+    latest_error = stats.get("latest_error")
+    if int(stats["lowstate_count"]) == 0:
+        print(f"WAIT: no {args.lowstate_topic} LowState messages received yet.")
+    elif latest_error:
+        print(f"WARN: {latest_error}")
+
+    if latest is None:
+        print("WAIT: no valid first-12 joint q/dq sample available yet.")
+        sys.stdout.flush()
+        return
+
+    recv_age = now - float(latest["recv_time"])
+    print(
+        f"latest_valid_sample={int(latest['sample_index'])} "
+        f"sample_time={float(latest['relative_time']):.3f}s "
+        f"latest_valid_age={recv_age:.3f}s tick={int(latest['tick'])}"
+    )
+    print("idx label    chg          q         dq    delta_from_start      range")
+    q_values = latest["q_values"]
+    dq_values = latest["dq_values"]
+    starts = latest["starts"]
+    for index, label in enumerate(JOINT_LABELS):
+        q = float(q_values[index])
+        dq = float(dq_values[index])
+        delta = q - float(starts[index])
+        joint_range = float(joint_stats[index]["max"]) - float(joint_stats[index]["min"])
+        marker = "*" if abs(delta) >= args.min_delta or joint_range >= args.min_delta else "."
+        print(
+            f"{index:02d}  {label:<8s} {marker:^3s} "
+            f"{q:+10.4f} {dq:+10.4f} {delta:+19.4f} {joint_range:10.4f}"
+        )
+    print("marker: '*' means abs(delta_from_start) or observed range >= min_delta.")
+    sys.stdout.flush()
+
+
+def print_joints_live_summary(
+    args: argparse.Namespace,
+    stats: Dict[str, object],
+    joint_stats: List[Dict[str, float]],
+) -> None:
+    print("joints_live_summary observe_only_no_lowcmd_publish=True")
+    print(f"lowstate_topic={args.lowstate_topic}")
+    print(f"lowstate_count={int(stats['lowstate_count'])}")
+    print(f"valid_joint_sample_count={int(stats['valid_sample_count'])}")
+    motor_lengths = sorted(int(value) for value in stats["motor_state_lengths"])
+    print(f"motor_state_lengths_seen={motor_lengths if motor_lengths else 'none'}")
+    print(f"short_motor_state_count={int(stats['short_motor_state_count'])}")
+    print(f"nonfinite_joint_message_count={int(stats['nonfinite_message_count'])}")
+    if int(stats["valid_sample_count"]) <= 0:
+        return
+
+    ranked = []
+    for index, label in enumerate(JOINT_LABELS):
+        joint_range = float(joint_stats[index]["max"]) - float(joint_stats[index]["min"])
+        ranked.append((joint_range, index, label))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    candidates = [label for joint_range, _, label in ranked if joint_range >= args.min_delta]
+    print("joint_range_desc:")
+    for joint_range, index, label in ranked:
+        joint = joint_stats[index]
+        print(
+            f"  {index:02d} {label:<8s} "
+            f"start={float(joint['start']):+8.4f} "
+            f"end={float(joint['end']):+8.4f} "
+            f"range={joint_range:8.4f} "
+            f"max_abs_dq={float(joint['max_abs_dq']):8.4f}"
+        )
+    print(f"candidate_min_delta_rad={args.min_delta:.4f}")
+    print(f"candidate_changed_joints={','.join(candidates) if candidates else 'none'}")
 
 
 def joint_csv_header() -> List[str]:
@@ -523,6 +631,311 @@ def run_joints(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_joints_live(args: argparse.Namespace) -> int:
+    if args.duration < 0.0:
+        print("FAIL: duration must be non-negative; use 0 for Ctrl-C live mode", file=sys.stderr)
+        return 2
+    if args.print_period <= 0.0:
+        print("FAIL: --print-period must be positive", file=sys.stderr)
+        return 2
+    if args.min_delta < 0.0:
+        print("FAIL: --min-delta must be non-negative", file=sys.stderr)
+        return 2
+
+    ensure_ros_imports()
+    rclpy.init()
+    node = rclpy.create_node("a2_real_joint_live_observer")
+    joint_stats = make_joint_stats()
+    stats: Dict[str, object] = {
+        "lowstate_count": 0,
+        "valid_sample_count": 0,
+        "nonfinite_message_count": 0,
+        "short_motor_state_count": 0,
+        "first_valid_time": None,
+        "motor_state_lengths": set(),
+        "latest": None,
+        "latest_error": None,
+    }
+
+    def callback(msg: LowState) -> None:
+        stats["lowstate_count"] = int(stats["lowstate_count"]) + 1
+        motor_count = len(msg.motor_state)
+        stats["motor_state_lengths"].add(motor_count)
+        if motor_count < len(JOINT_LABELS):
+            stats["short_motor_state_count"] = int(stats["short_motor_state_count"]) + 1
+            stats["latest_error"] = (
+                f"latest LowState motor_state length={motor_count}, expected at least "
+                f"{len(JOINT_LABELS)}"
+            )
+            return
+
+        q_values = []
+        dq_values = []
+        for index in range(len(JOINT_LABELS)):
+            motor = msg.motor_state[index]
+            q_values.append(float(motor.q))
+            dq_values.append(float(motor.dq))
+
+        if not finite_values(q_values) or not finite_values(dq_values):
+            stats["nonfinite_message_count"] = int(stats["nonfinite_message_count"]) + 1
+            stats["latest_error"] = "latest first-12 joint q/dq contains NaN or Inf"
+            return
+
+        now = time.monotonic()
+        if stats["first_valid_time"] is None:
+            stats["first_valid_time"] = now
+            for index, q in enumerate(q_values):
+                joint_stats[index]["start"] = q
+                joint_stats[index]["min"] = q
+                joint_stats[index]["max"] = q
+
+        stats["valid_sample_count"] = int(stats["valid_sample_count"]) + 1
+        sample_index = int(stats["valid_sample_count"])
+        tick = int(msg.tick) & 0xFFFFFFFF
+        relative_time = now - float(stats["first_valid_time"])
+
+        for index, q in enumerate(q_values):
+            joint_stats[index]["end"] = q
+            joint_stats[index]["min"] = min(joint_stats[index]["min"], q)
+            joint_stats[index]["max"] = max(joint_stats[index]["max"], q)
+            joint_stats[index]["max_abs_dq"] = max(
+                joint_stats[index]["max_abs_dq"],
+                abs(float(dq_values[index])),
+            )
+
+        stats["latest"] = {
+            "sample_index": sample_index,
+            "relative_time": relative_time,
+            "recv_time": now,
+            "tick": tick,
+            "q_values": list(q_values),
+            "dq_values": list(dq_values),
+            "starts": [joint_stats[index]["start"] for index in range(len(JOINT_LABELS))],
+        }
+        stats["latest_error"] = None
+
+    node.create_subscription(LowState, args.lowstate_topic, callback, 50)
+    started_at = time.monotonic()
+    deadline = None if args.duration <= 0.0 else started_at + args.duration
+    next_print = started_at
+    interrupted = False
+    try:
+        while rclpy.ok():
+            now = time.monotonic()
+            if deadline is not None and now >= deadline:
+                break
+            timeout = min(0.05, max(0.0, next_print - now))
+            if deadline is not None:
+                timeout = min(timeout, max(0.0, deadline - now))
+            rclpy.spin_once(node, timeout_sec=timeout)
+            now = time.monotonic()
+            if now >= next_print:
+                print_joints_live_table(args, started_at, stats, joint_stats)
+                next_print = now + args.print_period
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+    if interrupted:
+        print("joints_live interrupted by Ctrl-C")
+    print_joints_live_summary(args, stats, joint_stats)
+
+    failures = []
+    if int(stats["lowstate_count"]) == 0:
+        failures.append(f"no {args.lowstate_topic} messages")
+    if int(stats["short_motor_state_count"]) > 0:
+        failures.append(
+            f"{stats['short_motor_state_count']} messages have motor_state length below "
+            f"{len(JOINT_LABELS)}"
+        )
+    if int(stats["nonfinite_message_count"]) > 0:
+        failures.append(f"{stats['nonfinite_message_count']} messages contain NaN/Inf joint q/dq")
+    if int(stats["lowstate_count"]) > 0 and int(stats["valid_sample_count"]) == 0:
+        failures.append("no valid first-12 joint samples were available")
+
+    if failures:
+        for failure in failures:
+            print(f"FAIL: {failure}", file=sys.stderr)
+        return 2
+    print("PASS: joints-live observe-only finished; no lowcmd was published")
+    return 0
+
+
+def format_button_bits(buttons: Dict[str, bool]) -> str:
+    return " ".join(
+        f"{name}={1 if buttons.get(name) else 0}" for name in BUTTON_BYTE2 + BUTTON_BYTE3
+    )
+
+
+def print_remote_live_display(
+    args: argparse.Namespace,
+    started_at: float,
+    stats: Dict[str, object],
+) -> None:
+    now = time.monotonic()
+    latest = stats.get("latest")
+    clear_terminal(bool(args.clear_screen))
+    duration_text = "until Ctrl-C" if args.duration <= 0.0 else f"{args.duration:g}s"
+    print(
+        "remote_live observe_only_no_lowcmd_publish=True "
+        f"lowstate_topic={args.lowstate_topic} duration={duration_text} "
+        f"elapsed={now - started_at:.1f}s print_period={args.print_period:g}s "
+        f"deadzone={args.deadzone:.3f}"
+    )
+    print(
+        f"lowstate_count={int(stats['lowstate_count'])} "
+        f"decoded_packets={int(stats['decoded_count'])} "
+        f"invalid_remote_count={int(stats['invalid_count'])}"
+    )
+
+    latest_error = stats.get("latest_error")
+    if int(stats["lowstate_count"]) == 0:
+        print(f"WAIT: no {args.lowstate_topic} LowState messages received yet.")
+    elif latest_error:
+        print(f"WARN: {latest_error}")
+
+    if latest is None:
+        print("WAIT: no remote packet decoded yet.")
+        sys.stdout.flush()
+        return
+
+    recv_age = now - float(latest["recv_time"])
+    print(
+        f"latest_tick={int(latest['tick'])} latest_age={recv_age:.3f}s "
+        f"valid={bool(latest['valid'])}"
+    )
+    print("stick        raw    display(deadzone+clamp)")
+    raw = latest["sticks"]
+    display = latest["display"]
+    for name in STICK_NAMES:
+        print(f"{name:<5s} {float(raw[name]):+10.4f} {float(display[name]):+24.4f}")
+    buttons = latest["buttons"]
+    print(f"pressed_buttons={format_buttons(buttons)}")
+    print(f"button_bits={format_button_bits(buttons)}")
+    sys.stdout.flush()
+
+
+def print_remote_live_summary(args: argparse.Namespace, stats: Dict[str, object]) -> None:
+    print("remote_live_summary observe_only_no_lowcmd_publish=True")
+    print(f"lowstate_topic={args.lowstate_topic}")
+    print(f"lowstate_count={int(stats['lowstate_count'])}")
+    print(f"decoded_packets={int(stats['decoded_count'])}")
+    print(f"invalid_remote_count={int(stats['invalid_count'])}")
+    mins = stats["mins"]
+    maxs = stats["maxs"]
+    for name in STICK_NAMES:
+        if math.isfinite(float(mins[name])) and math.isfinite(float(maxs[name])):
+            print(f"{name}_raw_range=[{float(mins[name]):.3f}, {float(maxs[name]):.3f}]")
+        else:
+            print(f"{name}_raw_range=unavailable")
+
+
+def run_remote_live(args: argparse.Namespace) -> int:
+    if args.duration < 0.0:
+        print("FAIL: duration must be non-negative; use 0 for Ctrl-C live mode", file=sys.stderr)
+        return 2
+    if args.print_period <= 0.0:
+        print("FAIL: --print-period must be positive", file=sys.stderr)
+        return 2
+    if args.deadzone < 0.0:
+        print("FAIL: --deadzone must be non-negative", file=sys.stderr)
+        return 2
+
+    ensure_ros_imports()
+    rclpy.init()
+    node = rclpy.create_node("a2_real_remote_live_observer")
+    stats: Dict[str, object] = {
+        "lowstate_count": 0,
+        "decoded_count": 0,
+        "invalid_count": 0,
+        "latest": None,
+        "latest_error": None,
+        "mins": {name: float("inf") for name in STICK_NAMES},
+        "maxs": {name: float("-inf") for name in STICK_NAMES},
+    }
+
+    def callback(msg: LowState) -> None:
+        stats["lowstate_count"] = int(stats["lowstate_count"]) + 1
+        try:
+            sticks, buttons, valid = decode_remote(msg.wireless_remote)
+        except ValueError as exc:
+            stats["invalid_count"] = int(stats["invalid_count"]) + 1
+            stats["latest_error"] = str(exc)
+            return
+
+        stats["decoded_count"] = int(stats["decoded_count"]) + 1
+        if not valid:
+            stats["invalid_count"] = int(stats["invalid_count"]) + 1
+            stats["latest_error"] = "latest remote stick payload contains NaN or Inf"
+        else:
+            stats["latest_error"] = None
+
+        mins = stats["mins"]
+        maxs = stats["maxs"]
+        for name in STICK_NAMES:
+            value = float(sticks[name])
+            if math.isfinite(value):
+                mins[name] = min(float(mins[name]), value)
+                maxs[name] = max(float(maxs[name]), value)
+
+        stats["latest"] = {
+            "recv_time": time.monotonic(),
+            "tick": int(msg.tick) & 0xFFFFFFFF,
+            "sticks": dict(sticks),
+            "display": {
+                name: display_stick(float(sticks[name]), args.deadzone)
+                for name in STICK_NAMES
+            },
+            "buttons": dict(buttons),
+            "valid": valid,
+        }
+
+    node.create_subscription(LowState, args.lowstate_topic, callback, 50)
+    started_at = time.monotonic()
+    deadline = None if args.duration <= 0.0 else started_at + args.duration
+    next_print = started_at
+    interrupted = False
+    try:
+        while rclpy.ok():
+            now = time.monotonic()
+            if deadline is not None and now >= deadline:
+                break
+            timeout = min(0.05, max(0.0, next_print - now))
+            if deadline is not None:
+                timeout = min(timeout, max(0.0, deadline - now))
+            rclpy.spin_once(node, timeout_sec=timeout)
+            now = time.monotonic()
+            if now >= next_print:
+                print_remote_live_display(args, started_at, stats)
+                next_print = now + args.print_period
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+    if interrupted:
+        print("remote_live interrupted by Ctrl-C")
+    print_remote_live_summary(args, stats)
+
+    failures = []
+    if int(stats["lowstate_count"]) == 0:
+        failures.append(f"no {args.lowstate_topic} messages for remote decode")
+    if int(stats["invalid_count"]) > 0:
+        failures.append(f"{stats['invalid_count']} remote packets were invalid")
+    if int(stats["lowstate_count"]) > 0 and int(stats["decoded_count"]) == 0:
+        failures.append("no remote packets were decoded")
+
+    if failures:
+        for failure in failures:
+            print(f"FAIL: {failure}", file=sys.stderr)
+        return 2
+    print("PASS: remote-live observe-only finished; no lowcmd was published")
+    return 0
+
+
 def run_remote(args: argparse.Namespace) -> int:
     ensure_ros_imports()
     rclpy.init()
@@ -734,12 +1147,34 @@ def build_parser() -> argparse.ArgumentParser:
     add_lowstate_topic_arg(joints)
     joints.set_defaults(func=run_joints)
 
+    joints_live = subparsers.add_parser(
+        "joints-live",
+        help="live observe first-12 lowstate joint q/dq without publishing LowCmd",
+    )
+    joints_live.add_argument("duration", nargs="?", type=float, default=0.0)
+    joints_live.add_argument("--print-period", type=float, default=0.2)
+    joints_live.add_argument("--min-delta", type=float, default=0.03)
+    add_clear_screen_args(joints_live)
+    add_lowstate_topic_arg(joints_live)
+    joints_live.set_defaults(func=run_joints_live)
+
     remote = subparsers.add_parser("remote", help="decode wireless_remote[40] from lowstate")
     remote.add_argument("duration", nargs="?", type=float, default=15.0)
     remote.add_argument("--deadzone", type=float, default=0.08)
     remote.add_argument("--allow-zero", action="store_true")
     add_lowstate_topic_arg(remote)
     remote.set_defaults(func=run_remote)
+
+    remote_live = subparsers.add_parser(
+        "remote-live",
+        help="live print wireless_remote sticks/buttons without publishing LowCmd",
+    )
+    remote_live.add_argument("duration", nargs="?", type=float, default=0.0)
+    remote_live.add_argument("--print-period", type=float, default=0.2)
+    remote_live.add_argument("--deadzone", type=float, default=0.08)
+    add_clear_screen_args(remote_live)
+    add_lowstate_topic_arg(remote_live)
+    remote_live.set_defaults(func=run_remote_live)
 
     lowcmd_crc = subparsers.add_parser("lowcmd-crc", help="verify lowcmd CRC and safety shape")
     lowcmd_crc.add_argument("duration", nargs="?", type=float, default=8.0)

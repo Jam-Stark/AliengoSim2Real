@@ -71,7 +71,7 @@
 - [x] 实现 A2 remote decode utility：从 `wireless_remote[40]` 按 Unitree SDK2 sample offsets `lx=4`、`rx=8`、`ry=12`、`ly=20` decode little-endian `float32`，并按 byte `2/3` bit layout decode buttons。
 - [x] remote decode 增加 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard；invalid stick data 不进入 policy command。
 - [x] `a2_lowlevel_smoke` 增加 `log_remote` listen-only logging，打印 sticks 和 button names，默认仍不发布 command。
-- [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、`L2` gate、`Select` / `L2+B` local stop、runtime reset 和 `publish_zero()`。
+- [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、`L2` gate、`Select` / `L2+B` local stop、runtime reset 和 `enable_motion=true` zero stop。
 - [x] 更新 `ros2/A2/README.md` remote build/run、button gate、joystick mapping、safety limits 和 deploy machine validation checklist。
 
 ## 2026-06-05 18:14 HKT
@@ -116,3 +116,23 @@
 - [x] 记录部署机 + real A2 connected-preflight 的 ROS2 topic namespace mismatch：网络和 DDS 正常，`enp131s0` UP、IP `192.168.123.222/24`、ping `192.168.123.161` 成功；ROS2 graph 可见 `/lowstate`、`/lowcmd`、`/lowstate_raw`、`/lf/lowstate`、`/wirelesscontroller`，没有 `/rt/lowstate`。
 - [x] 将 A2 ROS2 backend default topic 修正为 ROS2 visible `/lowstate` / `/lowcmd`：`A2LowLevelInterface` 参数 `lowstate_topic` / `lowcmd_topic` 默认 `lowstate` / `lowcmd`，并在 smoke/policy log 中使用实际 resolved topic。
 - [x] 更新 `a2_real_robot_observer.py`、`a2_real_robot_test.sh`、`A2_REAL_ROBOT_TEST.md`、`README.md`、`A2_DOCKER_BUILD_TEST.md`，默认走 `/lowstate` / `/lowcmd`，同时保留 official DDS `rt/lowstate` / `rt/lowcmd` 作为 reference name 和 override 说明。
+
+## 2026-06-05 21:43 HKT
+
+- [x] 纳入 `ros2/A2/scripts/connected_preflight_result.md` 结论：configured `/lowstate` 可见且 type 包含 `unitree_hg/msg/LowState`，configured `/lowcmd` 可见且 type 包含 `unitree_hg/msg/LowCmd`，网络 `enp131s0` / `192.168.123.222/24` / ping `192.168.123.161` 正常。
+- [x] 记录 `/lowcmd` preflight 阶段 bare DDS Publisher / Subscription endpoint 不等价于 active command traffic；进入任何 publish path 前新增 standalone `no-lowcmd` observe-only check。
+- [x] 记录 `/lf/lowstate` 当前 type ambiguity：`unitree_go/msg/LowState` 与 `unitree_hg/msg/LowState` 并存；只作为 diagnostic info，不作为默认 A2 policy / lowlevel backend topic。
+- [x] 更新 `a2_real_robot_test.sh`、`A2_REAL_ROBOT_TEST.md`、`README.md`、`A2_DOCKER_BUILD_TEST.md`，使 connected preflight 校验 configured topic type，并把 `no-lowcmd` 放到 real robot publish path 前。
+
+## 2026-06-05 21:52 HKT
+
+- [x] 修复 A2 policy listen-only safety P1：`A2PolicyDeployNode` remote local stop 仍执行 `set_zero_command()` 和 `reset_runtime_state()`，但只有 `enable_motion=true` 时才 `publish_zero()`；`enable_motion=false` 下明确 log runtime reset 且不发布 zero LowCmd。
+- [x] 更新 `ros2/A2/README.md` 和 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`：`policy-listen-remote` 继续是 no-lowcmd observe/listen-only，按 `Select` / `L2+B` 也不发布；`enable_motion=true` 阶段 local stop 才发布 zero LowCmd。
+
+## 2026-06-05 22:03 HKT
+
+- [x] 新增 `a2_real_robot_observer.py joints-live` observe-only subcommand：只订阅 configured lowstate topic（默认 `/lowstate`），duration 默认 `0` 表示 Ctrl-C live mode，每 `--print-period` 秒打印固定 12 joint label 的 `q`、`dq`、`delta_from_start`、`range` 和 `*` changed marker。
+- [x] 新增 `a2_real_robot_observer.py remote-live` observe-only subcommand：只订阅 configured lowstate topic（默认 `/lowstate`），每 `--print-period` 秒打印 raw sticks、deadzone/clamped display sticks、pressed buttons 和 valid flag。
+- [x] `a2_real_robot_test.sh` 新增 `joints-live` / `remote-live` wrapper，并暴露 `A2_LIVE_PRINT_PERIOD`、`A2_LIVE_CLEAR_SCREEN`、`A2_JOINT_MIN_DELTA`、`A2_REMOTE_DEADZONE`。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`：人工 joint mapping / remote decode 优先使用 live observe-only tools，旧 `joints` / `remote` 保留为 summary、CSV 或 pass/fail validation。
+- [x] 更新 A2 memory TODO：部署机/实机下一步先用 `joints-live` / `remote-live` 完成人工 mapping/decode 验证，再进入后续 guarded publish path。

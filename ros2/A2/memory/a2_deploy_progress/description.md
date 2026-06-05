@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 21:21 HKT"
+last_updated: "2026-06-05 22:03 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -27,7 +27,7 @@ read_when:
 - A2 policy observation 每帧为 `projected_gravity_xy(2)`、`base_ang_vel(3)*0.25`、`joint_q-default_pos(12)`、`joint_dq*0.05`、`last_raw_action(12)`、`gait_clock(2)`、`command(3)*[2,2,0.25]`，history `32` flatten 为 `1472`。
 - A2 policy action 先按 `action_clip` clip，再映射为 `default_joint_pos + action_scale * raw_action`；训练顺序到 A2 low-level order same signs / no inversion，低层发布只走 `A2LowLevelInterface::publish_joint_commands()`。
 - 实现 A2 Remote Control v1 decode contract：`wireless_remote[40]` 中 `lx/rx/ry/ly` 分别来自 offsets `4/8/12/20` 的 little-endian `float32`，button byte `2/3` 按 Unitree SDK2 sample bit order decode，并做 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard。
-- `a2_policy_deploy` 支持 `command_source=static|remote`，默认 `static`；remote mapping 为 `cmd_vx=ly*max_remote_vx`、`cmd_vy=-lx*max_remote_vy`、`cmd_yaw=-rx*max_remote_yaw`，`L2` 是 nonzero command gate，`Select` 或 `L2+B` 触发 local stop / `publish_zero()` / policy runtime reset。
+- `a2_policy_deploy` 支持 `command_source=static|remote`，默认 `static`；remote mapping 为 `cmd_vx=ly*max_remote_vx`、`cmd_vy=-lx*max_remote_vy`、`cmd_yaw=-rx*max_remote_yaw`，`L2` 是 nonzero command gate；`Select` 或 `L2+B` 触发 local stop、`set_zero_command()` 和 policy runtime reset，只有 `enable_motion=true` 时才额外 `publish_zero()`。
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
@@ -42,7 +42,11 @@ read_when:
 - 用户已报告 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md` 中无连接 robot 的 Docker virtual tests 全部通过：Docker image、connected-independent preflight/container readiness、`unitree_hg` interface checks、lowlevel/policy build、offline lowstate/fake-lowstate smoke、`enable_motion=false` no-lowcmd verification。
 - 已新增 real robot validation guide/scripts：`ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`、`a2_real_robot_test.sh`、`a2_real_robot_observer.py`，覆盖 connected preflight、真实 configured lowstate（默认 `/lowstate`）rate/tick/freshness、remote raw/decode、MotionSwitcher `CheckMode` / guarded `ReleaseMode`、guarded zero `LowCmd` CRC、policy listen-only no-lowcmd 和 guarded `enable_motion=true` remote policy。
 - 已在 real robot validation guide/scripts 中新增 joint state mapping/direction observe-only validation：`a2_real_robot_observer.py joints` 订阅 configured lowstate（默认 `/lowstate`）、读取 first-12 `motor_state`、固定 A2 joint labels、统计 q/dq/range/max_abs_dq、支持 CSV；`a2_real_robot_test.sh joints` 暴露 `A2_JOINT_PRINT_PERIOD`、`A2_JOINT_MIN_DELTA`、`A2_JOINT_CSV`。
+- 已新增 A2 real robot live observation tools：`a2_real_robot_observer.py joints-live` / `remote-live` 和 wrapper `a2_real_robot_test.sh joints-live` / `remote-live`，均只订阅 configured lowstate topic（默认 `/lowstate`）、不发布 `LowCmd`；`joints-live` 周期刷新 12 joint q/dq/delta/range live table，`remote-live` 周期刷新 raw/display sticks、pressed buttons 和 valid flag。
 - 用户在部署机 + real A2 connected-preflight 中确认网络和 DDS 正常：`enp131s0` UP、IP `192.168.123.222/24`、ping `192.168.123.161` 成功；ROS2 graph 没有 `/rt/lowstate`，而是可见 `/lowstate`、`/lowcmd`、`/lowstate_raw`、`/lf/lowstate`、`/wirelesscontroller` 等。因此 A2 ROS2 backend default topic 已修正为 `/lowstate` / `/lowcmd`。
+- 用户提供 `ros2/A2/scripts/connected_preflight_result.md`：configured `/lowstate` 可见且 type 为 `unitree_hg/msg/LowState`，configured `/lowcmd` 可见且 type 为 `unitree_hg/msg/LowCmd`；`/lowcmd` 在 preflight 阶段已有 bare DDS Publisher / Subscription endpoint，但这不等价于 active command messages。
+- 同一 preflight result 显示 `/lf/lowstate` type 为 `['unitree_go/msg/LowState', 'unitree_hg/msg/LowState']`，存在 type ambiguity；它只作为 diagnostic info，不作为默认 A2 policy / lowlevel backend topic，默认继续使用 `/lowstate`。
+- real robot validation script/docs 已 harden：`connected-preflight` 额外校验 configured lowstate / lowcmd topic type；新增 standalone `no-lowcmd` observe-only step，进入任何 configured LowCmd publish path 前必须确认无 active LowCmd traffic。
 
 当前 blocker：
 
@@ -52,6 +56,7 @@ read_when:
 - A2 CRC 仍需和部署机 `unitree_hg` generated messages、Unitree SDK2 sample 或实机 low-level command 行为对照验证。
 - A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 configured lowstate（默认 `/lowstate`）的 `wireless_remote[40]` 验证 stick/button 方向、`L2` gate 和 local stop button。
 - 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；A2 runtime node 不自动调用 `MotionSwitcherClient`，real robot validation script 已提供 guarded `motion-check` / `motion-release` helper，但仍需部署机实机验证。
+- 进入任何 real configured LowCmd topic publish path 前，必须先运行 `A2/scripts/a2_real_robot_test.sh no-lowcmd 5`；如果观察到 LowCmd message，说明现场已有 active LowCmd traffic，必须停止该 publisher 后再继续。
 
 ## When Codex/AI Should Read This Entry
 
@@ -93,11 +98,11 @@ read_when:
 ## TODO Summary
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
-- 按 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 重新运行 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：configured `/lowstate` lowstate rate/tick/freshness、`joints` order/sign observe-only、remote raw/decode、MotionSwitcher release、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`。
-- 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
+- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher release、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
-- 在部署机/实机验证 A2 R3 remote layout：`a2_lowlevel_smoke log_remote` stick/button decode、`a2_policy_deploy command_source=remote` 的 `L2` gate、`Select` / `L2+B` local stop 和 mapping 方向。
+- 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的 `L2` gate、`Select` / `L2+B` local stop `enable_motion` 分流和 mapping 方向。
 
 ## DONE Summary
 
@@ -114,6 +119,9 @@ read_when:
 - A2 real robot validation guide/scripts 已新增：`A2_REAL_ROBOT_TEST.md`、`a2_real_robot_test.sh`、`a2_real_robot_observer.py`，默认 observe-only，并用 env guard 保护 `ReleaseMode`、zero `LowCmd` 和 `enable_motion=true`。
 - A2 joint state mapping/direction observe-only validation 已新增：`joints` observer/wrapper/docs 订阅 configured lowstate（默认 `/lowstate`），不发布 LowCmd，用于实机控制前确认 first-12 joint order 和 sign direction。
 - 2026-06-05 21:21 HKT 已记录真机 connected-preflight topic mismatch：ROS2 graph 可见 `/lowstate` / `/lowcmd` 而不是 `/rt/lowstate`；A2 ROS2 backend、observer、wrapper 和文档默认 topic 已改为 `/lowstate` / `/lowcmd`，保留参数/env override。
+- 2026-06-05 21:43 HKT 已根据 `connected_preflight_result.md` harden real robot preflight：记录 configured `/lowstate` / `/lowcmd` visibility/type pass、`/lf/lowstate` type ambiguity，并新增 `no-lowcmd` observe-only traffic check 作为任何 publish path 前的安全检查。
+- 2026-06-05 21:52 HKT 已修复 A2 policy listen-only safety P1：remote `Select` / `L2+B` local stop 在 `enable_motion=false` 下只 reset runtime、不发布 zero LowCmd；`enable_motion=true` 下保持 zero LowCmd stop。
+- 2026-06-05 22:03 HKT 已新增 `joints-live` / `remote-live` observe-only tools、wrapper env 和 docs，用于实时人工确认 joint mapping 及 remote raw/decode；当前 TODO 已调整为先用 live tools 验证。
 
 ## Recommended Next Files To Read
 

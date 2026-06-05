@@ -675,12 +675,20 @@ bool A2PolicyDeployNode::update_command_from_remote(
   if (remote_requests_local_stop(remote)) {
     set_zero_command();
     reset_runtime_state();
-    RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 1000,
-        "A2 remote local stop requested by buttons=%s. Resetting policy "
-        "runtime and publishing zero LowCmd.",
-        button_names.c_str());
-    publish_zero();
+    if (enable_motion_) {
+      RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "A2 remote local stop requested by buttons=%s. Resetting policy "
+          "runtime and publishing zero LowCmd.",
+          button_names.c_str());
+      publish_zero();
+    } else {
+      RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "A2 remote local stop requested by buttons=%s. Runtime reset; zero "
+          "LowCmd not published because enable_motion=false.",
+          button_names.c_str());
+    }
     return false;
   }
 

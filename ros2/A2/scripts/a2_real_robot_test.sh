@@ -110,7 +110,10 @@ Usage:
   a2_real_robot_test.sh connected-preflight IFACE
   a2_real_robot_test.sh lowstate [duration]
   a2_real_robot_test.sh joints [duration]
+  a2_real_robot_test.sh joints-live [duration]
+  a2_real_robot_test.sh no-lowcmd [duration]
   a2_real_robot_test.sh remote [duration]
+  a2_real_robot_test.sh remote-live [duration]
   a2_real_robot_test.sh smoke-remote [duration]
   a2_real_robot_test.sh motion-check IFACE
   A2_ALLOW_RELEASE_MODE=1 a2_real_robot_test.sh motion-release IFACE
@@ -122,6 +125,12 @@ Usage:
 Run inside the A2 Docker container after entering with A2_NET_IFACE=<robot NIC>.
 Logs are written under A2_TEST_LOG_DIR, default /tmp/a2_real_robot_tests.
 Topic defaults: A2_LOWSTATE_TOPIC=/lowstate, A2_LOWCMD_TOPIC=/lowcmd.
+no-lowcmd only observes the configured LowCmd topic and does not publish.
+joints-live and remote-live are live observe-only tools: they subscribe only to
+the configured LowState topic and never publish LowCmd. Their duration defaults
+to 0, meaning run until Ctrl-C.
+Live env: A2_LIVE_PRINT_PERIOD=0.2, A2_LIVE_CLEAR_SCREEN=1,
+A2_JOINT_MIN_DELTA=0.03, A2_REMOTE_DEADZONE=0.08.
 USAGE
 }
 
@@ -157,17 +166,55 @@ connected_preflight() {
       done <<< \"\$topics\"
       return 1
     }
+    topic_cli_name() {
+      local required=\"\$1\"
+      local slash=\"/\${required#/}\"
+      local bare=\"\${required#/}\"
+      local topic
+      while IFS= read -r topic; do
+        if [ \"\$topic\" = \"\$required\" ] || [ \"\$topic\" = \"\$slash\" ] || [ \"\$topic\" = \"\$bare\" ]; then
+          printf '%s\n' \"\$topic\"
+          return 0
+        fi
+      done <<< \"\$topics\"
+      return 1
+    }
     topic_info_if_visible() {
       local topic=\"\$1\"
-      if topic_visible \"\$topic\"; then
-        ros2 topic info \"\$topic\" -v || ros2 topic info \"/\${topic#/}\" -v || true
+      local actual=\"\"
+      if actual=\"\$(topic_cli_name \"\$topic\")\"; then
+        ros2 topic info \"\$actual\" -v || true
       else
         echo \"topic \$topic not visible; skipping ros2 topic info -v\"
       fi
     }
-    topic_info_if_visible /lowstate
+    require_topic_type() {
+      local topic=\"\$1\"
+      local expected=\"\$2\"
+      local label=\"\$3\"
+      local actual=\"\"
+      local types=\"\"
+      if ! actual=\"\$(topic_cli_name \"\$topic\")\"; then
+        echo \"ERROR: required \$label topic \$topic is not visible.\" >&2
+        exit 3
+      fi
+      if ! types=\"\$(ros2 topic type \"\$actual\" 2>&1)\"; then
+        echo \"ERROR: failed to read type for \$label topic \$topic resolved as \$actual: \$types\" >&2
+        exit 4
+      fi
+      printf 'configured_%s_topic=%s resolved_topic=%s types=%s\n' \"\$label\" \"\$topic\" \"\$actual\" \"\$types\"
+      case \"\$types\" in
+        *\"\$expected\"*) ;;
+        *)
+          echo \"ERROR: configured \$label topic \$topic resolved as \$actual does not include expected type \$expected; types=\$types\" >&2
+          exit 4
+          ;;
+      esac
+    }
+    topic_info_if_visible '${lowstate_topic}'
     topic_info_if_visible /lf/lowstate
-    topic_info_if_visible /lowcmd
+    echo 'INFO: /lf/lowstate is printed for diagnostics only; it is not the configured A2 backend default.'
+    topic_info_if_visible '${lowcmd_topic}'
     if ! topic_visible '${lowstate_topic}'; then
       echo 'ERROR: required lowstate topic ${lowstate_topic} is not visible.' >&2
       exit 3
@@ -176,8 +223,11 @@ connected_preflight() {
       echo 'ERROR: required lowcmd topic ${lowcmd_topic} is not visible.' >&2
       exit 3
     fi
+    require_topic_type '${lowstate_topic}' unitree_hg/msg/LowState lowstate
+    require_topic_type '${lowcmd_topic}' unitree_hg/msg/LowCmd lowcmd
     ros2 interface show unitree_hg/msg/LowState
     ros2 interface show unitree_hg/msg/LowCmd
+    echo 'PASS: connected preflight topics visible and types match configured A2 backend topics'
   "
 }
 
@@ -203,6 +253,28 @@ joints() {
   run_logged joints python3 "$observer" "${args[@]}"
 }
 
+joints_live() {
+  local duration="${1:-0}"
+  local args=(
+    joints-live "$duration"
+    --print-period "${A2_LIVE_PRINT_PERIOD:-0.2}"
+    --min-delta "${A2_JOINT_MIN_DELTA:-0.03}"
+    --lowstate-topic "$lowstate_topic"
+  )
+  if [ "${A2_LIVE_CLEAR_SCREEN:-1}" = "0" ]; then
+    args+=(--no-clear-screen)
+  else
+    args+=(--clear-screen)
+  fi
+  run_logged joints_live python3 "$observer" "${args[@]}"
+}
+
+no_lowcmd() {
+  local duration="${1:-5}"
+  run_logged no_lowcmd python3 "$observer" no-lowcmd "$duration" \
+    --lowcmd-topic "$lowcmd_topic"
+}
+
 remote() {
   local duration="${1:-15}"
   local args=(
@@ -214,6 +286,22 @@ remote() {
     args+=(--allow-zero)
   fi
   run_logged remote python3 "$observer" "${args[@]}"
+}
+
+remote_live() {
+  local duration="${1:-0}"
+  local args=(
+    remote-live "$duration"
+    --print-period "${A2_LIVE_PRINT_PERIOD:-0.2}"
+    --deadzone "${A2_REMOTE_DEADZONE:-0.08}"
+    --lowstate-topic "$lowstate_topic"
+  )
+  if [ "${A2_LIVE_CLEAR_SCREEN:-1}" = "0" ]; then
+    args+=(--no-clear-screen)
+  else
+    args+=(--clear-screen)
+  fi
+  run_logged remote_live python3 "$observer" "${args[@]}"
 }
 
 smoke_remote() {
@@ -480,8 +568,17 @@ case "$command" in
   joints)
     joints "$@"
     ;;
+  joints-live)
+    joints_live "$@"
+    ;;
+  no-lowcmd)
+    no_lowcmd "$@"
+    ;;
   remote)
     remote "$@"
+    ;;
+  remote-live)
+    remote_live "$@"
     ;;
   smoke-remote)
     smoke_remote "$@"

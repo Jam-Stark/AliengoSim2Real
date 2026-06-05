@@ -427,6 +427,9 @@ Ideal result：
 - policy listen-only 在 `enable_motion=false` 下能 load policy / validate contract / warm history，且 `/lowcmd` 无消息。
 - optional zero-command path 未在 real hardware 上执行。
 - 实机 safety checklist 已准备：关闭 `ai_sport` / `ai_sports`、离地或限功率、hardware emergency stop。
+- 连接 real A2 后，按 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 先运行
+  `connected-preflight enp131s0`，再运行 observe-only `no-lowcmd 5`；如果 configured
+  `/lowcmd` 收到任何 message，停止现有 publisher，不进入任何 real publish path。
 
 ## 10. Remains Unvalidated Until Real A2 Connection
 
