@@ -93,3 +93,20 @@
 ## 2026-06-05 18:41 HKT
 
 - [x] 新增 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`，面向部署机 `/home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real` 记录 Docker image build、preflight、offline `A2_NET_IFACE=lo` container checks、`unitree_hg` interface checks、lowlevel/policy build、fake lowstate smoke、`enable_motion=false` no-lowcmd verification、optional zero-command path、实机前 acceptance checklist 和 failure log 收集。
+
+## 2026-06-05 19:49 HKT
+
+- [x] 用户报告 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md` 中无连接 robot 的 Docker virtual tests 全部通过，覆盖 Docker image/container readiness、`unitree_hg` interface checks、lowlevel/policy build、offline smoke 和 `enable_motion=false` no-lowcmd verification。
+- [x] 新增 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`，记录 real A2 connected validation 顺序：host `enp131s0` / `192.168.123.99/24` / ping、container connected preflight、真实 `/rt/lowstate`、remote raw/decode、MotionSwitcher `CheckMode` / guarded `ReleaseMode`、guarded zero `LowCmd` CRC、policy listen-only 和 last-stage guarded `enable_motion=true`。
+- [x] 新增 `ros2/A2/scripts/a2_real_robot_test.sh` orchestrator，提供 `connected-preflight`、`lowstate`、`remote`、`smoke-remote`、`motion-check`、guarded `motion-release`、guarded `zero-lowcmd`、`policy-listen-remote`、guarded `policy-enable-remote` subcommands，并写 logs 到 `/tmp/a2_real_robot_tests`。
+- [x] 新增 `ros2/A2/scripts/a2_real_robot_observer.py` ROS2 observer，独立验证 `/rt/lowstate` rate/tick/freshness、official remote byte decode、`LowCmd` raw-layout CRC/zero/mode checks 和 no-lowcmd 监听。
+
+## 2026-06-05 20:10 HKT
+
+- [x] 已添加 A2 joint state mapping/direction observe-only validation scripts/docs：
+
+  - `a2_real_robot_observer.py joints` 只订阅 `/rt/lowstate`，不发布 `/rt/lowcmd`。
+  - 固定 first-12 labels：`FR_BODY`、`FR_THIGH`、`FR_CALF`、`FL_BODY`、`FL_THIGH`、`FL_CALF`、`RR_BODY`、`RR_THIGH`、`RR_CALF`、`RL_BODY`、`RL_THIGH`、`RL_CALF`。
+  - 记录 q start/end/min/max/range、max abs dq、周期性 q/dq/delta 快照、`candidate_changed_joints` 和 optional CSV time series。
+  - `a2_real_robot_test.sh joints` 支持 `A2_JOINT_PRINT_PERIOD`、`A2_JOINT_MIN_DELTA`、`A2_JOINT_CSV`。
+  - `A2_REAL_ROBOT_TEST.md` 已将逐关节 order/sign observe-only 验证放在 continuous lowstate 后、remote 前。
