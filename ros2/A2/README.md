@@ -46,6 +46,12 @@ colcon build --packages-select a2_lowlevel --cmake-args \
 
 `ros2/A2/docker/` 提供 A2 专用 Docker deployment layer。目标是让部署机即使是 Ubuntu 24.04，也通过容器固定到 Ubuntu 22.04 + ROS2 Humble + apt CycloneDDS/RMW。A2 package 仍然只依赖 ROS2 `unitree_hg` messages；Unitree SDK2 只在镜像中 build/install official examples，用于 MotionSwitcherClient / SDK smoke，不作为 `a2_lowlevel` 的直接依赖。
 
+Day-to-day real A2 operation should follow `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`.
+That runbook starts from deploy-machine cold start and gives the complete Docker, A2 network,
+workspace source/build, MotionSwitcher release/restore, policy enable, stop and disconnect command
+sequence. `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` remains the validation/reference guide for
+first-time connected checks, deeper joint/remote validation, CRC checks and failure diagnosis.
+
 A2 Docker 的 official target platform 是 `linux/amd64`，因为当前正式部署机是 x86_64。`build_image.sh` 和 `run_container.sh` 默认都会传入 `--platform linux/amd64`；只在 debug 特殊架构时使用 `A2_DOCKER_PLATFORM=linux/arm64` 等覆盖。Apple Silicon Mac 上的 Docker Desktop 可以通过 amd64 emulation build/run 大部分 offline validation，但性能、timing、host networking 和 DDS 行为不代表真实部署机；真实 A2 DDS/network/control 仍然只在部署机 + 机器人网络上验证。
 
 镜像内容：
@@ -257,8 +263,8 @@ source /work/projects/AliengoSim2Real/ros2/install/setup.bash
 ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   -p enable_motion:=true \
   -p command_source:=remote \
-  -p max_remote_vx:=0.4 \
-  -p max_remote_vy:=0.25 \
+  -p max_remote_vx:=0.8 \
+  -p max_remote_vy:=0.5 \
   -p max_remote_yaw:=0.6
 ```
 
@@ -380,7 +386,8 @@ A2/scripts/a2_real_robot_test.sh remote-live 30
 ```
 
 旧 `joints` / `remote` subcommands 仍用于 run-end summary、CSV 或 pass/fail validation；
-具体 connected real robot 流程见 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`。
+daily deployment operation 见 `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`；具体 connected
+real robot validation/reference 流程见 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`。
 
 `A2LowLevelInterface` 会保存最近一次 `LowState` 的 `mode_pr`、`mode_machine`、`tick`、IMU quaternion/gyroscope、前 12 个 joint q/dq 和 `wireless_remote[40]`。发送非零 joint command 时必须先收到 fresh configured lowstate topic，默认 `/lowstate`，否则拒绝发布并 log warn。
 
@@ -569,8 +576,8 @@ warmup 和 policy handover：
 ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   -p enable_motion:=true \
   -p command_source:=remote \
-  -p max_remote_vx:=0.4 \
-  -p max_remote_vy:=0.25 \
+  -p max_remote_vx:=0.8 \
+  -p max_remote_vy:=0.5 \
   -p max_remote_yaw:=0.6 \
   -p remote_deadzone:=0.08
 ```
@@ -582,7 +589,7 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `enable_motion`：默认 `false`。为 `false` 时不发布 motion command。
 - `command_source`：默认 `static`，可选 `static` / `remote`。
 - `cmd_vx` / `cmd_vy` / `cmd_yaw`：static command provider，默认全 `0.0`。
-- `max_remote_vx` / `max_remote_vy` / `max_remote_yaw`：remote stick 映射上限，默认 `0.4`、`0.25`、`0.6`。
+- `max_remote_vx` / `max_remote_vy` / `max_remote_yaw`：remote stick 映射上限，默认 `0.8`、`0.5`、`0.6`。
 - `remote_deadzone`：remote stick deadzone，默认 `0.08`。
 - `require_standup_before_policy`：默认 `true`。为 `true` 时，`enable_motion=true`
   只允许 `command_source=remote` 通过 two-A stand-up handover 进入 policy；static

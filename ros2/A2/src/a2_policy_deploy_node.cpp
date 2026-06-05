@@ -230,9 +230,9 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
   cmd_vy_ = this->declare_parameter<double>("cmd_vy", 0.0);
   cmd_yaw_ = this->declare_parameter<double>("cmd_yaw", 0.0);
   max_remote_vx_ =
-      this->declare_parameter<double>("max_remote_vx", 0.4);
+      this->declare_parameter<double>("max_remote_vx", 0.8);
   max_remote_vy_ =
-      this->declare_parameter<double>("max_remote_vy", 0.25);
+      this->declare_parameter<double>("max_remote_vy", 0.5);
   max_remote_yaw_ =
       this->declare_parameter<double>("max_remote_yaw", 0.6);
   remote_deadzone_ =

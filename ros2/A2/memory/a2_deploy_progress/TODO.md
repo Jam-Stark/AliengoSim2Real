@@ -6,6 +6,7 @@
 - [ ] 首次实机前增加或确认安全流程：
 
   - low-level control 前关闭 `ai_sport` / `ai_sports`；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按 `A2_REAL_ROBOT_TEST.md` 在实机执行和验证。
+  - 日常 deployment command sequence 已有 `A2_REAL_DEPLOY_RUNBOOK.md`；operator 每次 real deployment 仍必须执行 runbook 中的 hardware emergency stop、one LowCmd publisher、`no-lowcmd`、MotionSwitcher release/restore 和 stop/restore/disconnect safety checks。
   - 离地或限功率 smoke。
   - 准备 hardware emergency stop。
 

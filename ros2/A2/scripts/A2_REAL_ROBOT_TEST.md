@@ -537,9 +537,9 @@ A2_ALLOW_ENABLE_MOTION=1 A2/scripts/a2_real_robot_test.sh policy-enable-remote 2
 ```text
 enable_motion:=true
 command_source:=remote
-max_remote_vx:=0.10
-max_remote_vy:=0.06
-max_remote_yaw:=0.15
+max_remote_vx:=0.80
+max_remote_vy:=0.50
+max_remote_yaw:=0.6
 ```
 
 Ideal result：

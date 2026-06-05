@@ -737,9 +737,9 @@ policy_enable_remote() {
       -p lowcmd_topic:="$lowcmd_topic" \
       -p enable_motion:=true \
       -p command_source:=remote \
-      -p max_remote_vx:=0.10 \
-      -p max_remote_vy:=0.06 \
-      -p max_remote_yaw:=0.15
+      -p max_remote_vx:=0.80 \
+      -p max_remote_vy:=0.50 \
+      -p max_remote_yaw:=0.6
 }
 
 command="${1:-help}"

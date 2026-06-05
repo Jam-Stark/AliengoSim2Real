@@ -133,8 +133,8 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   double cmd_vx_ = 0.0;
   double cmd_vy_ = 0.0;
   double cmd_yaw_ = 0.0;
-  double max_remote_vx_ = 0.4;
-  double max_remote_vy_ = 0.25;
+  double max_remote_vx_ = 0.8;
+  double max_remote_vy_ = 0.5;
   double max_remote_yaw_ = 0.6;
   double remote_deadzone_ = 0.08;
   bool require_standup_before_policy_ = true;

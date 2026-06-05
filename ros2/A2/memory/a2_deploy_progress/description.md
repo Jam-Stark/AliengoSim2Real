@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 23:38 HKT"
+last_updated: "2026-06-06 00:12 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -28,6 +28,7 @@ read_when:
 - A2 policy action 先按 `action_clip` clip，再映射为 `default_joint_pos + action_scale * raw_action`；训练顺序到 A2 low-level order same signs / no inversion，低层发布只走 `A2LowLevelInterface::publish_joint_commands()`。
 - 实现 A2 Remote Control v1 decode contract：`wireless_remote[40]` 中 `lx/rx/ry/ly` 分别来自 offsets `4/8/12/20` 的 little-endian `float32`，button byte `2/3` 按 Unitree SDK2 sample bit order decode，并做 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard。
 - `a2_policy_deploy` 支持 `command_source=static|remote`，默认 `static`；remote mapping 为 `cmd_vx=ly*max_remote_vx`、`cmd_vy=-lx*max_remote_vy`、`cmd_yaw=-rx*max_remote_yaw`。A2 R3 `L2` decode 在实机上不可靠，因此已取消 `L2` locomotion gate；PolicyActive 中 valid sticks 在 deadzone 后直接映射 command。
+- A2 remote command 上限已调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`；`policy-enable-remote` wrapper 和 `a2_policy_deploy` 默认参数保持一致。
 - `a2_policy_deploy` 已实现 A2 Stand-Up + Policy Handover gate：默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下 first `A` 触发 stand-up interpolation，holder 持续发布 policy `default_joint_pos`，second `A` 在 `lx/rx/ly` deadzone 后为 zero 时进入 `PolicyWarmupHold`，history warm 和 first action validation 后下一 cycle 进入 `PolicyActive`。
 - stand-up / holder / warmup command 仍只调用 `A2LowLevelInterface::publish_joint_commands()`，不直接写 `unitree_hg::msg::LowCmd`，不绕过 fresh-state、mode routing 或 CRC；`command_source=static` 在默认 stand-up gate 下会拒绝 `enable_motion=true` motion publish，除非显式设置 `require_standup_before_policy=false`。
 - remote safety 已扩展：`Select` 是 primary local stop，`L2+B` 仅保留为附加 local stop path；任意 phase local stop 会 `set_zero_command()`、reset policy/stand-up runtime，且只有 `enable_motion=true` 时才额外 `publish_zero()`。stand-up / holder / warmup 阶段 `B` rising edge cancel 保持不变。
@@ -52,6 +53,7 @@ read_when:
 - real robot validation script/docs 已 harden：`connected-preflight` 额外校验 configured lowstate / lowcmd topic type；新增 standalone `no-lowcmd` observe-only step，进入任何 configured LowCmd publish path 前必须确认无 active LowCmd traffic。
 - `a2_real_robot_test.sh` MotionSwitcher helper compile/runtime 已适配部署机 SDK2 DDS nested include/lib layout：自动加入 `install/include/ddscxx`、`thirdparty/include/ddscxx`、`install/lib`、`thirdparty/lib/$(uname -m)` 等候选，显式链接 `-lddscxx -lddsc`，并通过 wrapper 将 SDK2 lib dirs 放到 `LD_LIBRARY_PATH` 前面以避免 ROS2/CycloneDDS libs shadow；`motion-check` 仍只调用 `CheckMode`，`motion-release` 仍需 `A2_ALLOW_RELEASE_MODE=1`。
 - 已新增 guarded MotionSwitcher restore/select：`motion-select IFACE MODE` 和 `motion-restore IFACE` 都要求 `A2_ALLOW_SELECT_MODE=1`，默认 restore mode 为 `A2_MOTION_RESTORE_MODE:-ai_sport`；helper action `select` 会在 `SelectMode` 前后 `CheckMode`，要求 `SelectMode ret==0` 且 after `CheckMode name==mode`。恢复前必须先停止 policy/LowCmd publisher，并运行 `no-lowcmd` pass。
+- 已新增正式 operator-facing real deployment runbook `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`：它不是 validation guide，而是 day-to-day command sequence，覆盖 host cold start、Docker image/container、A2 `192.168.123.x` network、container env、workspace build/source、connected readiness、MotionSwitcher guarded release/restore、policy listen-only gate、guarded `enable_motion=true` two-A handover、runtime stop、disconnect 和 failure log collection。
 
 当前 blocker：
 
@@ -85,6 +87,7 @@ read_when:
 - `ros2/A2/test/a2_remote_decode_test.cpp`
 - `ros2/A2/scripts/collect_deploy_machine_info.sh`
 - `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`
+- `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`
 - `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`
 - `ros2/A2/scripts/a2_real_robot_test.sh`
 - `ros2/A2/scripts/a2_real_robot_observer.py`
@@ -104,6 +107,7 @@ read_when:
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
 - 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / `CheckMode`、guarded release、测试结束后的 guarded restore/select、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 日常部署已有正式 `A2_REAL_DEPLOY_RUNBOOK.md` 可执行；operator 仍必须按 runbook 逐次执行 `no-lowcmd`、MotionSwitcher release/restore、hardware emergency stop、one LowCmd publisher 和 real safety checks，不要把 runbook 存在视为 broad real validation complete。
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
@@ -133,6 +137,8 @@ read_when:
 - 2026-06-05 22:54 HKT 已实现 A2 Stand-Up + Policy Handover gate：默认 remote two-A handover，stand-up/holder/warmup command 只走 `publish_joint_commands()`，static motion 默认 blocked unless `require_standup_before_policy=false`，并更新 real robot script/docs/README/memory。
 - 2026-06-05 23:18 HKT 已取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，PolicyActive 中 valid sticks 在 deadzone 后直接映射 command；`Select` 是 primary local stop，`L2+B` 仅为附加 stop path；two-A handover 的 second `A` 仍要求 `lx/rx/ly` centered。
 - 2026-06-05 23:38 HKT 已新增 A2 内置 motion service guarded restore/select：`motion-select IFACE MODE` 调用 `MotionSwitcherClient::SelectMode(MODE)` 并前后 `CheckMode`，`motion-restore IFACE` 默认恢复 `ai_sport`；恢复前要求停止 policy/LowCmd 并通过 `no-lowcmd`。
+- 2026-06-06 00:03 HKT 已新增正式 operator-facing `A2_REAL_DEPLOY_RUNBOOK.md`，区分 day-to-day real deployment operation 与 `A2_REAL_ROBOT_TEST.md` validation/reference，并在 README 增加入口。
+- 2026-06-06 00:12 HKT 已将 A2 remote command 上限从 conservative `0.10/0.06/0.15` wrapper caps 和旧 `0.4/0.25/0.6` node defaults 统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
 
 ## Recommended Next Files To Read
 

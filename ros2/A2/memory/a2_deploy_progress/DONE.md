@@ -173,3 +173,15 @@
 - [x] 保留 `motion-check` observe-only 和 guarded `motion-release` 行为，未引入 LowCmd publish、policy attach 或 `a2_policy_deploy` 修改。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`，要求恢复前停止 policy/LowCmd publisher、运行 `no-lowcmd` pass，并给出部署机内 restore 命令与 Unitree App fallback。
 - [x] 更新 A2 memory TODO/description：关闭和恢复内置 service 已有 guarded script，但实机流程仍需 operator 执行和验证。
+
+## 2026-06-06 00:03 HKT
+
+- [x] 新增 operator-facing `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`，作为 day-to-day A2 Docker real deployment operation doc，不替代 `A2_REAL_ROBOT_TEST.md` validation/reference guide。
+- [x] Runbook 覆盖 host cold start、Docker image/container、A2 `192.168.123.x` network、container env、workspace build/source、connected readiness、MotionSwitcher guarded release/restore、policy listen-only gate、guarded `enable_motion=true` two-A handover、runtime stop、disconnect 和 failure log collection。
+- [x] 更新 `ros2/A2/README.md`，新增 runbook 入口并明确 `A2_REAL_ROBOT_TEST.md` 仍用于 validation/reference。
+- [x] 更新 A2 memory description/TODO/DONE，记录 daily deployment runbook 已存在，但 broad real validation 和每次 operator safety checks 仍未因此完成。
+
+## 2026-06-06 00:12 HKT
+
+- [x] 将 A2 remote command 上限统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
+- [x] 更新 `a2_policy_deploy` 默认参数、`policy-enable-remote` wrapper 参数、README、real robot validation guide、real deployment runbook 和 A2 memory。
