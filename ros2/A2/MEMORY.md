@@ -1,6 +1,6 @@
 # A2 Memory
 
-Updated: 2026-06-05 15:07 HKT
+Updated: 2026-06-05 16:52 HKT
 
 本目录记录 `ros2/A2` A2 专属部署链路的可复用项目事实、当前施工状态、blocker 和下一步 TODO。稳定技术概念保留 English technical terms。
 

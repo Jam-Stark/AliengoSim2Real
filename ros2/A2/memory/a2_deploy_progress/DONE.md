@@ -65,3 +65,11 @@
 - [x] 保持 low-level publish boundary：policy node 只调用 `A2LowLevelInterface::publish_joint_commands()`，不直接写 `unitree_hg::msg::LowCmd`，不绕过 fresh-state guard、mode routing 或 A2 CRC。
 - [x] 增加 policy safety gating：missing/stale state、history 未 warm、`enable_motion=false`、NaN/Inf、wrong observation/action dim 时拒绝发布 motion。
 - [x] 更新 `ros2/A2/README.md` 的 policy build/run、contract、mapping、safety 和 remote TODO。
+
+## 2026-06-05 16:52 HKT
+
+- [x] 实现 A2 remote decode utility：从 `wireless_remote[40]` 按 Unitree SDK2 sample offsets `lx=4`、`rx=8`、`ry=12`、`ly=20` decode little-endian `float32`，并按 byte `2/3` bit layout decode buttons。
+- [x] remote decode 增加 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard；invalid stick data 不进入 policy command。
+- [x] `a2_lowlevel_smoke` 增加 `log_remote` listen-only logging，打印 sticks 和 button names，默认仍不发布 command。
+- [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、`L2` gate、`Select` / `L2+B` local stop、runtime reset 和 `publish_zero()`。
+- [x] 更新 `ros2/A2/README.md` remote build/run、button gate、joystick mapping、safety limits 和 deploy machine validation checklist。

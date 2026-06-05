@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 15:07 HKT"
+last_updated: "2026-06-05 16:52 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -25,6 +25,9 @@ read_when:
 - `a2_policy_deploy` 校验 `policy/A2_policy/policy.json` contract：`action_dim=12`、`per_frame_obs_dim=46`、`history_length=32`、`action_scale=0.25`、`sim_dt=0.005`、`control_decimation=4`、训练 joint order。
 - A2 policy observation 每帧为 `projected_gravity_xy(2)`、`base_ang_vel(3)*0.25`、`joint_q-default_pos(12)`、`joint_dq*0.05`、`last_raw_action(12)`、`gait_clock(2)`、`command(3)*[2,2,0.25]`，history `32` flatten 为 `1472`。
 - A2 policy action 先按 `action_clip` clip，再映射为 `default_joint_pos + action_scale * raw_action`；训练顺序到 A2 low-level order same signs / no inversion，低层发布只走 `A2LowLevelInterface::publish_joint_commands()`。
+- 实现 A2 Remote Control v1 decode contract：`wireless_remote[40]` 中 `lx/rx/ry/ly` 分别来自 offsets `4/8/12/20` 的 little-endian `float32`，button byte `2/3` 按 Unitree SDK2 sample bit order decode，并做 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard。
+- `a2_policy_deploy` 支持 `command_source=static|remote`，默认 `static`；remote mapping 为 `cmd_vx=ly*max_remote_vx`、`cmd_vy=-lx*max_remote_vy`、`cmd_yaw=-rx*max_remote_yaw`，`L2` 是 nonzero command gate，`Select` 或 `L2+B` 触发 local stop / `publish_zero()` / policy runtime reset。
+- `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
 
@@ -32,6 +35,7 @@ read_when:
 
 - code machine 没有 ROS2 / `colcon` / `/opt/ros`，无法本地完整 build `a2_lowlevel`。
 - A2 CRC 仍需和部署机 `unitree_hg` generated messages、Unitree SDK2 sample 或实机 low-level command 行为对照验证。
+- A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 `rt/lowstate.wireless_remote[40]` 验证 stick/button 方向、`L2` gate 和 local stop button。
 - 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；当前首版只在 README / smoke log 提醒，未自动调用 `MotionSwitcherClient`。
 
 ## When Codex/AI Should Read This Entry
@@ -47,10 +51,13 @@ read_when:
 - `ros2/A2/include/a2_lowlevel/a2_lowlevel_interface.h`
 - `ros2/A2/include/a2_lowlevel/a2_policy_deploy_node.h`
 - `ros2/A2/include/a2_lowlevel/a2_crc.h`
+- `ros2/A2/include/a2_lowlevel/a2_remote.h`
 - `ros2/A2/src/a2_lowlevel_interface.cpp`
 - `ros2/A2/src/a2_policy_deploy_node.cpp`
 - `ros2/A2/src/a2_crc.cpp`
+- `ros2/A2/src/a2_remote.cpp`
 - `ros2/A2/src/a2_lowlevel_smoke.cpp`
+- `ros2/A2/test/a2_remote_decode_test.cpp`
 - `ros2/A2/scripts/collect_deploy_machine_info.sh`
 - `ros2/A2/README.md`
 - `policy/A2_policy/policy.pt`
@@ -64,7 +71,7 @@ read_when:
 - 在部署机 build `a2_lowlevel`，验证 `unitree_hg` include/type/field names 和 CRC。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
 - 在部署机安装/配置 LibTorch + jsoncpp 后，用 `-DBUILD_A2_POLICY_DEPLOY=ON` build `a2_policy_deploy` 并验证 TorchScript runtime。
-- A2 remote control 目前只保留 `wireless_remote[40]` snapshot 输入边界；后续如需 remote command，需要新增 decode、button gate 和 stick mapping。
+- 在部署机/实机验证 A2 R3 remote layout：`a2_lowlevel_smoke log_remote` stick/button decode、`a2_policy_deploy command_source=remote` 的 `L2` gate、`Select` / `L2+B` local stop 和 mapping 方向。
 
 ## DONE Summary
 
@@ -72,6 +79,7 @@ read_when:
 - A2 memory 已规范化为 root memory schema，并只引用 `ros2/A2_Guide/`，不复制长 A2 SDK docs。
 - Unitree reference repos 路径已从旧 home-level default path 更新为 parent-projects layout：`/Users/caobaoquan/Downloads/python/projects/third_party/unitree`。
 - A2 Policy Adapter v1 已实现：guarded CMake target、`A2PolicyDeployNode`、policy contract validation、observation/action mapping、安全 publish gating、README policy sections。
+- A2 Remote Control v1 已实现：remote decode utility、policy `command_source=remote`、`L2` button gate、local stop、smoke remote logging、README remote sections 和 compile-free fake-byte decode test。
 
 ## Recommended Next Files To Read
 

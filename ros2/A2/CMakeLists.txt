@@ -27,6 +27,7 @@ set(A2_POLICY_DEFAULT_JSON_PATH
 
 add_library(a2_lowlevel
   src/a2_lowlevel_interface.cpp
+  src/a2_remote.cpp
   src/a2_crc.cpp
 )
 target_include_directories(a2_lowlevel PUBLIC
@@ -119,8 +120,19 @@ ament_export_targets(a2_lowlevelTargets HAS_LIBRARY_TARGET)
 ament_export_dependencies(rclcpp unitree_hg)
 
 if(BUILD_TESTING)
+  enable_testing()
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  add_executable(a2_remote_decode_test
+    test/a2_remote_decode_test.cpp
+    src/a2_remote.cpp
+  )
+  target_include_directories(a2_remote_decode_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  target_compile_features(a2_remote_decode_test PRIVATE cxx_std_17)
+  add_test(NAME a2_remote_decode_test COMMAND a2_remote_decode_test)
 endif()
 
 ament_package()

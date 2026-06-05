@@ -49,4 +49,12 @@
     -DBUILD_TESTING=OFF \
     -DBUILD_A2_POLICY_DEPLOY=ON
   ```
-- [ ] A2 remote control 后续只在明确需要时实现：基于 `wireless_remote[40]` snapshot 新增 decode、button gate 和 stick mapping；当前 `a2_policy_deploy` 仅支持 static command provider。
+
+## 2026-06-05 16:52 HKT
+
+- [ ] 在部署机/实机验证 A2 R3 remote layout 和 safety gate：
+
+  - `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印正确 `lx/rx/ry/ly` 和 button names。
+  - `a2_policy_deploy --ros-args -p command_source:=remote` 中 `L2` release 强制 policy command `[0,0,0]`。
+  - `L2` held 时方向符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+  - `Select` 和 `L2+B` 能触发 local stop、`publish_zero()`，并要求 history 重新 warm。

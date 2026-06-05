@@ -1,4 +1,5 @@
 #include "a2_lowlevel/a2_lowlevel_interface.h"
+#include "a2_lowlevel/a2_remote.h"
 
 #include <algorithm>
 #include <array>
@@ -6,6 +7,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -22,6 +24,36 @@ std::string format_joint_vector(
     out << values[i];
   }
   out << "]";
+  return out.str();
+}
+
+std::string format_remote_buttons(
+    const a2_lowlevel::A2RemoteState &remote) {
+  const auto names = a2_lowlevel::pressed_a2_remote_button_names(remote);
+  if (names.empty()) {
+    return "none";
+  }
+
+  std::ostringstream out;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (i != 0) {
+      out << ",";
+    }
+    out << names[i];
+  }
+  return out.str();
+}
+
+std::string format_remote_state(const a2_lowlevel::A2RemoteState &remote) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(3);
+  if (!remote.valid) {
+    out << "remote=invalid buttons=" << format_remote_buttons(remote);
+    return out.str();
+  }
+  out << "remote_sticks=[lx=" << remote.lx << ", rx=" << remote.rx
+      << ", ry=" << remote.ry << ", ly=" << remote.ly << "] buttons="
+      << format_remote_buttons(remote);
   return out.str();
 }
 
@@ -56,13 +88,19 @@ int main(int argc, char **argv) {
       1, static_cast<int>(node->get_parameter("state_timeout_ms").as_int()));
   const double command_hz =
       std::max(0.1, node->declare_parameter<double>("command_hz", 20.0));
+  const bool log_remote =
+      node->declare_parameter<bool>("log_remote", false);
+  const double remote_deadzone =
+      node->declare_parameter<double>("remote_deadzone", 0.08);
   const auto state_timeout = std::chrono::milliseconds(state_timeout_ms);
 
   RCLCPP_INFO(node->get_logger(),
               "a2_lowlevel_smoke params: publish_zero=%s, stand_test=%s, "
-              "state_timeout_ms=%d, command_hz=%.2f",
+              "state_timeout_ms=%d, command_hz=%.2f, log_remote=%s, "
+              "remote_deadzone=%.3f",
               publish_zero ? "true" : "false", stand_test ? "true" : "false",
-              state_timeout_ms, command_hz);
+              state_timeout_ms, command_hz, log_remote ? "true" : "false",
+              remote_deadzone);
 
   if (stand_test) {
     RCLCPP_WARN(node->get_logger(),
@@ -84,19 +122,36 @@ int main(int argc, char **argv) {
                 "precedence.");
   }
 
-  auto print_timer = node->create_wall_timer(std::chrono::seconds(1), [node] {
+  auto print_timer = node->create_wall_timer(std::chrono::seconds(1), [node,
+                                                                       log_remote,
+                                                                       remote_deadzone] {
     const auto state = node->latest_state();
     if (!state.has_state) {
       RCLCPP_INFO(node->get_logger(), "Waiting for rt/lowstate...");
       return;
     }
 
-    RCLCPP_INFO(node->get_logger(),
-                "tick=%u mode_pr=%u mode_machine=%u joint_q=%s joint_dq=%s",
-                state.tick, static_cast<unsigned>(state.mode_pr),
-                static_cast<unsigned>(state.mode_machine),
-                format_joint_vector(state.joint_q).c_str(),
-                format_joint_vector(state.joint_dq).c_str());
+    if (log_remote) {
+      const auto remote = a2_lowlevel::decode_a2_remote(
+          state.wireless_remote, static_cast<float>(remote_deadzone));
+      RCLCPP_INFO(
+          node->get_logger(),
+          "tick=%u mode_pr=%u mode_machine=%u joint_q=%s joint_dq=%s %s",
+          state.tick, static_cast<unsigned>(state.mode_pr),
+          static_cast<unsigned>(state.mode_machine),
+          format_joint_vector(state.joint_q).c_str(),
+          format_joint_vector(state.joint_dq).c_str(),
+          format_remote_state(remote).c_str());
+      return;
+    }
+
+    RCLCPP_INFO(
+        node->get_logger(),
+        "tick=%u mode_pr=%u mode_machine=%u joint_q=%s joint_dq=%s",
+        state.tick, static_cast<unsigned>(state.mode_pr),
+        static_cast<unsigned>(state.mode_machine),
+        format_joint_vector(state.joint_q).c_str(),
+        format_joint_vector(state.joint_dq).c_str());
   });
 
   rclcpp::TimerBase::SharedPtr command_timer;

@@ -128,7 +128,27 @@ bash ros2/A2/scripts/collect_deploy_machine_info.sh \
 
 History length 是 `32`，通过 `ManagerBasedEnv` observation terms 展平。`a2_policy_deploy` 不让 policy 直接写 `unitree_hg::msg::LowCmd`；policy output 先映射成 `std::array<A2JointCommand, 12>`，再交给 `A2LowLevelInterface` 处理 fresh-state guard、mode routing 和 CRC。
 
-Static command 在 observation 中仍按 `[2, 2, 0.25]` scale。gait clock 使用未 scale 的 static command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。
+Command provider 可选 `static` 或 `remote`，最终进入 observation 的 command 仍按 `[2, 2, 0.25]` scale。gait clock 使用未 scale 的 active command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。
+
+## A2 Remote Decode Contract
+
+`a2_remote` 从 `wireless_remote[40]` decode A2 R3 remote state。stick 使用 Unitree SDK2 sample layout，全部是 little-endian `float32`：
+
+| Stick | Offset |
+| --- | ---: |
+| `lx` | 4 |
+| `rx` | 8 |
+| `ry` | 12 |
+| `ly` | 20 |
+
+Button layout：
+
+| Byte | Bits |
+| --- | --- |
+| `2` | `R1`, `L1`, `Start`, `Select`, `R2`, `L2`, `F1`, `F3` |
+| `3` | `A`, `B`, `X`, `Y`, `Up`, `Right`, `Down`, `Left` |
+
+Decode 后会先做 NaN/Inf guard；任何 stick float 非 finite 时 `A2RemoteState.valid=false`，remote stick 不参与 policy command。finite stick 会按 `remote_deadzone` 置零 deadzone 内输入，并 clamp 到 `[-1, 1]`。
 
 ## Policy Action Mapping
 
@@ -182,6 +202,14 @@ PD gains 按 joint type 固定：
 ros2 run a2_lowlevel a2_lowlevel_smoke
 ```
 
+可选打印 remote decode，仍然不发布命令：
+
+```bash
+ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+  -p log_remote:=true \
+  -p remote_deadzone:=0.08
+```
+
 低频发布 zero/stop command：
 
 ```bash
@@ -200,6 +228,8 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 - `stand_test`：默认 `false`。为 `true` 时只在 fresh state 下发布固定低刚度站立目标；若同时设置 `publish_zero`，`stand_test` 优先。
 - `state_timeout_ms`：默认 `200`。用于 fresh state 判断。
 - `command_hz`：默认 `20`。用于 `publish_zero` 或 `stand_test` 的命令发送频率。
+- `log_remote`：默认 `false`。为 `true` 时打印 decoded sticks 和 button names。
+- `remote_deadzone`：默认 `0.08`。仅用于 remote decode logging。
 
 ## Policy Run
 
@@ -219,13 +249,38 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   -p cmd_yaw:=0.0
 ```
 
+显式启用 motion，并使用 A2 R3 remote command provider：
+
+```bash
+ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+  -p enable_motion:=true \
+  -p command_source:=remote \
+  -p max_remote_vx:=0.4 \
+  -p max_remote_vy:=0.25 \
+  -p max_remote_yaw:=0.6 \
+  -p remote_deadzone:=0.08
+```
+
 参数：
 
 - `policy_path`：默认 `policy/A2_policy/policy.pt`。
 - `policy_json_path`：默认 `policy/A2_policy/policy.json`。
 - `enable_motion`：默认 `false`。为 `false` 时不发布 motion command。
-- `cmd_vx` / `cmd_vy` / `cmd_yaw`：静态 command provider，默认全 `0.0`。
+- `command_source`：默认 `static`，可选 `static` / `remote`。
+- `cmd_vx` / `cmd_vy` / `cmd_yaw`：static command provider，默认全 `0.0`。
+- `max_remote_vx` / `max_remote_vy` / `max_remote_yaw`：remote stick 映射上限，默认 `0.4`、`0.25`、`0.6`。
+- `remote_deadzone`：remote stick deadzone，默认 `0.08`。
 - `state_timeout_ms`：默认 `200`，沿用 `A2LowLevelInterface` fresh-state 判断。
+
+Remote mapping：
+
+```text
+cmd_vx  =  ly * max_remote_vx
+cmd_vy  = -lx * max_remote_vy
+cmd_yaw = -rx * max_remote_yaw
+```
+
+`ry` 不参与 command，只在 debug log 中保留。Remote 只作为 command provider 和 safety gate；不会直接写 `LowCmd`，policy output 仍然只经过 `A2LowLevelInterface::publish_joint_commands()`。
 
 ## Safety
 
@@ -235,13 +290,20 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 
 `a2_policy_deploy` 的 publish refusal 条件：
 
+- `enable_motion=false`：node 仍监听 fresh `LowState`、更新 command provider、计算 observation 并 warm history，但在 `computeAction()` / `publish_joint_commands()` 前拒绝 motion publish
 - missing/stale `rt/lowstate`
 - `LowState`、observation 或 action 出现 `NaN` / `Inf`
+- `command_source` 非 `static` / `remote`
+- `command_source=remote` 时 remote stick decode invalid
 - observation/action dimension 不符合 contract
 - history 尚未 warm 到 `32` fresh frames
-- `enable_motion=false`
 
 这些条件下 node 不发布 motion command。
+
+Remote safety gate：
+
+- `L2` 必须按住才允许 nonzero policy command；未按住时 active command 强制为 `[0,0,0]`。
+- `Select` 或 `L2+B` 触发 local stop：清空 policy/history/action runtime，调用 `publish_zero()`，并要求 release 后重新 fresh-state + history warmup。这个 zero LowCmd 是显式 safe stop command，即使 `enable_motion=false` 也可能发布；不会发布 policy motion command。
 
 ## CRC
 
@@ -255,6 +317,12 @@ A2 CRC 在 `a2_crc` 中独立实现，不复用 Go2W CRC。实现按手册 `LowC
 
 policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_joint_commands()`。policy 侧不直接写 `unitree_hg::msg::LowCmd`，也不绕过 fresh-state guard、mode routing 和 A2 CRC。
 
-## Remote TODO
+## Deploy Machine Validation Checklist
 
-`A2LowLevelInterface` 已保存 `wireless_remote[40]` snapshot，作为后续 A2 remote control interface 的输入边界。当前 `a2_policy_deploy` 只支持 static command provider，尚未实现 A2 remote decode、按键 gate 或 stick mapping。
+当前 A2 R3 remote layout 来自 Unitree SDK2 sample，仍需在部署机或实机 `rt/lowstate.wireless_remote[40]` 上验证：
+
+- `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印对应 `lx/rx/ry/ly` 和 button names。
+- `L2` gate release 时 `a2_policy_deploy command_source=remote` 只给 policy command `[0,0,0]`。
+- `L2` held 时 mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- `Select` 与 `L2+B` 会触发 local stop、发布 zero LowCmd，并要求 history 重新 warm 到 `32` fresh frames。
+- 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop。
