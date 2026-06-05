@@ -1,6 +1,6 @@
 # a2_lowlevel
 
-`a2_lowlevel` 是独立的 ROS2 ament package，用于标准 A2 low-level adapter。首版只处理 A2 12 个 leg motors，不接 policy，不支持 A2W，也不修改 `ros2/src/**` 的 Go2W 链路。
+`a2_lowlevel` 是独立的 ROS2 ament package，用于标准 A2 low-level adapter。默认只 build A2 12 个 leg motors 的 low-level library 和 smoke，不修改 `ros2/src/**` 的 Go2W 链路。A2 policy deploy 是可选 target，需要显式打开 `BUILD_A2_POLICY_DEPLOY`。
 
 ## Build
 
@@ -11,6 +11,36 @@ cd /Users/caobaoquan/Downloads/python/projects/AliengoSim2Real/ros2
 colcon build --packages-select a2_lowlevel
 source install/setup.bash
 ```
+
+只 build low-level adapter / smoke 时不需要 LibTorch 或 jsoncpp。
+
+## Optional Policy Build
+
+`a2_policy_deploy` 通过 shared `utils/cpp_manager_env` 的 `ManagerBasedEnv` / `Policy` runtime 加载 TorchScript policy，但 low-level publish boundary 仍然只走 `A2LowLevelInterface::publish_joint_commands()`。
+
+启用 policy target：
+
+```bash
+cd /Users/caobaoquan/Downloads/python/projects/AliengoSim2Real/ros2
+colcon build --packages-select a2_lowlevel --cmake-args \
+  -DBUILD_A2_POLICY_DEPLOY=ON
+source install/setup.bash
+```
+
+如果 policy asset 不在默认位置，可覆盖 CMake default 或 ROS params：
+
+```bash
+colcon build --packages-select a2_lowlevel --cmake-args \
+  -DBUILD_A2_POLICY_DEPLOY=ON \
+  -DA2_POLICY_DEFAULT_PATH=/path/to/policy.pt \
+  -DA2_POLICY_DEFAULT_JSON_PATH=/path/to/policy.json
+```
+
+默认 policy contract:
+
+- TorchScript: `policy/A2_policy/policy.pt`
+- JSON: `policy/A2_policy/policy.json`
+- deploy control rate: `50 Hz`
 
 ## Deploy Machine Info
 
@@ -69,6 +99,72 @@ bash ros2/A2/scripts/collect_deploy_machine_info.sh \
 
 代码中提供 `A2MotorIndex`、`kA2MotorOrder`、`kA2MotorNames` 常量。`publish_joint_commands()` 只写 `motor_cmd[0:12]`，`motor_cmd[12:35]` 会清零。
 
+## A2 Policy Contract
+
+`a2_policy_deploy` 启动时会读取并校验 `policy.json`：
+
+- `action_dim = 12`
+- `per_frame_obs_dim = 46`
+- `history_length = 32`
+- flattened observation dim = `1472`
+- `action_scale = 0.25`
+- `sim_dt = 0.005`
+- `control_decimation = 4`
+- `1 / (sim_dt * control_decimation) = 50 Hz`
+- `joint_names` 和 `obs_joint_names` 必须等于训练顺序：
+  `FL_hip, FR_hip, RL_hip, RR_hip, FL_thigh, FR_thigh, RL_thigh, RR_thigh, FL_calf, FR_calf, RL_calf, RR_calf`
+
+每帧 observation order 固定为：
+
+| Segment | Dim | Scale |
+| --- | ---: | --- |
+| `projected_gravity_xy` | 2 | 1 |
+| `base_ang_vel` | 3 | `0.25` |
+| `joint_q - default_pos` | 12 | 1 |
+| `joint_dq` | 12 | `0.05` |
+| `last_raw_action` | 12 | 1 |
+| `gait_clock` | 2 | 1 |
+| `command` | 3 | `[2, 2, 0.25]` |
+
+History length 是 `32`，通过 `ManagerBasedEnv` observation terms 展平。`a2_policy_deploy` 不让 policy 直接写 `unitree_hg::msg::LowCmd`；policy output 先映射成 `std::array<A2JointCommand, 12>`，再交给 `A2LowLevelInterface` 处理 fresh-state guard、mode routing 和 CRC。
+
+Static command 在 observation 中仍按 `[2, 2, 0.25]` scale。gait clock 使用未 scale 的 static command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。
+
+## Policy Action Mapping
+
+Policy raw action 使用训练 joint order。发送前按 `policy.json` 的 `action_clip` clip，然后转换为 position target：
+
+```text
+target_q = default_joint_pos + action_scale * clipped_raw_action
+```
+
+训练顺序到 A2 low-level order 的 mapping 固定为 same signs、no inversion：
+
+| Training Joint | A2 Low-Level Joint |
+| --- | --- |
+| `FL_hip_joint` | `FL_BODY` |
+| `FR_hip_joint` | `FR_BODY` |
+| `RL_hip_joint` | `RL_BODY` |
+| `RR_hip_joint` | `RR_BODY` |
+| `FL_thigh_joint` | `FL_THIGH` |
+| `FR_thigh_joint` | `FR_THIGH` |
+| `RL_thigh_joint` | `RL_THIGH` |
+| `RR_thigh_joint` | `RR_THIGH` |
+| `FL_calf_joint` | `FL_CALF` |
+| `FR_calf_joint` | `FR_CALF` |
+| `RL_calf_joint` | `RL_CALF` |
+| `RR_calf_joint` | `RR_CALF` |
+
+PD gains 按 joint type 固定：
+
+| Joint Type | `kp` | `kd` |
+| --- | ---: | ---: |
+| hip/body | 140 | 5 |
+| thigh | 140 | 5 |
+| calf | 220 | 9 |
+
+`dq=0`、`tau=0`。
+
 ## Public API
 
 - `A2LowStateSnapshot latest_state() const`
@@ -105,9 +201,47 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 - `state_timeout_ms`：默认 `200`。用于 fresh state 判断。
 - `command_hz`：默认 `20`。用于 `publish_zero` 或 `stand_test` 的命令发送频率。
 
+## Policy Run
+
+默认 `enable_motion=false`，即使 policy 加载成功也不会发布运动命令：
+
+```bash
+ros2 run a2_lowlevel a2_policy_deploy
+```
+
+显式启用 motion，并使用静态 command provider：
+
+```bash
+ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+  -p enable_motion:=true \
+  -p cmd_vx:=0.0 \
+  -p cmd_vy:=0.0 \
+  -p cmd_yaw:=0.0
+```
+
+参数：
+
+- `policy_path`：默认 `policy/A2_policy/policy.pt`。
+- `policy_json_path`：默认 `policy/A2_policy/policy.json`。
+- `enable_motion`：默认 `false`。为 `false` 时不发布 motion command。
+- `cmd_vx` / `cmd_vy` / `cmd_yaw`：静态 command provider，默认全 `0.0`。
+- `state_timeout_ms`：默认 `200`，沿用 `A2LowLevelInterface` fresh-state 判断。
+
 ## Safety
 
-真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。`stand_test` 只是接口 smoke，不包含起身流程、姿态保护、limit check 或 emergency stop；首次运行应离地、限功率、有人值守，并准备硬件急停。
+真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。当前不会自动 stand-up，也不会自动关闭 `ai_sport` / `ai_sports`。
+
+`stand_test` 只是接口 smoke，不包含起身流程、姿态保护、limit check 或 emergency stop；首次运行应离地、限功率、有人值守，并准备硬件急停。
+
+`a2_policy_deploy` 的 publish refusal 条件：
+
+- missing/stale `rt/lowstate`
+- `LowState`、observation 或 action 出现 `NaN` / `Inf`
+- observation/action dimension 不符合 contract
+- history 尚未 warm 到 `32` fresh frames
+- `enable_motion=false`
+
+这些条件下 node 不发布 motion command。
 
 ## CRC
 
@@ -119,4 +253,8 @@ A2 CRC 在 `a2_crc` 中独立实现，不复用 Go2W CRC。实现按手册 `LowC
 
 ## Policy Boundary
 
-后续接 policy 时，应只把 policy output 映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_joint_commands()`。policy 侧不应直接写 `unitree_hg::msg::LowCmd`，也不应绕过 fresh-state guard、mode routing 和 A2 CRC。
+policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_joint_commands()`。policy 侧不直接写 `unitree_hg::msg::LowCmd`，也不绕过 fresh-state guard、mode routing 和 A2 CRC。
+
+## Remote TODO
+
+`A2LowLevelInterface` 已保存 `wireless_remote[40]` snapshot，作为后续 A2 remote control interface 的输入边界。当前 `a2_policy_deploy` 只支持 static command provider，尚未实现 A2 remote decode、按键 gate 或 stick mapping。

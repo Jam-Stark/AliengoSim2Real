@@ -5,19 +5,20 @@
 - [ ] 在 A2 部署机运行：
 
   ```bash
-  mkdir -p ~/third_party/unitree
-  cd ~/third_party/unitree
+  # 在 AliengoSim2Real repo root 执行
+  PROJECT_ROOT="$(pwd)"
+  UNITREE_ROOT="$(cd .. && pwd)/third_party/unitree"
+  mkdir -p "$UNITREE_ROOT"
 
-  git clone https://github.com/unitreerobotics/unitree_ros2
-  git clone https://github.com/unitreerobotics/unitree_sdk2
-  git clone https://github.com/unitreerobotics/unitree_sdk2_python
-  安装unitree 官方SDK
+  git clone https://github.com/unitreerobotics/unitree_ros2 "$UNITREE_ROOT/unitree_ros2"
+  git clone https://github.com/unitreerobotics/unitree_sdk2 "$UNITREE_ROOT/unitree_sdk2"
+  git clone https://github.com/unitreerobotics/unitree_sdk2_python "$UNITREE_ROOT/unitree_sdk2_python"
+  # 安装 Unitree 官方 SDK
 
-
-  bash ros2/A2/scripts/collect_deploy_machine_info.sh --ping > DeployMachineINFO.md
+  bash "$PROJECT_ROOT/ros2/A2/scripts/collect_deploy_machine_info.sh" --unitree-root "$UNITREE_ROOT" --ping > "$PROJECT_ROOT/DeployMachineINFO.md"
   ```
   将 `DeployMachineINFO.md` 回传给 Codex，用于调整 A2 deployment chain。
-- [ ] 在部署机确认 `~/third_party/unitree` 存在：
+- [ ] 在部署机确认 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree` 存在：
 
   - `unitree_ros2`
   - `unitree_sdk2`
@@ -40,10 +41,12 @@
   - 关闭 `ai_sport` / `ai_sports`。
   - 离地或限功率 smoke。
   - 准备 hardware emergency stop。
-- [ ] 后续接 policy 前定义 A2 policy contract：
+- [ ] 在部署机安装/配置 LibTorch + jsoncpp 后 build A2 policy deploy：
 
-  - observation layout
-  - action dimension
-  - joint order
-  - action scaling / PD gains
-  - `ManagerBasedEnv` adapter 边界
+  ```bash
+  cd ros2/A2
+  colcon build --packages-select a2_lowlevel --cmake-args \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_A2_POLICY_DEPLOY=ON
+  ```
+- [ ] A2 remote control 后续只在明确需要时实现：基于 `wireless_remote[40]` snapshot 新增 decode、button gate 和 stick mapping；当前 `a2_policy_deploy` 仅支持 static command provider。

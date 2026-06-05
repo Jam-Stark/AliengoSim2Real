@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(a2_lowlevel)
 
+option(BUILD_A2_POLICY_DEPLOY "Build A2 LibTorch policy deploy executable" OFF)
+
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
@@ -13,6 +15,15 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(unitree_hg REQUIRED)
+
+set(A2_POLICY_DEFAULT_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../policy/A2_policy/policy.pt"
+  CACHE FILEPATH "Default A2 TorchScript policy path"
+)
+set(A2_POLICY_DEFAULT_JSON_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../policy/A2_policy/policy.json"
+  CACHE FILEPATH "Default A2 policy contract JSON path"
+)
 
 add_library(a2_lowlevel
   src/a2_lowlevel_interface.cpp
@@ -40,9 +51,58 @@ ament_target_dependencies(a2_lowlevel_smoke
   unitree_hg
 )
 
-install(TARGETS
+set(A2_INSTALL_TARGETS
   a2_lowlevel
   a2_lowlevel_smoke
+)
+
+if(BUILD_A2_POLICY_DEPLOY)
+  find_package(Torch REQUIRED)
+  find_path(JSONCPP_INCLUDE_DIR NAMES json/json.h PATH_SUFFIXES jsoncpp)
+  find_library(JSONCPP_LIB NAMES jsoncpp)
+  if(NOT JSONCPP_INCLUDE_DIR OR NOT JSONCPP_LIB)
+    message(FATAL_ERROR
+      "Could not find jsoncpp. Install libjsoncpp-dev or provide "
+      "JSONCPP_INCLUDE_DIR/JSONCPP_LIB."
+    )
+  endif()
+
+  set(cpp_manager_env_path
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../utils/cpp_manager_env"
+  )
+  file(GLOB cpp_manager_env "${cpp_manager_env_path}/*.cpp")
+
+  add_executable(a2_policy_deploy
+    src/a2_policy_deploy_node.cpp
+    ${cpp_manager_env}
+  )
+  target_include_directories(a2_policy_deploy PRIVATE
+    "${cpp_manager_env_path}"
+    "${JSONCPP_INCLUDE_DIR}"
+  )
+  target_compile_definitions(a2_policy_deploy PRIVATE
+    A2_POLICY_DEFAULT_PATH="${A2_POLICY_DEFAULT_PATH}"
+    A2_POLICY_DEFAULT_JSON_PATH="${A2_POLICY_DEFAULT_JSON_PATH}"
+  )
+  if(TORCH_CXX_FLAGS)
+    separate_arguments(TORCH_CXX_FLAGS_LIST UNIX_COMMAND "${TORCH_CXX_FLAGS}")
+    target_compile_options(a2_policy_deploy PRIVATE ${TORCH_CXX_FLAGS_LIST})
+  endif()
+  target_compile_features(a2_policy_deploy PRIVATE cxx_std_17)
+  target_link_libraries(a2_policy_deploy
+    a2_lowlevel
+    ${TORCH_LIBRARIES}
+    ${JSONCPP_LIB}
+  )
+  ament_target_dependencies(a2_policy_deploy
+    rclcpp
+    unitree_hg
+  )
+  list(APPEND A2_INSTALL_TARGETS a2_policy_deploy)
+endif()
+
+install(TARGETS
+  ${A2_INSTALL_TARGETS}
   EXPORT a2_lowlevelTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
