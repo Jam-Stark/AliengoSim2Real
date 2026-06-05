@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 16:52 HKT"
+last_updated: "2026-06-05 18:41 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -30,10 +30,20 @@ read_when:
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
+- 已收到部署机报告 `ros2/A2/DeployMachineINFO.md`：host 是 `lt5.precognition.team` / user `baoquanc`，workspace 是 `/home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real`，host OS 是 Ubuntu 24.04.3，host 未安装 `/opt/ros`，candidate A2 NIC 是 `enp131s0`，当前未配置 `192.168.123.x`。
+- 部署机 Unitree refs 已确认：`unitree_ros2@5204e6e`、`unitree_sdk2@63c6f53`、`unitree_sdk2_python@f7a5526`，路径是 `/home/baoquanc/Downloads/WorkSpace/projects/third_party/unitree`。
+- 已实现 `ros2/A2/docker/` Docker deployment layer：基于 Ubuntu 22.04 + ROS2 Humble container，安装 apt CycloneDDS/RMW、Unitree ROS2 messages、SDK2 examples、CPU LibTorch `/opt/libtorch`，并提供 host image build/run/preflight 和 container workspace build scripts。
+- A2 Docker formal target platform 是 `linux/amd64`，因为正式 deploy machine 是 x86_64；`build_image.sh` / `run_container.sh` 默认使用 `A2_DOCKER_PLATFORM=linux/amd64`，仅 debug 特殊架构时覆盖。
+- A2 Docker 默认 `A2_NET_IFACE=lo` 用于 offline smoke；真实 A2 需要显式 `A2_NET_IFACE=enp131s0`，并手动把 host NIC 配到 `192.168.123.99/24`。`192.168.124.x` 不是当前 SDK2 low-level DDS chain 使用的 subnet。
+- Apple Silicon Mac Docker Desktop 可在 amd64 emulation 下运行大部分 offline validation：image build、container startup、lowlevel/policy build、ROS2 interface checks、listen-only smoke；但性能、timing、Docker Desktop host networking 和 DDS/network/control 不具备部署代表性。
+- 本 thread 已决定跳过 Mac Docker Desktop offline validation；未在 Mac 上 run Docker build/container，不把该 validation 记为 DONE，下一步直接走 deploy-machine Docker build/preflight。
+- 已新增部署机专用 Docker build/test 文档 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`，覆盖 image build、preflight、offline container environment、`unitree_hg` interface checks、lowlevel/policy build、fake lowstate smoke、`enable_motion=false` no-lowcmd verification、optional zero-command path 和实机前 acceptance checklist。
 
 当前 blocker：
 
 - code machine 没有 ROS2 / `colcon` / `/opt/ros`，无法本地完整 build `a2_lowlevel`。
+- code machine 是 macOS，但本 thread 明确不跑 Docker Desktop offline validation；真实 DDS/network/control 仍需在 Linux deploy machine + A2 网络上验证。
+- 部署机 host 是 Ubuntu 24.04.3，因此 A2 deploy 采用 Ubuntu 22.04 + ROS2 Humble Docker container；不要要求 host 原生安装 Humble。
 - A2 CRC 仍需和部署机 `unitree_hg` generated messages、Unitree SDK2 sample 或实机 low-level command 行为对照验证。
 - A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 `rt/lowstate.wireless_remote[40]` 验证 stick/button 方向、`L2` gate 和 local stop button。
 - 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；当前首版只在 README / smoke log 提醒，未自动调用 `MotionSwitcherClient`。
@@ -59,6 +69,14 @@ read_when:
 - `ros2/A2/src/a2_lowlevel_smoke.cpp`
 - `ros2/A2/test/a2_remote_decode_test.cpp`
 - `ros2/A2/scripts/collect_deploy_machine_info.sh`
+- `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`
+- `ros2/A2/docker/Dockerfile`
+- `ros2/A2/docker/entrypoint.sh`
+- `ros2/A2/docker/build_image.sh`
+- `ros2/A2/docker/run_container.sh`
+- `ros2/A2/docker/build_a2_workspace.sh`
+- `ros2/A2/docker/preflight.sh`
+- `ros2/A2/DeployMachineINFO.md`
 - `ros2/A2/README.md`
 - `policy/A2_policy/policy.pt`
 - `policy/A2_policy/policy.json`
@@ -66,12 +84,13 @@ read_when:
 
 ## TODO Summary
 
-- 等部署机运行 `collect_deploy_machine_info.sh` 生成 `DeployMachineINFO.md` 后，基于真实 ROS2 / Unitree / network / message interface 信息修正部署链路。
-- Unitree reference repos 统一按 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree` 查找；运行 deploy info collector 时传入 `--unitree-root`，避免回退到旧 home-level default path。
-- 在部署机 build `a2_lowlevel`，验证 `unitree_hg` include/type/field names 和 CRC。
+- 在部署机 build A2 Docker image，并运行 `ros2/A2/docker/preflight.sh --iface enp131s0 --container-check` 验证 ROS2 Humble / Unitree ROS2 message readiness。
+- 手动配置部署机 `enp131s0` 到 `192.168.123.99/24`，确认 A2 `192.168.123.x` low-level subnet 连通；不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
+- 在 Docker container 内 build `a2_lowlevel`，验证 `unitree_hg` include/type/field names 和 CRC。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
-- 在部署机安装/配置 LibTorch + jsoncpp 后，用 `-DBUILD_A2_POLICY_DEPLOY=ON` build `a2_policy_deploy` 并验证 TorchScript runtime。
+- 在 Docker container 内用 CPU LibTorch `/opt/libtorch` 和 `-DBUILD_A2_POLICY_DEPLOY=ON` build `a2_policy_deploy` 并验证 TorchScript runtime。
 - 在部署机/实机验证 A2 R3 remote layout：`a2_lowlevel_smoke log_remote` stick/button decode、`a2_policy_deploy command_source=remote` 的 `L2` gate、`Select` / `L2+B` local stop 和 mapping 方向。
+- 按 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md` 在部署机执行 Docker build/preflight/offline smoke，并回填实际 pass/fail。
 
 ## DONE Summary
 
@@ -80,6 +99,10 @@ read_when:
 - Unitree reference repos 路径已从旧 home-level default path 更新为 parent-projects layout：`/Users/caobaoquan/Downloads/python/projects/third_party/unitree`。
 - A2 Policy Adapter v1 已实现：guarded CMake target、`A2PolicyDeployNode`、policy contract validation、observation/action mapping、安全 publish gating、README policy sections。
 - A2 Remote Control v1 已实现：remote decode utility、policy `command_source=remote`、`L2` button gate、local stop、smoke remote logging、README remote sections 和 compile-free fake-byte decode test。
+- A2 Docker deployment layer 已实现：Ubuntu 22.04 + ROS2 Humble image、Unitree refs pin、CPU LibTorch default、host run/preflight scripts、container build script、README Docker build/run/smoke/migration sections。
+- A2 Docker helper script / README / memory 已记录 formal `linux/amd64` default 和 Mac Docker Desktop offline validation scope。
+- 本 thread 已记录跳过 Mac Docker Desktop offline validation，且 deploy-machine Docker build/preflight 是下一条 validation path。
+- A2 Docker build/test deploy-machine guide 已新增到 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`；文档步骤已明确不连接 real A2、不启用 motion、不用 Mac Docker networking 代表 DDS/control。
 
 ## Recommended Next Files To Read
 

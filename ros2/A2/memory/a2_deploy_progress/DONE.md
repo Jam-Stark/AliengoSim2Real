@@ -73,3 +73,23 @@
 - [x] `a2_lowlevel_smoke` 增加 `log_remote` listen-only logging，打印 sticks 和 button names，默认仍不发布 command。
 - [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、`L2` gate、`Select` / `L2+B` local stop、runtime reset 和 `publish_zero()`。
 - [x] 更新 `ros2/A2/README.md` remote build/run、button gate、joystick mapping、safety limits 和 deploy machine validation checklist。
+
+## 2026-06-05 18:14 HKT
+
+- [x] 收到并纳入 `ros2/A2/DeployMachineINFO.md`：部署机 `lt5.precognition.team` / user `baoquanc`，workspace `/home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real`，host OS Ubuntu 24.04.3，host 未安装 `/opt/ros`，candidate A2 NIC `enp131s0` 当前未配置 `192.168.123.x`。
+- [x] 确认部署机 Unitree refs：`unitree_ros2@5204e6e`、`unitree_sdk2@63c6f53`、`unitree_sdk2_python@f7a5526`，并将 Dockerfile pin 到这些 refs。
+- [x] 实现 `ros2/A2/docker/` Docker deployment layer：Ubuntu 22.04 + ROS2 Humble image、apt CycloneDDS/RMW、Unitree ROS2 messages、SDK2 examples、CPU LibTorch `/opt/libtorch`、entrypoint、host image build/run/preflight scripts、container workspace build script。
+- [x] 更新 `ros2/A2/README.md`：Docker build/run、preflight、offline smoke、connected smoke、remote logging、policy remote run、Docker migration/export/import 和 safety gates。
+
+## 2026-06-05 18:31 HKT
+
+- [x] 将 A2 Docker helper 默认 platform 固定为 `A2_DOCKER_PLATFORM=linux/amd64`，匹配正式 x86_64 deploy machine；`build_image.sh` / `run_container.sh` 默认传入 Docker `--platform`，`preflight.sh` 只报告/使用 platform 做 container check，不修改 host state。
+- [x] 更新 `ros2/A2/README.md` 和 A2 memory，说明 Apple Silicon Mac Docker Desktop 可用 amd64 emulation 做 offline validation，但 timing、host networking、DDS 和实机 control 仍属于部署机验证范围。
+
+## 2026-06-05 18:34 HKT
+
+- [x] 按本 thread 决策移除 Mac Docker Desktop offline validation active TODO；该 validation 未运行、未标记完成，下一步 validation path 改为 deploy-machine Docker build 和 `preflight.sh --iface enp131s0 --container-check`。
+
+## 2026-06-05 18:41 HKT
+
+- [x] 新增 `ros2/A2/scripts/A2_DOCKER_BUILD_TEST.md`，面向部署机 `/home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real` 记录 Docker image build、preflight、offline `A2_NET_IFACE=lo` container checks、`unitree_hg` interface checks、lowlevel/policy build、fake lowstate smoke、`enable_motion=false` no-lowcmd verification、optional zero-command path、实机前 acceptance checklist 和 failure log 收集。

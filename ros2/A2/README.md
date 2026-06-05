@@ -42,21 +42,264 @@ colcon build --packages-select a2_lowlevel --cmake-args \
 - JSON: `policy/A2_policy/policy.json`
 - deploy control rate: `50 Hz`
 
+## Docker Deployment
+
+`ros2/A2/docker/` 提供 A2 专用 Docker deployment layer。目标是让部署机即使是 Ubuntu 24.04，也通过容器固定到 Ubuntu 22.04 + ROS2 Humble + apt CycloneDDS/RMW。A2 package 仍然只依赖 ROS2 `unitree_hg` messages；Unitree SDK2 只在镜像中 build/install official examples，用于 MotionSwitcherClient / SDK smoke，不作为 `a2_lowlevel` 的直接依赖。
+
+A2 Docker 的 official target platform 是 `linux/amd64`，因为当前正式部署机是 x86_64。`build_image.sh` 和 `run_container.sh` 默认都会传入 `--platform linux/amd64`；只在 debug 特殊架构时使用 `A2_DOCKER_PLATFORM=linux/arm64` 等覆盖。Apple Silicon Mac 上的 Docker Desktop 可以通过 amd64 emulation build/run 大部分 offline validation，但性能、timing、host networking 和 DDS 行为不代表真实部署机；真实 A2 DDS/network/control 仍然只在部署机 + 机器人网络上验证。
+
+镜像内容：
+
+- base image: `ros:humble-ros-base-jammy`
+- ROS2/RMW: `ros-humble-rmw-cyclonedds-cpp`、`ros-humble-rosidl-generator-dds-idl`
+- build deps: `python3-colcon-common-extensions`、`build-essential`、`cmake`、`libyaml-cpp-dev`、`libjsoncpp-dev`
+- debug tools: `iproute2`、`iputils-ping`、`net-tools`、`dnsutils`、`tcpdump`、`ethtool`
+- CPU LibTorch: `/opt/libtorch`，默认 `cxx11-abi shared-with-deps CPU zip`
+- Unitree refs:
+  - `unitree_ros2@5204e6e`
+  - `unitree_sdk2@63c6f53`
+  - `unitree_sdk2_python@f7a5526`
+
+Build image on host:
+
+```bash
+cd /home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+bash ros2/A2/docker/build_image.sh
+```
+
+默认 image tag 是 `a2-humble-deploy:2026-06-05`，默认 platform 是 `linux/amd64`。二者都可覆盖：
+
+```bash
+A2_DOCKER_IMAGE=a2-humble-deploy:local \
+A2_DOCKER_PLATFORM=linux/amd64 \
+bash ros2/A2/docker/build_image.sh
+```
+
+Run container on host:
+
+```bash
+cd /home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+A2_NET_IFACE=lo bash ros2/A2/docker/run_container.sh
+```
+
+默认 host mount 使用部署机报告中的路径：
+
+```text
+/home/baoquanc/Downloads/WorkSpace/projects -> /work/projects
+```
+
+如本机 workspace 不同，可覆盖：
+
+```bash
+HOST_PROJECTS_DIR=/path/to/projects \
+A2_NET_IFACE=lo \
+bash ros2/A2/docker/run_container.sh
+```
+
+## Mac Docker Desktop Offline Validation
+
+Apple Silicon Mac 可用 Docker Desktop 的 amd64 emulation 做 offline validation。先启动 Docker Desktop，等待 `docker info` 可用，然后在本机 workspace 运行：
+
+```bash
+cd /Users/caobaoquan/Downloads/python/projects/AliengoSim2Real
+bash ros2/A2/docker/build_image.sh
+```
+
+进入 amd64 emulated container，offline 使用 loopback interface：
+
+```bash
+HOST_PROJECTS_DIR=/Users/caobaoquan/Downloads/python/projects \
+A2_NET_IFACE=lo \
+bash ros2/A2/docker/run_container.sh bash
+```
+
+在 container 内 build low-level 和 policy target：
+
+```bash
+/opt/a2/build_a2_workspace.sh --lowlevel-only --cmake-release
+/opt/a2/build_a2_workspace.sh --policy --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+```
+
+做 interface/package checks 和 listen-only smoke：
+
+```bash
+ros2 pkg prefix unitree_hg
+ros2 interface show unitree_hg/msg/LowState >/dev/null
+ros2 interface show unitree_hg/msg/LowCmd >/dev/null
+ros2 pkg prefix a2_lowlevel
+timeout 3 ros2 run a2_lowlevel a2_lowlevel_smoke || true
+```
+
+Mac offline validation 只能覆盖 Docker image、workspace build、ROS2 message availability、node startup 和 pure listen-only smoke。`--network host` 在 Docker Desktop 上不等价于 Linux host networking；A2 `enp131s0`、`192.168.123.x` DDS traffic、remote decode with real `rt/lowstate`、policy timing 和任何 low-level command/control 都必须回到部署机验证。
+
+`run_container.sh` 使用：
+
+- `--network host`
+- `--privileged`
+- `--ipc host`
+- `-v "$HOST_PROJECTS_DIR:/work/projects"`
+
+Container entrypoint 会 source：
+
+- `/opt/ros/humble/setup.bash`
+- `/opt/unitree/unitree_ros2/cyclonedds_ws/install/setup.bash`
+- `/work/projects/AliengoSim2Real/ros2/install/setup.bash`，如果已经 build
+
+并设置：
+
+- `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`
+- `Torch_DIR=/opt/libtorch/share/cmake/Torch`
+- `LD_LIBRARY_PATH=/opt/libtorch/lib:$LD_LIBRARY_PATH`
+- `CYCLONEDDS_URI`，由 `A2_NET_IFACE` 自动生成，默认 `lo`
+
+真实 A2 硬件必须显式设置机器人 Ethernet NIC，例如部署机报告中的 `enp131s0`：
+
+```bash
+A2_NET_IFACE=enp131s0 bash ros2/A2/docker/run_container.sh
+```
+
+## Docker Workspace Build
+
+进入容器后，从 `/work/projects/AliengoSim2Real/ros2` build A2 package：
+
+```bash
+/opt/a2/build_a2_workspace.sh --lowlevel-only --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+```
+
+Build optional policy target：
+
+```bash
+/opt/a2/build_a2_workspace.sh --policy --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+```
+
+Policy build 等价于：
+
+```bash
+cd /work/projects/AliengoSim2Real/ros2
+colcon build --packages-select a2_lowlevel --cmake-args \
+  -DBUILD_TESTING=OFF \
+  -DBUILD_A2_POLICY_DEPLOY=ON \
+  -DTorch_DIR=/opt/libtorch/share/cmake/Torch
+```
+
+## Docker Preflight
+
+Host preflight 不会修改网络，只检查 Docker、candidate NIC、A2 subnet、workspace mount 和可选 container readiness：
+
+Preflight 默认报告并在 `--container-check` 时使用 `A2_DOCKER_PLATFORM=linux/amd64`，可用 `--platform` 或 env override；部署机 default 应保持 amd64。
+
+```bash
+cd /home/baoquanc/Downloads/WorkSpace/projects/AliengoSim2Real
+bash ros2/A2/docker/preflight.sh --iface enp131s0
+```
+
+可选 ping A2 low-level address：
+
+```bash
+bash ros2/A2/docker/preflight.sh --iface enp131s0 --ping
+```
+
+可选进入镜像检查 Unitree ROS2 messages：
+
+```bash
+bash ros2/A2/docker/preflight.sh --iface enp131s0 --container-check
+```
+
+如果 `enp131s0` 没有 `192.168.123.x`，手动配置示例：
+
+```bash
+sudo ip link set enp131s0 up
+sudo ip addr flush dev enp131s0
+sudo ip addr add 192.168.123.99/24 dev enp131s0
+```
+
+`192.168.124.x` 不是当前 SDK2 low-level DDS chain 使用的 subnet；`rt/lowstate` / `rt/lowcmd` 应走 `192.168.123.x`。
+
+## Docker Smoke Runs
+
+Offline smoke，不连接实机，只验证 package、message 和 node 可启动：
+
+```bash
+A2_NET_IFACE=lo bash ros2/A2/docker/run_container.sh bash
+/opt/a2/build_a2_workspace.sh --lowlevel-only --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+ros2 pkg prefix unitree_hg
+ros2 pkg prefix a2_lowlevel
+timeout 3 ros2 run a2_lowlevel a2_lowlevel_smoke || true
+```
+
+Connected listen-only smoke：
+
+```bash
+A2_NET_IFACE=enp131s0 bash ros2/A2/docker/run_container.sh bash
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+ros2 topic echo /rt/lowstate --once
+ros2 run a2_lowlevel a2_lowlevel_smoke
+```
+
+Remote logging，仍然 listen-only、不发布 command：
+
+```bash
+ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+  -p log_remote:=true \
+  -p remote_deadzone:=0.08
+```
+
+Policy remote run，默认仍需显式 `enable_motion=true`，且 `L2` gate 控制 nonzero command：
+
+```bash
+/opt/a2/build_a2_workspace.sh --policy --cmake-release
+source /work/projects/AliengoSim2Real/ros2/install/setup.bash
+ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+  -p enable_motion:=true \
+  -p command_source:=remote \
+  -p max_remote_vx:=0.4 \
+  -p max_remote_vy:=0.25 \
+  -p max_remote_yaw:=0.6
+```
+
+Unitree SDK2 smoke binaries are built in `/opt/unitree/unitree_sdk2/build/bin` inside the image. Use them only as official SDK diagnostics, for example checking SDK2 topic/service readiness before low-level A2 policy testing. They are not linked into `a2_lowlevel`.
+
+## Docker Migration
+
+保存镜像：
+
+```bash
+docker save a2-humble-deploy:2026-06-05 | gzip > a2-humble-deploy_2026-06-05.tar.gz
+```
+
+导入镜像：
+
+```bash
+gunzip -c a2-humble-deploy_2026-06-05.tar.gz | docker load
+```
+
+也可以用 `docker tag` 标记稳定版本：
+
+```bash
+docker tag a2-humble-deploy:2026-06-05 a2-humble-deploy:validated-on-lt5
+```
+
 ## Deploy Machine Info
 
 调整 A2 deployment chain 前，建议先在真实部署机上采集一次机器、网络、ROS2、Unitree repo 和 A2 package readiness 信息。该报告用于判断 deploy machine 的 ROS2 distro、CycloneDDS/RMW 配置、Unitree SDK2/ROS2 checkout 状态、`unitree_hg` interfaces、网卡网段和基础 build/runtime tools 是否满足 A2 low-level chain 的要求。
 
-默认输出 Markdown 到 stdout，可重定向保存为 `DeployMachineINFO.md`：
+当前收到的 `ros2/A2/DeployMachineINFO.md` 显示部署机为 `lt5.precognition.team` / user `baoquanc`，host OS 是 Ubuntu 24.04.3，host 未安装 `/opt/ros`，Unitree repos 已在 `/home/baoquanc/Downloads/WorkSpace/projects/third_party/unitree`，并且 refs 符合 Dockerfile pin。Docker deployment 因此固定使用 Ubuntu 22.04 + ROS2 Humble container，而不是要求 host 原生安装 Humble。
+
+默认输出 Markdown 到 stdout，可重定向保存为 `ros2/A2/DeployMachineINFO.md`：
 
 ```bash
 cd /path/to/AliengoSim2Real
-bash ros2/A2/scripts/collect_deploy_machine_info.sh > DeployMachineINFO.md
+bash ros2/A2/scripts/collect_deploy_machine_info.sh > ros2/A2/DeployMachineINFO.md
 ```
 
 如果部署机已连接 Unitree/A2 网络，可额外执行短 ping 检测 `192.168.123.161`、`192.168.123.162`、`192.168.124.162`：
 
 ```bash
-bash ros2/A2/scripts/collect_deploy_machine_info.sh --ping > DeployMachineINFO.md
+bash ros2/A2/scripts/collect_deploy_machine_info.sh --ping > ros2/A2/DeployMachineINFO.md
 ```
 
 如果 Unitree sources 不在默认 `$HOME/third_party/unitree`，显式指定 root：
@@ -64,7 +307,7 @@ bash ros2/A2/scripts/collect_deploy_machine_info.sh --ping > DeployMachineINFO.m
 ```bash
 bash ros2/A2/scripts/collect_deploy_machine_info.sh \
   --unitree-root /path/to/unitree \
-  > DeployMachineINFO.md
+  > ros2/A2/DeployMachineINFO.md
 ```
 
 脚本默认启用 `--no-sensitive` 行为，不 dump 全量 env；只输出 `ROS_DISTRO`、`RMW_IMPLEMENTATION`、`CYCLONEDDS_URI` 的受限摘要和必要 command/path/version 信息。采集失败的 probe 会标记为 `MISSING` / `UNAVAILABLE` / `FAILED` 并继续，适合在非 ROS 或 macOS 环境先做 smoke。
