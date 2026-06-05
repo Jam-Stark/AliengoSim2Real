@@ -119,6 +119,10 @@ Ideal result：
 image-found
 ```
 
+如果旧 container 内 `/opt/a2/build_a2_workspace.sh` 曾因
+`AMENT_TRACE_SETUP_FILES: unbound variable` 失败，先重新 build image；该 helper 在
+Docker build 时复制进 image，旧 image 不会自动获得修复。
+
 ## 4. Preflight After Image
 
 image build 后增加 `--container-check`，验证 container 内 ROS2 / Unitree message

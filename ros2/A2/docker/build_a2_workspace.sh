@@ -52,10 +52,37 @@ done
 
 source_if_present() {
   local setup_file="$1"
-  if [ -f "$setup_file" ]; then
-    # shellcheck disable=SC1090
-    source "$setup_file"
+  if [ ! -f "$setup_file" ]; then
+    return 0
   fi
+
+  local nounset_was_on=0
+  local errexit_was_on=0
+  case "$-" in
+    *u*) nounset_was_on=1 ;;
+  esac
+  case "$-" in
+    *e*) errexit_was_on=1 ;;
+  esac
+
+  set +u
+  set +e
+  # shellcheck disable=SC1090
+  source "$setup_file"
+  local source_status=$?
+
+  if [ "$nounset_was_on" -eq 1 ]; then
+    set -u
+  else
+    set +u
+  fi
+  if [ "$errexit_was_on" -eq 1 ]; then
+    set -e
+  else
+    set +e
+  fi
+
+  return "$source_status"
 }
 
 source_if_present /opt/ros/humble/setup.bash

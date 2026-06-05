@@ -9,8 +9,8 @@ ENV UNITREE_SDK2_ROOT=/opt/unitree/unitree_sdk2
 ENV UNITREE_SDK2_PYTHON_ROOT=/opt/unitree/unitree_sdk2_python
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ENV Torch_DIR=/opt/libtorch/share/cmake/Torch
-ENV CMAKE_PREFIX_PATH=/opt/libtorch:${CMAKE_PREFIX_PATH}
-ENV LD_LIBRARY_PATH=/opt/libtorch/lib:${LD_LIBRARY_PATH}
+ENV CMAKE_PREFIX_PATH=/opt/libtorch:${CMAKE_PREFIX_PATH:-}
+ENV LD_LIBRARY_PATH=/opt/libtorch/lib:${LD_LIBRARY_PATH:-}
 ENV PATH=/opt/unitree/unitree_sdk2/install/bin:/opt/unitree/unitree_sdk2/build/bin:${PATH}
 
 ARG UNITREE_ROS2_REF=5204e6e
