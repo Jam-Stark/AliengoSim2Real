@@ -248,7 +248,8 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
   -p remote_deadzone:=0.08
 ```
 
-Policy remote run，默认仍需显式 `enable_motion=true`，且 `L2` gate 控制 nonzero command：
+Policy remote run，默认仍需显式 `enable_motion=true`。PolicyActive 中 valid remote
+sticks 会在 deadzone 后直接映射 locomotion command；`L2` 不再作为 locomotion gate：
 
 ```bash
 /opt/a2/build_a2_workspace.sh --policy --cmake-release
@@ -589,8 +590,6 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `standup_kp_start` / `standup_kd_start`：默认 `3.0` / `0.5`。
 - `standup_final_gain_scale`：默认 `1.0`，stand-up 最终 holder gain 相对 policy
   PD gain 的 scale。
-- `standup_require_l2_released_for_handover`：默认 `true`，second `A` handover
-  前要求 `L2` release。
 - `state_timeout_ms`：默认 `200`，沿用 `A2LowLevelInterface` fresh-state 判断。
 - `lowstate_topic`：默认 `lowstate`，ROS2 graph 通常显示为 `/lowstate`。
 - `lowcmd_topic`：默认 `lowcmd`，ROS2 graph 通常显示为 `/lowcmd`。
@@ -603,7 +602,10 @@ cmd_vy  = -lx * max_remote_vy
 cmd_yaw = -rx * max_remote_yaw
 ```
 
-`ry` 不参与 command，只在 debug log 中保留。Remote 只作为 command provider 和 safety gate；不会直接写 `LowCmd`，policy output 仍然只经过 `A2LowLevelInterface::publish_joint_commands()`。
+PolicyActive 中 valid sticks 在 deadzone 后始终按上述公式映射 command，不要求按住
+`L2`。`ry` 不参与 command，只在 debug log 中保留。Remote 只作为 command provider 和
+safety input；不会直接写 `LowCmd`，policy output 仍然只经过
+`A2LowLevelInterface::publish_joint_commands()`。
 
 ### Stand-Up Handover
 
@@ -614,14 +616,17 @@ cmd_yaw = -rx * max_remote_yaw
 2. `StandUpInterpolating`：记录当前 joint q，按 training order 插值到
    `policy.json` 的 `default_joint_pos`；rear training indices
    `2,3,6,7,10,11` 使用 lead，front indices `0,1,4,5,8,9` 使用 lag。
-3. `StandHoldWaitingForA`：持续发布 default stand pose，等待 second `A`。
+3. `StandHoldWaitingForA`：持续发布 default stand pose，等待 second `A`；接受 second
+   `A` 前仍要求 `lx/rx/ly` 在 deadzone 后为 zero。
 4. `PolicyWarmupHold`：继续发布 default stand pose，同时填满 policy history；
    history warm 后先做一次 action dim/finite validation，本 cycle 不发布 policy action。
 5. `PolicyActive`：下一 cycle 才允许 normal policy action publish。
 
-`Select` 或 `L2+B` 在任意 phase 触发 local stop；`enable_motion=true` 时发布 zero
-LowCmd，`enable_motion=false` 时只 reset runtime。stand-up / hold / warmup 阶段额外支持
-`B` rising edge cancel，cancel 后回到 `IdleBlocked`。
+`Select` 是 primary local stop，在任意 phase 触发 local stop。`L2+B` 保留为附加 local
+stop path，但由于 A2 R3 `L2` decode 曾出现不可靠，现场应优先使用 `Select`。local stop 在
+`enable_motion=true` 时发布 zero LowCmd，`enable_motion=false` 时只 reset runtime。
+stand-up / hold / warmup 阶段额外支持 `B` rising edge cancel，cancel 后回到
+`IdleBlocked`。
 
 ## Safety
 
@@ -643,10 +648,15 @@ LowCmd，`enable_motion=false` 时只 reset runtime。stand-up / hold / warmup �
 
 这些条件下 node 不发布 motion command。
 
-Remote safety gate：
+Remote safety handling：
 
-- `L2` 必须按住才允许 nonzero policy command；未按住时 active command 强制为 `[0,0,0]`。
-- `Select` 或 `L2+B` 触发 local stop：清空 policy/history/action runtime，并要求 release 后重新 fresh-state + history warmup。`enable_motion=false` 时只 reset runtime，不发布任何 LowCmd；`enable_motion=true` 时才调用 `publish_zero()` 发布显式 zero/stop LowCmd，不发布 policy motion command。
+- PolicyActive 中不再使用 `L2` 作为 locomotion command gate；valid remote sticks 在
+  deadzone 后直接映射到 `cmd_vx/cmd_vy/cmd_yaw`。
+- `Select` 是 primary local stop：清空 policy/history/action runtime，并要求重新
+  two-A handover / fresh-state + history warmup。`L2+B` 保留为附加 local stop path，但
+  不应作为现场主要 stop 手段。`enable_motion=false` 时只 reset runtime，不发布任何
+  LowCmd；`enable_motion=true` 时才调用 `publish_zero()` 发布显式 zero/stop LowCmd，
+  不发布 policy motion command。
 - stand-up / hold / warmup 阶段 `B` rising edge 可 cancel，清空 handover runtime；`enable_motion=true` 时发布 zero LowCmd。
 
 ## CRC
@@ -666,10 +676,12 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 当前 A2 R3 remote layout 来自 Unitree SDK2 sample，仍需在部署机或实机 configured lowstate topic（默认 `/lowstate`）的 `wireless_remote[40]` 上验证：
 
 - `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印对应 `lx/rx/ry/ly` 和 button names。
-- `L2` gate release 时 `a2_policy_deploy command_source=remote` 只给 policy command `[0,0,0]`。
-- `L2` held 时 mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- `a2_policy_deploy command_source=remote` 在 PolicyActive 中不要求 `L2`；valid sticks
+  在 deadzone 后直接进入 policy command。
+- sticks mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
 - `policy-enable-remote` 使用 two-A sequence：first `A` stand-up、holder default pose、
-  second `A` warmup/handover、下一 cycle policy active。
-- `Select` 与 `L2+B` 会触发 local stop 并要求重新 two-A handover；stand-up / hold /
-  warmup 阶段 `B` 可 cancel；只有 `enable_motion=true` 的 motion path 会发布 zero LowCmd。
+  second `A` 需要 `lx/rx/ly` centered 后才进入 warmup/handover，下一 cycle policy active。
+- `Select` 是 primary local stop；`L2+B` 只是附加 local stop path。local stop 会要求重新
+  two-A handover；stand-up / hold / warmup 阶段 `B` 可 cancel；只有 `enable_motion=true`
+  的 motion path 会发布 zero LowCmd。
 - 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop。

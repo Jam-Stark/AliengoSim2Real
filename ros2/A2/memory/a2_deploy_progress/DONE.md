@@ -71,8 +71,8 @@
 - [x] 实现 A2 remote decode utility：从 `wireless_remote[40]` 按 Unitree SDK2 sample offsets `lx=4`、`rx=8`、`ry=12`、`ly=20` decode little-endian `float32`，并按 byte `2/3` bit layout decode buttons。
 - [x] remote decode 增加 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard；invalid stick data 不进入 policy command。
 - [x] `a2_lowlevel_smoke` 增加 `log_remote` listen-only logging，打印 sticks 和 button names，默认仍不发布 command。
-- [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、`L2` gate、`Select` / `L2+B` local stop、runtime reset 和 `enable_motion=true` zero stop。
-- [x] 更新 `ros2/A2/README.md` remote build/run、button gate、joystick mapping、safety limits 和 deploy machine validation checklist。
+- [x] `a2_policy_deploy` 增加 `command_source=static|remote`，保留 static command params，并实现 remote mapping、remote local stop、runtime reset 和 `enable_motion=true` zero stop。
+- [x] 更新 `ros2/A2/README.md` remote build/run、joystick mapping、safety limits 和 deploy machine validation checklist。
 
 ## 2026-06-05 18:14 HKT
 
@@ -155,6 +155,13 @@
 
 - [x] 实现 A2 Stand-Up + Policy Handover gate：`a2_policy_deploy` 默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下按 `IdleBlocked -> StandUpInterpolating -> StandHoldWaitingForA -> PolicyWarmupHold -> PolicyActive` 执行 two-A handover。
 - [x] stand-up / holder / warmup command 全部只构造 `A2JointCommand` 并调用 `A2LowLevelInterface::publish_joint_commands()`；没有直接写 `unitree_hg::msg::LowCmd`，继续保留 fresh-state、mode routing 和 CRC boundary。
-- [x] 新增 stand-up params：`standup_stage1_steps=150`、`standup_stage2_steps=150`、`standup_rear_alpha_lead=0.10`、`standup_front_alpha_lag=0.04`、`standup_kp_start=3.0`、`standup_kd_start=0.5`、`standup_final_gain_scale=1.0`、`standup_require_l2_released_for_handover=true`，并在 runtime refresh 中校验 invalid params。
+- [x] 新增 stand-up params：`standup_stage1_steps=150`、`standup_stage2_steps=150`、`standup_rear_alpha_lead=0.10`、`standup_front_alpha_lag=0.04`、`standup_kp_start=3.0`、`standup_kd_start=0.5`、`standup_final_gain_scale=1.0`，并在 runtime refresh 中校验 invalid params。
 - [x] remote safety 更新：`Select` / `L2+B` 在任意 phase local stop；stand-up / holder / warmup 阶段 `B` rising edge cancel；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下才发布 zero LowCmd。
 - [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md` Section 10 / acceptance checklist、`README.md` policy/safety sections 和 A2 memory TODO。
+
+## 2026-06-05 23:18 HKT
+
+- [x] 取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，`A2PolicyDeployNode::update_command_from_remote()` 不再因 `remote.buttons.l2=false` 强制 command zero，也不再输出 `L2 gate is not held`。
+- [x] stand-up second-`A` handover 不再要求 `L2` release；仍要求 `lx/rx/ly` sticks 在 deadzone 后为 zero，才进入 `PolicyWarmupHold`。
+- [x] 保留 local stop safety：`Select` 是 primary local stop；`L2+B` 仅保留为附加 stop path；stand-up / hold / warmup 阶段 `B` rising edge cancel 不变。
+- [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md`、`README.md` 和 A2 memory TODO/DONE/description，移除旧 `L2` gate 文案。

@@ -32,7 +32,12 @@
 - 现场只保留一个低层控制 publisher，不要并行运行其他 configured LowCmd topic
   publisher（默认 `/lowcmd`）。
 
-重要说明：当前 `a2_policy_deploy command_source=remote` 中，`L2` release 会把 locomotion command 强制为 `[0,0,0]`；但 `enable_motion=true` 下 first `A` 后 stand-up/holder 会持续发布 standing joint targets，second `A` handover 后 policy 也可能继续发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion path。
+重要说明：当前 `a2_policy_deploy command_source=remote` 已取消 `L2` locomotion gate；
+PolicyActive 中 valid sticks 会在 deadzone 后直接映射 locomotion command。`enable_motion=true`
+下 first `A` 后 stand-up/holder 会持续发布 standing joint targets，second `A` handover 后
+policy 也可能继续发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion
+path。`Select` 是 primary local stop；`L2+B` 只保留为附加 stop path，因为 A2 R3 `L2`
+decode 曾出现不可靠。
 
 ## 1. Host Network and Docker Entry
 
@@ -451,8 +456,9 @@ Ideal result：
 command source，但 `enable_motion=false`，同时 observer 确认没有任何 configured
 LowCmd topic message（默认 `/lowcmd`）。publish path 仍有 `enable_motion`、fresh-state、
 history warmup、NaN/Inf、CRC/mode routing 等 guards。
-即使 operator 在此阶段按 `Select` 或 `L2+B` 请求 local stop，policy node 也只 reset
-runtime，不发布 zero LowCmd；no-lowcmd observer 会验证这个 listen-only boundary。
+即使 operator 在此阶段按 primary local stop `Select`，或按附加 stop path `L2+B` 请求
+local stop，policy node 也只 reset runtime，不发布 zero LowCmd；no-lowcmd observer 会验证
+这个 listen-only boundary。
 
 ```bash
 A2/scripts/a2_real_robot_test.sh policy-listen-remote 20
@@ -465,7 +471,8 @@ Ideal result：
 - policy 输出 `Validated A2 policy contract...`。
 - policy 输出 `enable_motion=false` 和 `command_source=remote`。
 - policy history warmup 后仍输出 `A2 policy publish refused because enable_motion=false.`。
-- 按 `Select` 或 `L2+B` 时 policy 只记录 local stop / runtime reset，不发布 zero LowCmd。
+- 按 `Select` 时 policy 只记录 local stop / runtime reset，不发布 zero LowCmd；`L2+B`
+  仍可作为附加 stop path，但现场 primary stop 是 `Select`。
 - no-lowcmd observer 会以 `policy duration + 2s` 运行，覆盖完整 policy runtime 和收尾窗口。
 - no-lowcmd observer 输出 `PASS: no /lowcmd messages observed`，或显示 operator 配置的
   `A2_LOWCMD_TOPIC`。
@@ -481,9 +488,11 @@ Ideal result：
 - `motion-check` 显示内置 motion mode 已 release，或 App 已关闭内置 motion service。
 - 现场没有其他 configured LowCmd topic publisher（默认 `/lowcmd`）。
 - 遥控器 operator 知道 two-A sequence：first `A` 起身，holder 保持 policy default pose；second `A` 才开始 policy warmup/handover。
-- second `A` 前 release `L2` 并让 `lx/rx/ly` stick 在 deadzone 后为 zero；否则 node 会继续 holder。
-- `L2` release 只强制 locomotion command `[0,0,0]`；stand-up/holder/policy 仍可能发布 standing joint targets。
-- `Select` 或 `L2+B` 会触发 local stop、runtime reset，并调用 `publish_zero()` 发布 zero LowCmd；stand-up / hold / warmup 阶段 `B` rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
+- second `A` 前让 `lx/rx/ly` stick 在 deadzone 后为 zero；否则 node 会继续 holder。
+- `L2` 不再强制 locomotion command 为 zero；PolicyActive 中 valid sticks 会直接映射 command。
+- `Select` 是 primary local stop，会触发 local stop、runtime reset，并调用 `publish_zero()`
+  发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
+  rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
 
 运行小速度上限的 remote policy：
 
@@ -507,11 +516,13 @@ Ideal result：
 - lowstate fresh；first `A` 后进入 `StandUpInterpolating`，每 50 steps 打印 stage/front_alpha/rear_alpha，完成后进入 default pose holder。
 - holder 阶段 second `A` 后进入 `PolicyWarmupHold`，持续发布 default stand pose，同时 history warm 到 `32` fresh frames。
 - history warm 后 node 先做一次 policy action dim/finite validation；下一 valid cycle 才进入 `PolicyActive` 并发布 policy action。
-- release `L2` 时 locomotion command 为 zero，但仍可能发布 standing target `LowCmd`。
-- held `L2` 后，遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- PolicyActive 中 centered sticks 对应 zero locomotion command；moving sticks 不要求
+  `L2` held。
+- 遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
 
-任何异常立即松开 `L2`、按 local stop 组合或 e-stop，并保存 logs。
+任何异常立即松开 sticks、按 primary local stop `Select` 或 e-stop，并保存 logs；`L2+B`
+只作为附加 stop path。
 
 ## 11. Acceptance Checklist
 

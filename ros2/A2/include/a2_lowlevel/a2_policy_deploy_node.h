@@ -145,7 +145,6 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   double standup_kp_start_ = 3.0;
   double standup_kd_start_ = 0.5;
   double standup_final_gain_scale_ = 1.0;
-  bool standup_require_l2_released_for_handover_ = true;
   StandupPhase standup_phase_ = StandupPhase::kIdleBlocked;
   int standup_step_ = 0;
   std::array<float, kTrainingJointCount> standup_start_pos_{};

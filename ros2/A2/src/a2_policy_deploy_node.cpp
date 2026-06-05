@@ -253,10 +253,6 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("standup_kd_start", 0.5);
   standup_final_gain_scale_ =
       this->declare_parameter<double>("standup_final_gain_scale", 1.0);
-  standup_require_l2_released_for_handover_ =
-      this->declare_parameter<bool>(
-          "standup_require_l2_released_for_handover", true);
-
   int state_timeout_ms = 200;
   this->get_parameter("state_timeout_ms", state_timeout_ms);
   state_timeout_ =
@@ -706,9 +702,6 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("standup_kd_start", standup_kd_start_);
   this->get_parameter("standup_final_gain_scale",
                       standup_final_gain_scale_);
-  this->get_parameter("standup_require_l2_released_for_handover",
-                      standup_require_l2_released_for_handover_);
-
   if (standup_stage1_steps_ < 1 || standup_stage2_steps_ < 1 ||
       !std::isfinite(standup_rear_alpha_lead_) ||
       !std::isfinite(standup_front_alpha_lag_) ||
@@ -822,14 +815,6 @@ bool A2PolicyDeployNode::update_command_from_remote(
       "A2 remote decode: lx=%.3f rx=%.3f ry=%.3f ly=%.3f buttons=%s",
       remote.lx, remote.rx, remote.ry, remote.ly, button_names.c_str());
 
-  if (!remote.buttons.l2) {
-    set_zero_command();
-    RCLCPP_INFO_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "A2 remote L2 gate is not held; policy command forced to [0,0,0].");
-    return true;
-  }
-
   cmd_vx_ = static_cast<double>(remote.ly) * max_remote_vx_;
   cmd_vy_ = -static_cast<double>(remote.lx) * max_remote_vy_;
   cmd_yaw_ = -static_cast<double>(remote.rx) * max_remote_yaw_;
@@ -938,11 +923,7 @@ bool A2PolicyDeployNode::handle_required_standup_remote(
 
     case StandupPhase::kStandHoldWaitingForA:
       if (edges.a_rising) {
-        if (standup_require_l2_released_for_handover_ && remote.buttons.l2) {
-          RCLCPP_WARN_THROTTLE(
-              this->get_logger(), *this->get_clock(), 1000,
-              "A2 stand-up handover refused: release L2 before second A.");
-        } else if (!remote_sticks_are_zero_for_handover(remote)) {
+        if (!remote_sticks_are_zero_for_handover(remote)) {
           RCLCPP_WARN_THROTTLE(
               this->get_logger(), *this->get_clock(), 1000,
               "A2 stand-up handover refused: sticks must be centered after "
@@ -1048,8 +1029,7 @@ bool A2PolicyDeployNode::publish_standup_interpolation() {
     RCLCPP_INFO(
         this->get_logger(),
         "A2 stand-up interpolation complete: holding policy default pose and "
-        "waiting for second A press. Release L2 and center sticks before "
-        "handover.");
+        "waiting for second A press. Center sticks before handover.");
   }
   return true;
 }

@@ -15,11 +15,11 @@
 
   - 先运行 `A2/scripts/a2_real_robot_test.sh remote-live`，确认 raw/display `lx/rx/ry/ly` 和 pressed buttons 能实时随 stick/button 变化。
   - 再运行旧 `remote` summary validation 和 `a2_lowlevel_smoke --ros-args -p log_remote:=true`，确认 decode range 与 button names 一致。
-  - `a2_policy_deploy --ros-args -p command_source:=remote` 中 `L2` release 强制 policy command `[0,0,0]`。
-  - `L2` held 时方向符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
-  - `policy-enable-remote` 默认 `require_standup_before_policy=true`：first `A` 触发 stand-up interpolation，holder 持续发布 policy default pose，second `A` 在 `L2` released 且 `lx/rx/ly` deadzone 后为 zero 时进入 warmup/handover。
+  - `a2_policy_deploy --ros-args -p command_source:=remote` 在 PolicyActive 中不要求 `L2`；valid sticks 在 deadzone 后直接进入 policy command。
+  - 不按 `L2` 时方向仍符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+  - `policy-enable-remote` 默认 `require_standup_before_policy=true`：first `A` 触发 stand-up interpolation，holder 持续发布 policy default pose，second `A` 在 `lx/rx/ly` deadzone 后为 zero 时进入 warmup/handover。
   - `PolicyWarmupHold` 持续发布 default stand pose，同时 history warm 到 `32` fresh frames；first policy action validation 通过后，下一 cycle 才进入 `PolicyActive` publish。
-  - `Select` 和 `L2+B` 能触发 local stop 并要求重新 two-A handover；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd。
+  - `Select` 是 primary local stop，`L2+B` 是附加 local stop path；local stop 能要求重新 two-A handover；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd。
   - stand-up / holder / warmup 阶段 `B` rising edge 能 cancel handover 并回到 `IdleBlocked`；`enable_motion=true` 下发布 zero LowCmd。
 
 ## 2026-06-05 19:49 HKT
@@ -36,7 +36,7 @@
   - guarded `motion-release enp131s0`
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
-  - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` warmup/handover、`Select` / `L2+B` local stop 和 `B` cancel。
+  - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` primary local stop、`L2+B` 附加 stop path 和 `B` cancel。
 
 ## 2026-06-05 20:10 HKT
 

@@ -670,7 +670,8 @@ policy_enable_remote() {
   echo "WARNING: enable_motion=true publishes LowCmd only after first A starts stand-up."
   echo "WARNING: first A = stand-up interpolation; holder keeps policy default pose."
   echo "WARNING: second A = handover warmup, then policy active on the next valid cycle."
-  echo "WARNING: L2 release forces zero locomotion command, but hold/policy standing targets can still publish."
+  echo "WARNING: L2 is not a locomotion gate; valid sticks map command directly after deadzone in PolicyActive."
+  echo "WARNING: Select is the primary local stop; L2+B is only an additional stop path if L2 decodes correctly."
   run_timeout_accept_124 policy_enable_remote "$duration" \
     ros2 run a2_lowlevel a2_policy_deploy --ros-args \
       -p lowstate_topic:="$lowstate_topic" \
