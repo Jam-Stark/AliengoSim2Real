@@ -1,0 +1,143 @@
+{
+  "action_clip": 100.0,
+  "action_dim": 12,
+  "action_scale": 0.25,
+  "base_ang_vel_scale": 0.25,
+  "base_body_name": "base_link",
+  "base_force_kd": 160.0,
+  "base_force_scale": 0.01,
+  "command_scales": [
+    2.0,
+    2.0,
+    0.25
+  ],
+  "control_decimation": 4,
+  "default_joint_pos": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0
+  ],
+  "default_locomotion_cmd": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "gait_frequency_hz": 2.0,
+  "history_length": 32,
+  "joint_actuator_gains": {
+    "FL_calf_joint": [
+      220.0,
+      9.0
+    ],
+    "FL_hip_joint": [
+      140.0,
+      5.0
+    ],
+    "FL_thigh_joint": [
+      140.0,
+      5.0
+    ],
+    "FR_calf_joint": [
+      220.0,
+      9.0
+    ],
+    "FR_hip_joint": [
+      140.0,
+      5.0
+    ],
+    "FR_thigh_joint": [
+      140.0,
+      5.0
+    ],
+    "RL_calf_joint": [
+      220.0,
+      9.0
+    ],
+    "RL_hip_joint": [
+      140.0,
+      5.0
+    ],
+    "RL_thigh_joint": [
+      140.0,
+      5.0
+    ],
+    "RR_calf_joint": [
+      220.0,
+      9.0
+    ],
+    "RR_hip_joint": [
+      140.0,
+      5.0
+    ],
+    "RR_thigh_joint": [
+      140.0,
+      5.0
+    ]
+  },
+  "joint_names": [
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "RL_hip_joint",
+    "RR_hip_joint",
+    "FL_thigh_joint",
+    "FR_thigh_joint",
+    "RL_thigh_joint",
+    "RR_thigh_joint",
+    "FL_calf_joint",
+    "FR_calf_joint",
+    "RL_calf_joint",
+    "RR_calf_joint"
+  ],
+  "joint_vel_scale": 0.05,
+  "leg_action_dim": 12,
+  "obs_default_joint_pos": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5,
+    -1.0,
+    -1.0,
+    -1.0,
+    -1.0
+  ],
+  "obs_joint_names": [
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "RL_hip_joint",
+    "RR_hip_joint",
+    "FL_thigh_joint",
+    "FR_thigh_joint",
+    "RL_thigh_joint",
+    "RR_thigh_joint",
+    "FL_calf_joint",
+    "FR_calf_joint",
+    "RL_calf_joint",
+    "RR_calf_joint"
+  ],
+  "per_frame_obs_dim": 46,
+  "root_init_pos": [
+    0.0,
+    0.0,
+    0.55
+  ],
+  "root_init_quat": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "sim_dt": 0.005
+}
