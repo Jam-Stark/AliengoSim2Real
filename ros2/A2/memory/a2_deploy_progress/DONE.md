@@ -143,3 +143,10 @@
 - [x] MotionSwitcher helper compile 显式链接 `-lunitree_sdk2 -lddscxx -lddsc -pthread`，降低 header 修复后继续出现 DDS unresolved symbols 的风险。
 - [x] `motion-check` 仍保持 observe-only，只调用 `CheckMode`；`motion-release` 仍保持 `A2_ALLOW_RELEASE_MODE=1` env guard。helper compile 失败时脚本删除可能残留的 helper binary 并停止，不继续执行不存在的 helper。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`，记录 `TopicTraits.hpp` nested `ddscxx` include path 问题、DDS lib dirs、验证 `find` 命令和 compile smoke command。
+
+## 2026-06-05 22:32 HKT
+
+- [x] 根据部署机 `motion-check` 运行期 `free(): invalid pointer` 加固 MotionSwitcher helper runtime：生成 wrapper 并在执行 helper 前将 SDK2 lib dirs 前置到 `LD_LIBRARY_PATH`，避免已 source ROS2 Humble 后 ROS2/CycloneDDS `libddsc*.so` shadow SDK2 bundled DDS libs。
+- [x] `motion-check` helper compile 后打印 `ldd` 结果，便于确认 `libunitree_sdk2`、`libddscxx`、`libddsc` 解析到 `/opt/unitree/unitree_sdk2/install/lib` 或 `thirdparty/lib/$(uname -m)`。
+- [x] helper C++ 增加阶段日志：`ChannelFactory::Init`、`MotionSwitcherClient::Init`、`CheckMode`、`ChannelFactory::Release`；成功路径显式调用 `ChannelFactory::Release()`。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md`、`README.md` 和 A2 memory TODO，要求部署机复跑 `motion-check` 并回传 `ldd` / stage log；`motion-check` 仍不发布 LowCmd、不接入 policy。

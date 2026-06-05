@@ -267,9 +267,11 @@ MotionSwitcher real robot validation uses `A2/scripts/a2_real_robot_test.sh moti
 to compile a temporary SDK2 helper and call `CheckMode` only. The helper compile now prints all
 SDK2 include/lib dirs, includes nested DDS headers such as `install/include/ddscxx` or
 `thirdparty/include/ddscxx`, adds DDS lib dirs such as `install/lib` or
-`thirdparty/lib/$(uname -m)`, and links `-lddscxx -lddsc`. `motion-release` still requires
-`A2_ALLOW_RELEASE_MODE=1`; see `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` before any release or
-publish path.
+`thirdparty/lib/$(uname -m)`, links `-lddscxx -lddsc`, and runs through a wrapper that prefixes
+`LD_LIBRARY_PATH` with SDK2 lib dirs so ROS2/CycloneDDS libraries do not shadow SDK2 DDS libs.
+`motion-check` prints helper stages and still does not publish LowCmd. `motion-release` still
+requires `A2_ALLOW_RELEASE_MODE=1`; see `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` before any
+release or publish path.
 
 ## Docker Migration
 
