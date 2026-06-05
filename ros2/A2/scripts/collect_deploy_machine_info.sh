@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-UNITREE_ROOT="${HOME}/third_party/unitree"
+UNITREE_ROOT="/home/baoquanc/Downloads/WorkSpace/projects/third_party/unitree"
 DO_PING=0
 NO_SENSITIVE=1
 
@@ -13,7 +13,7 @@ Collect deployment-machine diagnostics for the A2 deployment chain and write a
 Markdown report to stdout.
 
 Options:
-  --unitree-root <path>  Unitree source root. Default: $HOME/third_party/unitree
+  --unitree-root <path>  Unitree source root. Default: /home/baoquanc/Downloads/WorkSpace/projects/third_party/unitree
   --ping                Run short ping checks for Unitree/A2 network addresses
   --no-sensitive        Avoid sensitive env dumps. This is the default behavior
   --help                Show this help
