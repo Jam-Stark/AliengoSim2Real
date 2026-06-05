@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <string>
 #include <type_traits>
 
 #include "a2_lowlevel/a2_crc.h"
@@ -54,6 +55,11 @@ bool is_nonzero_joint_command(const A2JointCommand &command) {
          command.kp != 0.0f || command.kd != 0.0f;
 }
 
+std::string non_empty_topic_or_default(const std::string &topic,
+                                       const char *default_topic) {
+  return topic.empty() ? std::string(default_topic) : topic;
+}
+
 }  // namespace
 
 A2LowLevelInterface::A2LowLevelInterface(const rclcpp::NodeOptions &options)
@@ -62,18 +68,27 @@ A2LowLevelInterface::A2LowLevelInterface(const rclcpp::NodeOptions &options)
       this->declare_parameter<int>("state_timeout_ms", 200);
   fresh_state_timeout_ =
       std::chrono::milliseconds(std::max(1, state_timeout_ms));
+  const std::string lowstate_topic = non_empty_topic_or_default(
+      this->declare_parameter<std::string>("lowstate_topic", "lowstate"),
+      "lowstate");
+  const std::string lowcmd_topic = non_empty_topic_or_default(
+      this->declare_parameter<std::string>("lowcmd_topic", "lowcmd"),
+      "lowcmd");
 
   low_cmd_pub_ =
-      this->create_publisher<unitree_hg::msg::LowCmd>("rt/lowcmd", 10);
+      this->create_publisher<unitree_hg::msg::LowCmd>(lowcmd_topic, 10);
   low_state_sub_ = this->create_subscription<unitree_hg::msg::LowState>(
-      "rt/lowstate", 10,
+      lowstate_topic, 10,
       [this](const unitree_hg::msg::LowState::SharedPtr msg) {
         low_state_callback(msg);
       });
+  lowcmd_topic_ = low_cmd_pub_->get_topic_name();
+  lowstate_topic_ = low_state_sub_->get_topic_name();
 
   RCLCPP_INFO(this->get_logger(),
-              "A2 low-level interface ready: pub rt/lowcmd, sub rt/lowstate, "
+              "A2 low-level interface ready: pub %s, sub %s, "
               "fresh_state_timeout=%ld ms",
+              lowcmd_topic_.c_str(), lowstate_topic_.c_str(),
               static_cast<long>(fresh_state_timeout_.count()));
 }
 
@@ -127,7 +142,8 @@ bool A2LowLevelInterface::publish_joint_commands(
   if (!fresh) {
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
-        "Refusing A2 joint command because rt/lowstate is missing or stale.");
+        "Refusing A2 joint command because %s is missing or stale.",
+        lowstate_topic_.c_str());
     return false;
   }
 

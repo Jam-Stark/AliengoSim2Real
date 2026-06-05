@@ -9,17 +9,6 @@
   - 离地或限功率 smoke。
   - 准备 hardware emergency stop。
 
-## 2026-06-05 18:14 HKT
-
-- [ ] 手动配置 A2 low-level subnet，并确认 `192.168.123.x` 连通；`192.168.124.x` 不是当前 SDK2 low-level DDS chain 使用的 subnet：
-
-  ```bash
-  sudo ip link set enp131s0 up
-  sudo ip addr flush dev enp131s0
-  sudo ip addr add 192.168.123.99/24 dev enp131s0
-  bash ros2/A2/docker/preflight.sh --iface enp131s0 --ping
-  ```
-
 ## 2026-06-05 16:52 HKT
 
 - [ ] 在部署机/实机验证 A2 R3 remote layout 和 safety gate：
@@ -33,7 +22,7 @@
 
 - [ ] 按 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 在部署机 + real A2 上运行 connected validation，并回传 `/tmp/a2_real_robot_tests` logs：
 
-  - `connected-preflight enp131s0`
+  - 用默认 `A2_LOWSTATE_TOPIC=/lowstate`、`A2_LOWCMD_TOPIC=/lowcmd` 重新运行 `connected-preflight enp131s0`
   - `lowstate`
   - `joints`
   - `remote`
@@ -51,4 +40,4 @@
   - 运行 `A2/scripts/a2_real_robot_test.sh joints`，必要时设置 `A2_JOINT_CSV` 记录 time series。
   - 每次只移动一个 joint，确认 `candidate_changed_joints` 与目标 label 一致。
   - 沿 sim/training convention 的 `+q` 方向移动，记录 `delta_from_start` sign 是否符合 no-inversion 假设。
-  - 如发现 mapping mismatch 或 per-joint sign inversion 需求，先修正并复验，再进入任何 `/rt/lowcmd` control path。
+  - 如发现 mapping mismatch 或 per-joint sign inversion 需求，先修正并复验，再进入任何 configured LowCmd topic（默认 `/lowcmd`）control path。

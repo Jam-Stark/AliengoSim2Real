@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include "unitree_hg/msg/low_cmd.hpp"
@@ -75,12 +76,16 @@ class A2LowLevelInterface : public rclcpp::Node {
   bool publish_zero();
   bool publish_joint_commands(
       const std::array<A2JointCommand, kA2JointCount> &commands);
+  const std::string &lowstate_topic() const { return lowstate_topic_; }
+  const std::string &lowcmd_topic() const { return lowcmd_topic_; }
 
  private:
   void low_state_callback(const unitree_hg::msg::LowState::SharedPtr msg);
 
   rclcpp::Publisher<unitree_hg::msg::LowCmd>::SharedPtr low_cmd_pub_;
   rclcpp::Subscription<unitree_hg::msg::LowState>::SharedPtr low_state_sub_;
+  std::string lowstate_topic_;
+  std::string lowcmd_topic_;
 
   mutable std::mutex state_mutex_;
   A2LowStateSnapshot latest_state_;

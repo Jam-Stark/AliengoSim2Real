@@ -6,6 +6,8 @@ repo_root="$(cd "$script_dir/../../.." && pwd)"
 ros_root="$repo_root/ros2"
 observer="$script_dir/a2_real_robot_observer.py"
 log_dir="${A2_TEST_LOG_DIR:-/tmp/a2_real_robot_tests}"
+lowstate_topic="${A2_LOWSTATE_TOPIC:-/lowstate}"
+lowcmd_topic="${A2_LOWCMD_TOPIC:-/lowcmd}"
 
 mkdir -p "$log_dir"
 
@@ -119,6 +121,7 @@ Usage:
 
 Run inside the A2 Docker container after entering with A2_NET_IFACE=<robot NIC>.
 Logs are written under A2_TEST_LOG_DIR, default /tmp/a2_real_robot_tests.
+Topic defaults: A2_LOWSTATE_TOPIC=/lowstate, A2_LOWCMD_TOPIC=/lowcmd.
 USAGE
 }
 
@@ -135,13 +138,42 @@ connected_preflight() {
     echo \"ROS_DISTRO=\${ROS_DISTRO:-UNSET}\"
     echo \"RMW_IMPLEMENTATION=\${RMW_IMPLEMENTATION:-UNSET}\"
     echo \"A2_NET_IFACE=\${A2_NET_IFACE:-UNSET}\"
+    echo \"A2_LOWSTATE_TOPIC=${lowstate_topic}\"
+    echo \"A2_LOWCMD_TOPIC=${lowcmd_topic}\"
     echo \"CYCLONEDDS_URI=\${CYCLONEDDS_URI:-UNSET}\"
     ip addr show '$iface'
     ping -c 5 192.168.123.161
     topics=\"\$(ros2 topic list)\"
     printf '%s\n' \"\$topics\"
-    if ! printf '%s\n' \"\$topics\" | grep -Eq '^/?rt/lowstate$'; then
-      echo 'ERROR: required topic /rt/lowstate is not visible.' >&2
+    topic_visible() {
+      local required=\"\$1\"
+      local slash=\"/\${required#/}\"
+      local bare=\"\${required#/}\"
+      local topic
+      while IFS= read -r topic; do
+        if [ \"\$topic\" = \"\$required\" ] || [ \"\$topic\" = \"\$slash\" ] || [ \"\$topic\" = \"\$bare\" ]; then
+          return 0
+        fi
+      done <<< \"\$topics\"
+      return 1
+    }
+    topic_info_if_visible() {
+      local topic=\"\$1\"
+      if topic_visible \"\$topic\"; then
+        ros2 topic info \"\$topic\" -v || ros2 topic info \"/\${topic#/}\" -v || true
+      else
+        echo \"topic \$topic not visible; skipping ros2 topic info -v\"
+      fi
+    }
+    topic_info_if_visible /lowstate
+    topic_info_if_visible /lf/lowstate
+    topic_info_if_visible /lowcmd
+    if ! topic_visible '${lowstate_topic}'; then
+      echo 'ERROR: required lowstate topic ${lowstate_topic} is not visible.' >&2
+      exit 3
+    fi
+    if ! topic_visible '${lowcmd_topic}'; then
+      echo 'ERROR: required lowcmd topic ${lowcmd_topic} is not visible.' >&2
       exit 3
     fi
     ros2 interface show unitree_hg/msg/LowState
@@ -153,7 +185,8 @@ lowstate() {
   local duration="${1:-10}"
   run_logged lowstate python3 "$observer" lowstate "$duration" \
     --min-hz "${A2_LOWSTATE_MIN_HZ:-50}" \
-    --max-gap-ms "${A2_LOWSTATE_MAX_GAP_MS:-250}"
+    --max-gap-ms "${A2_LOWSTATE_MAX_GAP_MS:-250}" \
+    --lowstate-topic "$lowstate_topic"
 }
 
 joints() {
@@ -162,6 +195,7 @@ joints() {
     joints "$duration"
     --print-period "${A2_JOINT_PRINT_PERIOD:-0.5}"
     --min-delta "${A2_JOINT_MIN_DELTA:-0.03}"
+    --lowstate-topic "$lowstate_topic"
   )
   if [ -n "${A2_JOINT_CSV:-}" ]; then
     args+=(--csv "$A2_JOINT_CSV")
@@ -171,7 +205,11 @@ joints() {
 
 remote() {
   local duration="${1:-15}"
-  local args=(remote "$duration" --deadzone "${A2_REMOTE_DEADZONE:-0.08}")
+  local args=(
+    remote "$duration"
+    --deadzone "${A2_REMOTE_DEADZONE:-0.08}"
+    --lowstate-topic "$lowstate_topic"
+  )
   if [ "${A2_REMOTE_ALLOW_ZERO:-0}" = "1" ]; then
     args+=(--allow-zero)
   fi
@@ -182,6 +220,8 @@ smoke_remote() {
   local duration="${1:-15}"
   run_timeout_accept_124 smoke_remote "$duration" \
     ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+      -p lowstate_topic:="$lowstate_topic" \
+      -p lowcmd_topic:="$lowcmd_topic" \
       -p log_remote:=true \
       -p remote_deadzone:="${A2_REMOTE_DEADZONE:-0.08}"
 }
@@ -343,19 +383,22 @@ motion_release() {
 
 zero_lowcmd() {
   local duration="${1:-8}"
-  require_env_flag A2_ALLOW_ZERO_LOWCMD "zero-lowcmd publishes explicit zero LowCmd frames to /rt/lowcmd."
+  require_env_flag A2_ALLOW_ZERO_LOWCMD "zero-lowcmd publishes explicit zero LowCmd frames to ${lowcmd_topic}."
 
   local obs_log smoke_status obs_status obs_pid
   obs_log="$(log_file zero_lowcmd_observer)"
   print_log_path "$obs_log"
   (
-    python3 "$observer" lowcmd-crc "$duration" --expect-zero --expect-state-mode 2>&1 | tee "$obs_log"
+    python3 "$observer" lowcmd-crc "$duration" --expect-zero --expect-state-mode \
+      --lowstate-topic "$lowstate_topic" --lowcmd-topic "$lowcmd_topic" 2>&1 | tee "$obs_log"
   ) &
   obs_pid=$!
   sleep 1
 
   run_timeout_accept_124 zero_lowcmd_smoke 3 \
     ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+      -p lowstate_topic:="$lowstate_topic" \
+      -p lowcmd_topic:="$lowcmd_topic" \
       -p publish_zero:=true \
       -p command_hz:=5.0
   smoke_status=$?
@@ -383,13 +426,16 @@ PY
   print_log_path "$obs_log"
   echo "[a2-real-test] no-lowcmd observer duration=${observer_duration}s covers policy duration=${duration}s"
   (
-    python3 "$observer" no-lowcmd "$observer_duration" 2>&1 | tee "$obs_log"
+    python3 "$observer" no-lowcmd "$observer_duration" \
+      --lowcmd-topic "$lowcmd_topic" 2>&1 | tee "$obs_log"
   ) &
   obs_pid=$!
   sleep 1
 
   run_timeout_accept_124 policy_listen_remote "$duration" \
     ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+      -p lowstate_topic:="$lowstate_topic" \
+      -p lowcmd_topic:="$lowcmd_topic" \
       -p enable_motion:=false \
       -p command_source:=remote
   policy_status=$?
@@ -412,6 +458,8 @@ policy_enable_remote() {
   echo "WARNING: L2 release forces zero locomotion command, but standing joint targets can still publish."
   run_timeout_accept_124 policy_enable_remote "$duration" \
     ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+      -p lowstate_topic:="$lowstate_topic" \
+      -p lowcmd_topic:="$lowcmd_topic" \
       -p enable_motion:=true \
       -p command_source:=remote \
       -p max_remote_vx:=0.10 \

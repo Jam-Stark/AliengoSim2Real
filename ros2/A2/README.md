@@ -131,7 +131,7 @@ ros2 pkg prefix a2_lowlevel
 timeout 3 ros2 run a2_lowlevel a2_lowlevel_smoke || true
 ```
 
-Mac offline validation 只能覆盖 Docker image、workspace build、ROS2 message availability、node startup 和 pure listen-only smoke。`--network host` 在 Docker Desktop 上不等价于 Linux host networking；A2 `enp131s0`、`192.168.123.x` DDS traffic、remote decode with real `rt/lowstate`、policy timing 和任何 low-level command/control 都必须回到部署机验证。
+Mac offline validation 只能覆盖 Docker image、workspace build、ROS2 message availability、node startup 和 pure listen-only smoke。`--network host` 在 Docker Desktop 上不等价于 Linux host networking；A2 `enp131s0`、`192.168.123.x` DDS traffic、remote decode with real ROS2 visible `/lowstate`、policy timing 和任何 low-level command/control 都必须回到部署机验证。
 
 `run_container.sh` 使用：
 
@@ -216,7 +216,7 @@ sudo ip addr flush dev enp131s0
 sudo ip addr add 192.168.123.99/24 dev enp131s0
 ```
 
-`192.168.124.x` 不是当前 SDK2 low-level DDS chain 使用的 subnet；`rt/lowstate` / `rt/lowcmd` 应走 `192.168.123.x`。
+`192.168.124.x` 不是当前 SDK2 low-level DDS chain 使用的 subnet；official DDS reference names `rt/lowstate` / `rt/lowcmd` 应走 `192.168.123.x`，当前 ROS2 backend 默认 visible topics 是 `/lowstate` / `/lowcmd`。
 
 ## Docker Smoke Runs
 
@@ -236,7 +236,7 @@ Connected listen-only smoke：
 ```bash
 A2_NET_IFACE=enp131s0 bash ros2/A2/docker/run_container.sh bash
 source /work/projects/AliengoSim2Real/ros2/install/setup.bash
-ros2 topic echo /rt/lowstate --once
+ros2 topic echo /lowstate --once
 ros2 run a2_lowlevel a2_lowlevel_smoke
 ```
 
@@ -314,12 +314,20 @@ bash ros2/A2/scripts/collect_deploy_machine_info.sh \
 
 ## Topic / Type
 
-- Subscribe: `rt/lowstate`
+- Subscribe default: `lowstate` parameter value, visible as `/lowstate` in the ROS2 graph
 - Type: `unitree_hg/msg/LowState`
-- Publish: `rt/lowcmd`
+- Publish default: `lowcmd` parameter value, visible as `/lowcmd` in the ROS2 graph
 - Type: `unitree_hg/msg/LowCmd`
 
-`A2LowLevelInterface` 会保存最近一次 `LowState` 的 `mode_pr`、`mode_machine`、`tick`、IMU quaternion/gyroscope、前 12 个 joint q/dq 和 `wireless_remote[40]`。发送非零 joint command 时必须先收到 fresh `rt/lowstate`，否则拒绝发布并 log warn。
+A2_Guide / Unitree DDS reference names 是 `rt/lowstate` / `rt/lowcmd`。当前部署机 real A2 的 ROS2 graph 可见 topic 是 `/lowstate` / `/lowcmd`，因此 `A2LowLevelInterface` 默认参数为 `lowstate_topic=lowstate`、`lowcmd_topic=lowcmd`。如现场 bridge 或 wrapper 暴露不同名字，可通过 ROS2 parameters 修改：
+
+```bash
+ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+  -p lowstate_topic:=/rt/lowstate \
+  -p lowcmd_topic:=/rt/lowcmd
+```
+
+`A2LowLevelInterface` 会保存最近一次 `LowState` 的 `mode_pr`、`mode_machine`、`tick`、IMU quaternion/gyroscope、前 12 个 joint q/dq 和 `wireless_remote[40]`。发送非零 joint command 时必须先收到 fresh configured lowstate topic，默认 `/lowstate`，否则拒绝发布并 log warn。
 
 ## 12 Motor Order
 
@@ -470,6 +478,8 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 - `publish_zero`：默认 `false`。为 `true` 时按 `command_hz` 发布 zero/stop command。
 - `stand_test`：默认 `false`。为 `true` 时只在 fresh state 下发布固定低刚度站立目标；若同时设置 `publish_zero`，`stand_test` 优先。
 - `state_timeout_ms`：默认 `200`。用于 fresh state 判断。
+- `lowstate_topic`：默认 `lowstate`，ROS2 graph 通常显示为 `/lowstate`。
+- `lowcmd_topic`：默认 `lowcmd`，ROS2 graph 通常显示为 `/lowcmd`。
 - `command_hz`：默认 `20`。用于 `publish_zero` 或 `stand_test` 的命令发送频率。
 - `log_remote`：默认 `false`。为 `true` 时打印 decoded sticks 和 button names。
 - `remote_deadzone`：默认 `0.08`。仅用于 remote decode logging。
@@ -514,6 +524,8 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `max_remote_vx` / `max_remote_vy` / `max_remote_yaw`：remote stick 映射上限，默认 `0.4`、`0.25`、`0.6`。
 - `remote_deadzone`：remote stick deadzone，默认 `0.08`。
 - `state_timeout_ms`：默认 `200`，沿用 `A2LowLevelInterface` fresh-state 判断。
+- `lowstate_topic`：默认 `lowstate`，ROS2 graph 通常显示为 `/lowstate`。
+- `lowcmd_topic`：默认 `lowcmd`，ROS2 graph 通常显示为 `/lowcmd`。
 
 Remote mapping：
 
@@ -534,7 +546,7 @@ cmd_yaw = -rx * max_remote_yaw
 `a2_policy_deploy` 的 publish refusal 条件：
 
 - `enable_motion=false`：node 仍监听 fresh `LowState`、更新 command provider、计算 observation 并 warm history，但在 `computeAction()` / `publish_joint_commands()` 前拒绝 motion publish
-- missing/stale `rt/lowstate`
+- missing/stale configured lowstate topic（默认 `/lowstate`）
 - `LowState`、observation 或 action 出现 `NaN` / `Inf`
 - `command_source` 非 `static` / `remote`
 - `command_source=remote` 时 remote stick decode invalid
@@ -562,7 +574,7 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 
 ## Deploy Machine Validation Checklist
 
-当前 A2 R3 remote layout 来自 Unitree SDK2 sample，仍需在部署机或实机 `rt/lowstate.wireless_remote[40]` 上验证：
+当前 A2 R3 remote layout 来自 Unitree SDK2 sample，仍需在部署机或实机 configured lowstate topic（默认 `/lowstate`）的 `wireless_remote[40]` 上验证：
 
 - `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印对应 `lx/rx/ry/ly` 和 button names。
 - `L2` gate release 时 `a2_policy_deploy command_source=remote` 只给 policy command `[0,0,0]`。

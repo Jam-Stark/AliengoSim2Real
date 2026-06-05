@@ -127,7 +127,8 @@ int main(int argc, char **argv) {
                                                                        remote_deadzone] {
     const auto state = node->latest_state();
     if (!state.has_state) {
-      RCLCPP_INFO(node->get_logger(), "Waiting for rt/lowstate...");
+      RCLCPP_INFO(node->get_logger(), "Waiting for %s...",
+                  node->lowstate_topic().c_str());
       return;
     }
 
@@ -169,7 +170,8 @@ int main(int argc, char **argv) {
         if (!node->has_fresh_state(state_timeout)) {
           RCLCPP_WARN_THROTTLE(
               node->get_logger(), *node->get_clock(), 2000,
-              "stand_test waiting for fresh rt/lowstate before publishing.");
+              "stand_test waiting for fresh %s before publishing.",
+              node->lowstate_topic().c_str());
           return;
         }
         node->publish_joint_commands(stand_command);

@@ -88,7 +88,9 @@ Ideal result：
 - 不应出现脚本修改 host network 的行为。
 
 不要在未连接 A2 时把 `192.168.124.x` 当作本链路的 low-level DDS subnet；当前
-`rt/lowstate` / `rt/lowcmd` path 使用 `192.168.123.x`。
+official DDS reference names `rt/lowstate` / `rt/lowcmd` 使用 `192.168.123.x`。
+本仓库 ROS2 backend 默认 visible topics 是 `/lowstate` / `/lowcmd`；旧 `/rt/...`
+不再是默认 ROS2 topic。
 
 ## 3. Build Docker Image
 
@@ -296,9 +298,9 @@ echo "exit=$?"
 
 Ideal result：
 
-- log 包含 `A2 low-level interface ready: pub rt/lowcmd, sub rt/lowstate`。
+- log 包含 `A2 low-level interface ready: pub /lowcmd, sub /lowstate`。
 - log 包含 `listen-only mode: no LowCmd will be published.`。
-- 每秒打印 `Waiting for rt/lowstate...`。
+- 每秒打印 `Waiting for /lowstate...`。
 - 进程因 `timeout 5` 退出，exit code 通常是 `124`。
 - 不应 crash，不应发布 motion command。
 
@@ -310,11 +312,11 @@ timeout 5 ros2 run a2_lowlevel a2_lowlevel_smoke || echo "timeout-or-nonzero=$?"
 
 ### 8.2 Fake LowState Publisher + Smoke
 
-Terminal A 启动 fake `rt/lowstate`：
+Terminal A 启动 fake `/lowstate`：
 
 ```bash
 source /work/projects/AliengoSim2Real/ros2/install/setup.bash
-ros2 topic pub -r 20 /rt/lowstate unitree_hg/msg/LowState '{}'
+ros2 topic pub -r 20 /lowstate unitree_hg/msg/LowState '{}'
 ```
 
 Ideal result：
@@ -332,14 +334,14 @@ timeout 8 ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p log_remote:=true 
 
 Ideal result：
 
-- log 从 `Waiting for rt/lowstate...` 变为包含 `tick=0 mode_pr=0 mode_machine=0`。
+- log 从 `Waiting for /lowstate...` 变为包含 `tick=0 mode_pr=0 mode_machine=0`。
 - `joint_q=[0.000, ...]`、`joint_dq=[0.000, ...]`。
 - `remote_sticks=[lx=0.000, rx=0.000, ry=0.000, ly=0.000] buttons=none`，或 remote default 相关 zero log。
 - 不 crash，不发布 motion command。
 
 ### 8.3 Policy Load / Listen-Only with Fake LowState
 
-保持 Terminal A fake `rt/lowstate` 运行。Terminal B 执行：
+保持 Terminal A fake `/lowstate` 运行。Terminal B 执行：
 
 ```bash
 source /work/projects/AliengoSim2Real/ros2/install/setup.bash
@@ -362,24 +364,24 @@ Ideal result：
 
 ### 8.4 Verify No LowCmd Under enable_motion=false
 
-Terminal A 保持 fake `rt/lowstate`。Terminal B 运行 policy listen-only。Terminal C 执行：
+Terminal A 保持 fake `/lowstate`。Terminal B 运行 policy listen-only。Terminal C 执行：
 
 ```bash
 source /work/projects/AliengoSim2Real/ros2/install/setup.bash
-timeout 5 ros2 topic echo /rt/lowcmd --once
+timeout 5 ros2 topic echo /lowcmd --once
 echo "exit=$?"
 ```
 
 Ideal result：
 
-- 5 秒内没有 `/rt/lowcmd` message。
+- 5 秒内没有 `/lowcmd` message。
 - `timeout` exit code 通常是 `124`。
 - 这说明 `enable_motion=false` 下没有 lowcmd publish。
 
 如果 shell 因 nonzero 中断，可用：
 
 ```bash
-timeout 5 ros2 topic echo /rt/lowcmd --once || echo "expected-timeout=$?"
+timeout 5 ros2 topic echo /lowcmd --once || echo "expected-timeout=$?"
 ```
 
 ### 8.5 Optional Zero-Command Path, Fake/No Hardware Only
@@ -392,7 +394,7 @@ Terminal A：
 
 ```bash
 source /work/projects/AliengoSim2Real/ros2/install/setup.bash
-timeout 5 ros2 topic echo /rt/lowcmd --once
+timeout 5 ros2 topic echo /lowcmd --once
 ```
 
 Terminal B：
@@ -420,9 +422,9 @@ Ideal result：
 - `unitree_hg/msg/LowCmd`、`LowState`、`MotorCmd` 字段与本文档一致。
 - `/opt/a2/build_a2_workspace.sh --lowlevel-only --cmake-release` 完成，`a2_lowlevel_smoke` 可运行。
 - `/opt/a2/build_a2_workspace.sh --policy --cmake-release` 完成，`a2_policy_deploy` 可运行。
-- no-lowstate smoke 能等待 `rt/lowstate` 且不 crash。
+- no-lowstate smoke 能等待 `/lowstate` 且不 crash。
 - fake lowstate smoke 能接收 default zero state；如 `{}` CLI limitation 触发，已记录并跳过，不误连硬件。
-- policy listen-only 在 `enable_motion=false` 下能 load policy / validate contract / warm history，且 `/rt/lowcmd` 无消息。
+- policy listen-only 在 `enable_motion=false` 下能 load policy / validate contract / warm history，且 `/lowcmd` 无消息。
 - optional zero-command path 未在 real hardware 上执行。
 - 实机 safety checklist 已准备：关闭 `ai_sport` / `ai_sports`、离地或限功率、hardware emergency stop。
 
@@ -432,8 +434,8 @@ Ideal result：
 
 - `enp131s0` 真实 NIC 是否正确接入 A2 network。
 - host 是否正确配置 `192.168.123.99/24`，A2 `192.168.123.x` 是否可达。
-- robot 是否持续发布真实 `rt/lowstate`。
-- `rt/lowcmd` CRC 在真实 Unitree A2 low-level path 中的行为。
+- robot 是否持续发布真实 ROS2 visible `/lowstate`。
+- `/lowcmd` CRC 在真实 Unitree A2 low-level path 中的行为。
 - `wireless_remote[40]` 的真实 byte layout、stick direction、button state。
 - `a2_lowlevel_smoke -p log_remote:=true` 的真实 remote decode。
 - `ai_sport` / `ai_sports` 关闭流程。

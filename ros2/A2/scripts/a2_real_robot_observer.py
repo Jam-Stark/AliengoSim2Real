@@ -33,6 +33,8 @@ JOINT_LABELS = (
 BUTTON_BYTE2 = ("R1", "L1", "Start", "Select", "R2", "L2", "F1", "F3")
 BUTTON_BYTE3 = ("A", "B", "X", "Y", "Up", "Right", "Down", "Left")
 STICK_NAMES = ("lx", "rx", "ry", "ly")
+DEFAULT_LOWSTATE_TOPIC = "/lowstate"
+DEFAULT_LOWCMD_TOPIC = "/lowcmd"
 
 rclpy = None
 Node = object
@@ -67,6 +69,14 @@ def spin_for(node: Node, duration: float) -> None:
     deadline = time.monotonic() + duration
     while time.monotonic() < deadline and rclpy.ok():
         rclpy.spin_once(node, timeout_sec=0.1)
+
+
+def add_lowstate_topic_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lowstate-topic", default=DEFAULT_LOWSTATE_TOPIC)
+
+
+def add_lowcmd_topic_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lowcmd-topic", default=DEFAULT_LOWCMD_TOPIC)
 
 
 def bytes_from_uint8_sequence(data: Sequence[int]) -> bytes:
@@ -295,7 +305,8 @@ def run_lowstate(args: argparse.Namespace) -> int:
         if not finite_values(collect_lowstate_floats(msg)):
             stats["nonfinite"] += 1
 
-    node.create_subscription(LowState, "/rt/lowstate", callback, 50)
+    node.create_subscription(LowState, args.lowstate_topic, callback, 50)
+    print(f"lowstate_topic={args.lowstate_topic}")
     spin_for(node, args.duration)
     node.destroy_node()
     rclpy.shutdown()
@@ -327,7 +338,7 @@ def run_lowstate(args: argparse.Namespace) -> int:
 
     failures = []
     if count == 0:
-        failures.append("no /rt/lowstate messages")
+        failures.append(f"no {args.lowstate_topic} messages")
     if hz < args.min_hz:
         failures.append(f"rate {hz:.2f} Hz below min {args.min_hz:.2f} Hz")
     if max_gap_ms > args.max_gap_ms:
@@ -437,8 +448,9 @@ def run_joints(args: argparse.Namespace) -> int:
                 )
             )
 
-    node.create_subscription(LowState, "/rt/lowstate", callback, 50)
+    node.create_subscription(LowState, args.lowstate_topic, callback, 50)
     print("joints_observe_only_no_lowcmd_publish=True")
+    print(f"lowstate_topic={args.lowstate_topic}")
     print(f"joint_labels={','.join(JOINT_LABELS)}")
     spin_for(node, args.duration)
     node.destroy_node()
@@ -492,7 +504,7 @@ def run_joints(args: argparse.Namespace) -> int:
 
     failures = []
     if int(stats["lowstate_count"]) == 0:
-        failures.append("no /rt/lowstate messages")
+        failures.append(f"no {args.lowstate_topic} messages")
     if int(stats["short_motor_state_count"]) > 0:
         failures.append(
             f"{stats['short_motor_state_count']} messages have motor_state length below "
@@ -507,7 +519,7 @@ def run_joints(args: argparse.Namespace) -> int:
         for failure in failures:
             print(f"FAIL: {failure}", file=sys.stderr)
         return 2
-    print("PASS: joint mapping/direction observe-only checks passed; no /rt/lowcmd was published")
+    print("PASS: joint mapping/direction observe-only checks passed; no lowcmd was published")
     return 0
 
 
@@ -561,7 +573,8 @@ def run_remote(args: argparse.Namespace) -> int:
             )
             last_buttons = button_state
 
-    node.create_subscription(LowState, "/rt/lowstate", callback, 50)
+    node.create_subscription(LowState, args.lowstate_topic, callback, 50)
+    print(f"lowstate_topic={args.lowstate_topic}")
     spin_for(node, args.duration)
     node.destroy_node()
     rclpy.shutdown()
@@ -577,7 +590,7 @@ def run_remote(args: argparse.Namespace) -> int:
 
     failures = []
     if count == 0:
-        failures.append("no /rt/lowstate messages for remote decode")
+        failures.append(f"no {args.lowstate_topic} messages for remote decode")
     if invalid_count > 0:
         failures.append(f"{invalid_count} remote packets contain invalid stick floats")
     if not args.allow_zero and not nonzero_seen:
@@ -636,8 +649,10 @@ def run_lowcmd_crc(args: argparse.Namespace) -> int:
                 f"crc_ok={crc_ok} zero_ok={zero_ok} mode_ok={mode_ok}"
             )
 
-    node.create_subscription(LowState, "/rt/lowstate", lowstate_callback, 50)
-    node.create_subscription(LowCmd, "/rt/lowcmd", lowcmd_callback, 50)
+    node.create_subscription(LowState, args.lowstate_topic, lowstate_callback, 50)
+    node.create_subscription(LowCmd, args.lowcmd_topic, lowcmd_callback, 50)
+    print(f"lowstate_topic={args.lowstate_topic}")
+    print(f"lowcmd_topic={args.lowcmd_topic}")
     spin_for(node, args.duration)
     node.destroy_node()
     rclpy.shutdown()
@@ -650,9 +665,9 @@ def run_lowcmd_crc(args: argparse.Namespace) -> int:
 
     failures = []
     if lowcmd_count == 0:
-        failures.append("no /rt/lowcmd messages")
+        failures.append(f"no {args.lowcmd_topic} messages")
     if args.expect_state_mode and not state_seen:
-        failures.append("no /rt/lowstate observed while checking mode_machine")
+        failures.append(f"no {args.lowstate_topic} observed while checking mode_machine")
     if crc_failures:
         failures.append(f"{crc_failures} LowCmd CRC mismatches")
     if zero_failures:
@@ -683,16 +698,17 @@ def run_no_lowcmd(args: argparse.Namespace) -> int:
             f"crc=0x{int(msg.crc) & 0xFFFFFFFF:08x}"
         )
 
-    node.create_subscription(LowCmd, "/rt/lowcmd", callback, 50)
+    node.create_subscription(LowCmd, args.lowcmd_topic, callback, 50)
+    print(f"lowcmd_topic={args.lowcmd_topic}")
     spin_for(node, args.duration)
     node.destroy_node()
     rclpy.shutdown()
 
     print(f"lowcmd_count={count}")
     if count:
-        print(f"FAIL: observed {count} /rt/lowcmd messages", file=sys.stderr)
+        print(f"FAIL: observed {count} {args.lowcmd_topic} messages", file=sys.stderr)
         return 2
-    print("PASS: no /rt/lowcmd messages observed")
+    print(f"PASS: no {args.lowcmd_topic} messages observed")
     return 0
 
 
@@ -700,36 +716,42 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="A2 real robot ROS2 observers")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    lowstate = subparsers.add_parser("lowstate", help="measure /rt/lowstate rate and freshness")
+    lowstate = subparsers.add_parser("lowstate", help="measure lowstate rate and freshness")
     lowstate.add_argument("duration", nargs="?", type=float, default=10.0)
     lowstate.add_argument("--min-hz", type=float, default=50.0)
     lowstate.add_argument("--max-gap-ms", type=float, default=250.0)
+    add_lowstate_topic_arg(lowstate)
     lowstate.set_defaults(func=run_lowstate)
 
     joints = subparsers.add_parser(
         "joints",
-        help="observe first-12 /rt/lowstate joint q/dq for order and direction validation",
+        help="observe first-12 lowstate joint q/dq for order and direction validation",
     )
     joints.add_argument("duration", nargs="?", type=float, default=15.0)
     joints.add_argument("--print-period", type=float, default=0.5)
     joints.add_argument("--min-delta", type=float, default=0.03)
     joints.add_argument("--csv")
+    add_lowstate_topic_arg(joints)
     joints.set_defaults(func=run_joints)
 
-    remote = subparsers.add_parser("remote", help="decode wireless_remote[40] from /rt/lowstate")
+    remote = subparsers.add_parser("remote", help="decode wireless_remote[40] from lowstate")
     remote.add_argument("duration", nargs="?", type=float, default=15.0)
     remote.add_argument("--deadzone", type=float, default=0.08)
     remote.add_argument("--allow-zero", action="store_true")
+    add_lowstate_topic_arg(remote)
     remote.set_defaults(func=run_remote)
 
-    lowcmd_crc = subparsers.add_parser("lowcmd-crc", help="verify /rt/lowcmd CRC and safety shape")
+    lowcmd_crc = subparsers.add_parser("lowcmd-crc", help="verify lowcmd CRC and safety shape")
     lowcmd_crc.add_argument("duration", nargs="?", type=float, default=8.0)
     lowcmd_crc.add_argument("--expect-zero", action="store_true")
     lowcmd_crc.add_argument("--expect-state-mode", action="store_true")
+    add_lowstate_topic_arg(lowcmd_crc)
+    add_lowcmd_topic_arg(lowcmd_crc)
     lowcmd_crc.set_defaults(func=run_lowcmd_crc)
 
-    no_lowcmd = subparsers.add_parser("no-lowcmd", help="fail if any /rt/lowcmd is observed")
+    no_lowcmd = subparsers.add_parser("no-lowcmd", help="fail if any lowcmd is observed")
     no_lowcmd.add_argument("duration", nargs="?", type=float, default=8.0)
+    add_lowcmd_topic_arg(no_lowcmd)
     no_lowcmd.set_defaults(func=run_no_lowcmd)
 
     return parser

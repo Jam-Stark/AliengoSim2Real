@@ -638,7 +638,8 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
   if (!has_fresh_state(state_timeout_)) {
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
-        "A2 policy publish refused because rt/lowstate is missing or stale.");
+        "A2 policy publish refused because %s is missing or stale.",
+        lowstate_topic().c_str());
     reset_runtime_state();
     return false;
   }

@@ -110,3 +110,9 @@
   - 记录 q start/end/min/max/range、max abs dq、周期性 q/dq/delta 快照、`candidate_changed_joints` 和 optional CSV time series。
   - `a2_real_robot_test.sh joints` 支持 `A2_JOINT_PRINT_PERIOD`、`A2_JOINT_MIN_DELTA`、`A2_JOINT_CSV`。
   - `A2_REAL_ROBOT_TEST.md` 已将逐关节 order/sign observe-only 验证放在 continuous lowstate 后、remote 前。
+
+## 2026-06-05 21:21 HKT
+
+- [x] 记录部署机 + real A2 connected-preflight 的 ROS2 topic namespace mismatch：网络和 DDS 正常，`enp131s0` UP、IP `192.168.123.222/24`、ping `192.168.123.161` 成功；ROS2 graph 可见 `/lowstate`、`/lowcmd`、`/lowstate_raw`、`/lf/lowstate`、`/wirelesscontroller`，没有 `/rt/lowstate`。
+- [x] 将 A2 ROS2 backend default topic 修正为 ROS2 visible `/lowstate` / `/lowcmd`：`A2LowLevelInterface` 参数 `lowstate_topic` / `lowcmd_topic` 默认 `lowstate` / `lowcmd`，并在 smoke/policy log 中使用实际 resolved topic。
+- [x] 更新 `a2_real_robot_observer.py`、`a2_real_robot_test.sh`、`A2_REAL_ROBOT_TEST.md`、`README.md`、`A2_DOCKER_BUILD_TEST.md`，默认走 `/lowstate` / `/lowcmd`，同时保留 official DDS `rt/lowstate` / `rt/lowcmd` 作为 reference name 和 override 说明。
