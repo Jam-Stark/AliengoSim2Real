@@ -150,3 +150,11 @@
 - [x] `motion-check` helper compile 后打印 `ldd` 结果，便于确认 `libunitree_sdk2`、`libddscxx`、`libddsc` 解析到 `/opt/unitree/unitree_sdk2/install/lib` 或 `thirdparty/lib/$(uname -m)`。
 - [x] helper C++ 增加阶段日志：`ChannelFactory::Init`、`MotionSwitcherClient::Init`、`CheckMode`、`ChannelFactory::Release`；成功路径显式调用 `ChannelFactory::Release()`。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md`、`README.md` 和 A2 memory TODO，要求部署机复跑 `motion-check` 并回传 `ldd` / stage log；`motion-check` 仍不发布 LowCmd、不接入 policy。
+
+## 2026-06-05 22:54 HKT
+
+- [x] 实现 A2 Stand-Up + Policy Handover gate：`a2_policy_deploy` 默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下按 `IdleBlocked -> StandUpInterpolating -> StandHoldWaitingForA -> PolicyWarmupHold -> PolicyActive` 执行 two-A handover。
+- [x] stand-up / holder / warmup command 全部只构造 `A2JointCommand` 并调用 `A2LowLevelInterface::publish_joint_commands()`；没有直接写 `unitree_hg::msg::LowCmd`，继续保留 fresh-state、mode routing 和 CRC boundary。
+- [x] 新增 stand-up params：`standup_stage1_steps=150`、`standup_stage2_steps=150`、`standup_rear_alpha_lead=0.10`、`standup_front_alpha_lag=0.04`、`standup_kp_start=3.0`、`standup_kd_start=0.5`、`standup_final_gain_scale=1.0`、`standup_require_l2_released_for_handover=true`，并在 runtime refresh 中校验 invalid params。
+- [x] remote safety 更新：`Select` / `L2+B` 在任意 phase local stop；stand-up / holder / warmup 阶段 `B` rising edge cancel；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下才发布 zero LowCmd。
+- [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md` Section 10 / acceptance checklist、`README.md` policy/safety sections 和 A2 memory TODO。

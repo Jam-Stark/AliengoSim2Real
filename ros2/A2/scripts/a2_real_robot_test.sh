@@ -126,6 +126,8 @@ Run inside the A2 Docker container after entering with A2_NET_IFACE=<robot NIC>.
 Logs are written under A2_TEST_LOG_DIR, default /tmp/a2_real_robot_tests.
 Topic defaults: A2_LOWSTATE_TOPIC=/lowstate, A2_LOWCMD_TOPIC=/lowcmd.
 no-lowcmd only observes the configured LowCmd topic and does not publish.
+policy-enable-remote uses the two-A handover: first A starts stand-up, the node
+holds the policy default pose, and second A starts warmup/policy handover.
 joints-live and remote-live are live observe-only tools: they subscribe only to
 the configured LowState topic and never publish LowCmd. Their duration defaults
 to 0, meaning run until Ctrl-C.
@@ -321,10 +323,17 @@ compile_motion_helper() {
   local sdk_root="${UNITREE_SDK2_ROOT:-/opt/unitree/unitree_sdk2}"
   local arch
   arch="$(uname -m)"
+  local arch_candidates=("$arch")
   local include_dirs=()
   local lib_dirs=()
   local sdk_lib_dir=""
   local helper_ld_path=""
+
+  if [ "$arch" = "arm64" ]; then
+    arch_candidates+=("aarch64")
+  elif [ "$arch" = "aarch64" ]; then
+    arch_candidates+=("arm64")
+  fi
 
   add_include_dir() {
     local dir="$1"
@@ -374,14 +383,25 @@ compile_motion_helper() {
   for candidate in \
     "$sdk_root/install/lib" \
     "$sdk_root/build/lib" \
-    "$sdk_root/build" \
-    "$sdk_root/lib/$arch" \
-    "$sdk_root/lib"; do
+    "$sdk_root/build"; do
     if dir_has_lib "$candidate" "unitree_sdk2"; then
       sdk_lib_dir="$candidate"
       break
     fi
   done
+  if [ -z "$sdk_lib_dir" ]; then
+    local arch_candidate
+    for arch_candidate in "${arch_candidates[@]}"; do
+      candidate="$sdk_root/lib/$arch_candidate"
+      if dir_has_lib "$candidate" "unitree_sdk2"; then
+        sdk_lib_dir="$candidate"
+        break
+      fi
+    done
+  fi
+  if [ -z "$sdk_lib_dir" ] && dir_has_lib "$sdk_root/lib" "unitree_sdk2"; then
+    sdk_lib_dir="$sdk_root/lib"
+  fi
   if [ -z "$sdk_lib_dir" ]; then
     echo "ERROR: libunitree_sdk2 not found under $sdk_root" >&2
     return 2
@@ -391,13 +411,15 @@ compile_motion_helper() {
     "$sdk_lib_dir" \
     "$sdk_root/install/lib" \
     "$sdk_root/build/lib" \
-    "$sdk_root/build" \
-    "$sdk_root/lib/$arch" \
-    "$sdk_root/lib" \
-    "$sdk_root/thirdparty/lib/$arch" \
-    "$sdk_root/thirdparty/lib"; do
+    "$sdk_root/build"; do
     add_lib_dir "$candidate"
   done
+  for arch_candidate in "${arch_candidates[@]}"; do
+    add_lib_dir "$sdk_root/lib/$arch_candidate"
+    add_lib_dir "$sdk_root/thirdparty/lib/$arch_candidate"
+  done
+  add_lib_dir "$sdk_root/lib"
+  add_lib_dir "$sdk_root/thirdparty/lib"
 
   local candidate
   for candidate in "${lib_dirs[@]}"; do
@@ -644,9 +666,11 @@ PY
 
 policy_enable_remote() {
   local duration="${1:-20}"
-  require_env_flag A2_ALLOW_ENABLE_MOTION "enable_motion=true is a real motion path and publishes LowCmd after policy warmup."
-  echo "WARNING: enable_motion=true publishes motion commands after warmup."
-  echo "WARNING: L2 release forces zero locomotion command, but standing joint targets can still publish."
+  require_env_flag A2_ALLOW_ENABLE_MOTION "enable_motion=true is a real motion path: first A publishes stand-up/hold LowCmd, second A starts handover warmup/policy."
+  echo "WARNING: enable_motion=true publishes LowCmd only after first A starts stand-up."
+  echo "WARNING: first A = stand-up interpolation; holder keeps policy default pose."
+  echo "WARNING: second A = handover warmup, then policy active on the next valid cycle."
+  echo "WARNING: L2 release forces zero locomotion command, but hold/policy standing targets can still publish."
   run_timeout_accept_124 policy_enable_remote "$duration" \
     ros2 run a2_lowlevel a2_policy_deploy --ros-args \
       -p lowstate_topic:="$lowstate_topic" \

@@ -19,7 +19,7 @@
 - `connected-preflight`、`no-lowcmd`、`lowstate`、`joints-live`、`joints`、`remote-live`、`remote`、`smoke-remote`、`motion-check`、`policy-listen-remote` 默认不发布 configured LowCmd topic message。
 - `motion-release` 会调用 Unitree `MotionSwitcherClient::ReleaseMode()`，必须显式设置 `A2_ALLOW_RELEASE_MODE=1`。
 - `zero-lowcmd` 会发布 zero `LowCmd`，必须显式设置 `A2_ALLOW_ZERO_LOWCMD=1`。
-- `policy-enable-remote` 是最后阶段，会设置 `enable_motion:=true` 并在 policy warmup 后发布 motion `LowCmd`，必须显式设置 `A2_ALLOW_ENABLE_MOTION=1`。
+- `policy-enable-remote` 是最后阶段，会设置 `enable_motion:=true`；first `A` 才开始 stand-up/hold `LowCmd`，second `A` 才进入 warmup/policy handover，必须显式设置 `A2_ALLOW_ENABLE_MOTION=1`。
 - 不运行 `stand_test`。
 - 不使用 `192.168.124.x` 做 SDK development；A2 SDK development 只走 `192.168.123.0/24`。
 
@@ -32,7 +32,7 @@
 - 现场只保留一个低层控制 publisher，不要并行运行其他 configured LowCmd topic
   publisher（默认 `/lowcmd`）。
 
-重要说明：当前 `a2_policy_deploy command_source=remote` 中，`L2` release 会把 locomotion command 强制为 `[0,0,0]`；但如果 `enable_motion=true` 且 history warmup 完成，policy 仍可能发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion path。
+重要说明：当前 `a2_policy_deploy command_source=remote` 中，`L2` release 会把 locomotion command 强制为 `[0,0,0]`；但 `enable_motion=true` 下 first `A` 后 stand-up/holder 会持续发布 standing joint targets，second `A` handover 后 policy 也可能继续发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion path。
 
 ## 1. Host Network and Docker Entry
 
@@ -480,8 +480,10 @@ Ideal result：
 
 - `motion-check` 显示内置 motion mode 已 release，或 App 已关闭内置 motion service。
 - 现场没有其他 configured LowCmd topic publisher（默认 `/lowcmd`）。
-- 遥控器 operator 知道：`L2` release 只强制 locomotion command `[0,0,0]`；policy 仍可能发布 standing joint targets。
-- `Select` 或 `L2+B` 会触发 local stop、history reset，并调用 `publish_zero()` 发布 zero LowCmd；该 zero stop 只属于 `enable_motion=true` 阶段。
+- 遥控器 operator 知道 two-A sequence：first `A` 起身，holder 保持 policy default pose；second `A` 才开始 policy warmup/handover。
+- second `A` 前 release `L2` 并让 `lx/rx/ly` stick 在 deadzone 后为 zero；否则 node 会继续 holder。
+- `L2` release 只强制 locomotion command `[0,0,0]`；stand-up/holder/policy 仍可能发布 standing joint targets。
+- `Select` 或 `L2+B` 会触发 local stop、runtime reset，并调用 `publish_zero()` 发布 zero LowCmd；stand-up / hold / warmup 阶段 `B` rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
 
 运行小速度上限的 remote policy：
 
@@ -502,7 +504,9 @@ max_remote_yaw:=0.15
 Ideal result：
 
 - policy contract validate 通过。
-- lowstate fresh，history warmup 完成。
+- lowstate fresh；first `A` 后进入 `StandUpInterpolating`，每 50 steps 打印 stage/front_alpha/rear_alpha，完成后进入 default pose holder。
+- holder 阶段 second `A` 后进入 `PolicyWarmupHold`，持续发布 default stand pose，同时 history warm 到 `32` fresh frames。
+- history warm 后 node 先做一次 policy action dim/finite validation；下一 valid cycle 才进入 `PolicyActive` 并发布 policy action。
 - release `L2` 时 locomotion command 为 zero，但仍可能发布 standing target `LowCmd`。
 - held `L2` 后，遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
@@ -525,7 +529,8 @@ Ideal result：
 - MotionSwitcher `CheckMode` 可读，`ReleaseMode` 或 App 能关闭 `ai_sports` / `ai_sport`。
 - `zero-lowcmd` CRC、zero shape、`mode_machine` follow state 全部 pass。
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
-- `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行。
+- `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`
+  stand-up、holder default pose、second `A` warmup/handover、local stop 和 `B` cancel。
 
 ## 12. Failure Logs to Collect
 

@@ -27,6 +27,8 @@ constexpr std::size_t kTrainingJointCountLocal = 12;
 constexpr double kStandingCmdVxThreshold = 0.1;
 constexpr double kStandingCmdVyThreshold = 0.1;
 constexpr double kStandingCmdYawThreshold = 0.2;
+constexpr double kRemoteZeroEpsilon = 1e-5;
+constexpr int kStandupLogStepInterval = 50;
 constexpr std::array<float, kTrainingJointCountLocal> kExpectedDefaultJointPos =
     {0.0f, 0.0f,  0.0f,  0.0f, 0.5f, 0.5f,
      0.5f, 0.5f, -1.0f, -1.0f, -1.0f, -1.0f};
@@ -178,6 +180,22 @@ bool is_finite_nonnegative(double value) {
   return std::isfinite(value) && value >= 0.0;
 }
 
+double smoothstep01(double value) {
+  const double x = std::clamp(value, 0.0, 1.0);
+  return x * x * (3.0 - 2.0 * x);
+}
+
+bool is_rear_training_joint(std::size_t training_idx) {
+  return training_idx == 2 || training_idx == 3 || training_idx == 6 ||
+         training_idx == 7 || training_idx == 10 || training_idx == 11;
+}
+
+bool remote_sticks_are_zero_for_handover(const A2RemoteState &remote) {
+  return std::abs(remote.lx) <= kRemoteZeroEpsilon &&
+         std::abs(remote.rx) <= kRemoteZeroEpsilon &&
+         std::abs(remote.ly) <= kRemoteZeroEpsilon;
+}
+
 std::string format_remote_button_names(const A2RemoteState &remote) {
   const auto names = pressed_a2_remote_button_names(remote);
   if (names.empty()) {
@@ -219,6 +237,25 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("max_remote_yaw", 0.6);
   remote_deadzone_ =
       this->declare_parameter<double>("remote_deadzone", 0.08);
+  require_standup_before_policy_ =
+      this->declare_parameter<bool>("require_standup_before_policy", true);
+  standup_stage1_steps_ =
+      this->declare_parameter<int>("standup_stage1_steps", 150);
+  standup_stage2_steps_ =
+      this->declare_parameter<int>("standup_stage2_steps", 150);
+  standup_rear_alpha_lead_ =
+      this->declare_parameter<double>("standup_rear_alpha_lead", 0.10);
+  standup_front_alpha_lag_ =
+      this->declare_parameter<double>("standup_front_alpha_lag", 0.04);
+  standup_kp_start_ =
+      this->declare_parameter<double>("standup_kp_start", 3.0);
+  standup_kd_start_ =
+      this->declare_parameter<double>("standup_kd_start", 0.5);
+  standup_final_gain_scale_ =
+      this->declare_parameter<double>("standup_final_gain_scale", 1.0);
+  standup_require_l2_released_for_handover_ =
+      this->declare_parameter<bool>(
+          "standup_require_l2_released_for_handover", true);
 
   int state_timeout_ms = 200;
   this->get_parameter("state_timeout_ms", state_timeout_ms);
@@ -474,20 +511,106 @@ A2PolicyDeployNode::build_low_level_commands(
   return commands;
 }
 
+std::array<A2JointCommand, kA2JointCount>
+A2PolicyDeployNode::build_standup_commands(double front_alpha,
+                                           double rear_alpha,
+                                           double kp_factor) const {
+  const double safe_front_alpha = std::clamp(front_alpha, 0.0, 1.0);
+  const double safe_rear_alpha = std::clamp(rear_alpha, 0.0, 1.0);
+  const double safe_kp_factor = std::clamp(kp_factor, 0.0, 1.0);
+
+  std::array<A2JointCommand, kA2JointCount> commands{};
+  for (std::size_t training_idx = 0; training_idx < kTrainingJointCount;
+       ++training_idx) {
+    const bool rear_joint = is_rear_training_joint(training_idx);
+    const double joint_alpha = rear_joint ? safe_rear_alpha : safe_front_alpha;
+    const double target =
+        static_cast<double>(standup_start_pos_[training_idx]) +
+        (static_cast<double>(contract_.default_joint_pos[training_idx]) -
+         static_cast<double>(standup_start_pos_[training_idx])) *
+            joint_alpha;
+    const double final_kp =
+        (training_idx < 8 ? 140.0 : 220.0) * standup_final_gain_scale_;
+    const double final_kd =
+        (training_idx < 8 ? 5.0 : 9.0) * standup_final_gain_scale_;
+    const double kp =
+        standup_kp_start_ + (final_kp - standup_kp_start_) * safe_kp_factor;
+    const double kd =
+        standup_kd_start_ + (final_kd - standup_kd_start_) * safe_kp_factor;
+
+    const std::size_t a2_idx = kTrainingToA2Index[training_idx];
+    auto &command = commands[a2_idx];
+    command.q = static_cast<float>(target);
+    command.dq = 0.0f;
+    command.tau = 0.0f;
+    command.kp = static_cast<float>(kp);
+    command.kd = static_cast<float>(kd);
+  }
+
+  return commands;
+}
+
 void A2PolicyDeployNode::control_loop() {
   if (!refresh_runtime_params()) {
     reset_runtime_state();
+    reset_standup_state();
     return;
   }
 
   log_enable_state_if_changed();
   log_command_source_if_changed();
 
+  if (!enable_motion_ && standup_phase_ != StandupPhase::kIdleBlocked) {
+    reset_runtime_state();
+    reset_standup_state();
+  }
+
   if (!ensure_motion_preconditions()) {
     return;
   }
 
-  if (!update_command_from_source(latest_state())) {
+  const auto state = latest_state();
+  A2RemoteState remote;
+  RemoteButtonEdges remote_edges;
+  const A2RemoteState *remote_for_command = nullptr;
+  if (command_source_ == CommandSource::kRemote) {
+    remote = decode_a2_remote(
+        state.wireless_remote, static_cast<float>(remote_deadzone_));
+    remote_for_command = &remote;
+
+    if (remote_requests_local_stop(remote)) {
+      handle_remote_local_stop(remote);
+      return;
+    }
+    if (!remote.valid) {
+      handle_invalid_remote_packet();
+      return;
+    }
+
+    remote_edges = update_remote_button_edges(remote);
+  }
+
+  if (require_standup_before_policy_ &&
+      command_source_ == CommandSource::kStatic && enable_motion_) {
+    set_zero_command();
+    reset_runtime_state();
+    reset_standup_state();
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 policy motion refused: require_standup_before_policy=true blocks "
+        "command_source=static. Use command_source=remote for two-A stand-up "
+        "handover, or explicitly set require_standup_before_policy=false.");
+    return;
+  }
+
+  if (require_standup_before_policy_ &&
+      command_source_ == CommandSource::kRemote && enable_motion_) {
+    if (handle_required_standup_remote(state, remote, remote_edges)) {
+      return;
+    }
+  }
+
+  if (!update_command_from_source(state, remote_for_command)) {
     return;
   }
 
@@ -495,24 +618,7 @@ void A2PolicyDeployNode::control_loop() {
     gait_phase_ = 0.0;
   }
 
-  try {
-    computeObs(kPolicyId);
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-                          "A2 policy observation update failed: %s",
-                          e.what());
-    reset_runtime_state();
-    return;
-  }
-
-  if (policcy_obs.size() <= kPolicyId ||
-      policcy_obs[kPolicyId].numel() !=
-          static_cast<int64_t>(kFlattenedObsDim) ||
-      !vector_is_finite(policcy_obs[kPolicyId].data_)) {
-    RCLCPP_ERROR_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "Refusing A2 policy publish because observation is invalid.");
-    reset_runtime_state();
+  if (!compute_and_validate_policy_observation()) {
     return;
   }
 
@@ -590,6 +696,31 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("max_remote_vy", max_remote_vy_);
   this->get_parameter("max_remote_yaw", max_remote_yaw_);
   this->get_parameter("remote_deadzone", remote_deadzone_);
+  this->get_parameter("require_standup_before_policy",
+                      require_standup_before_policy_);
+  this->get_parameter("standup_stage1_steps", standup_stage1_steps_);
+  this->get_parameter("standup_stage2_steps", standup_stage2_steps_);
+  this->get_parameter("standup_rear_alpha_lead", standup_rear_alpha_lead_);
+  this->get_parameter("standup_front_alpha_lag", standup_front_alpha_lag_);
+  this->get_parameter("standup_kp_start", standup_kp_start_);
+  this->get_parameter("standup_kd_start", standup_kd_start_);
+  this->get_parameter("standup_final_gain_scale",
+                      standup_final_gain_scale_);
+  this->get_parameter("standup_require_l2_released_for_handover",
+                      standup_require_l2_released_for_handover_);
+
+  if (standup_stage1_steps_ < 1 || standup_stage2_steps_ < 1 ||
+      !std::isfinite(standup_rear_alpha_lead_) ||
+      !std::isfinite(standup_front_alpha_lag_) ||
+      !is_finite_nonnegative(standup_kp_start_) ||
+      !is_finite_nonnegative(standup_kd_start_) ||
+      !is_finite_nonnegative(standup_final_gain_scale_)) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 stand-up params invalid: steps must be >=1, lead/lag finite, "
+        "and gains/final scale finite nonnegative. Refusing policy publish.");
+    return false;
+  }
 
   if (command_source_param_ == "static") {
     command_source_ = CommandSource::kStatic;
@@ -641,6 +772,7 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
         "A2 policy publish refused because %s is missing or stale.",
         lowstate_topic().c_str());
     reset_runtime_state();
+    reset_standup_state();
     return false;
   }
 
@@ -651,6 +783,7 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
         this->get_logger(), *this->get_clock(), 2000,
         "A2 policy publish refused because LowState contains NaN/Inf.");
     reset_runtime_state();
+    reset_standup_state();
     return false;
   }
 
@@ -658,14 +791,18 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
 }
 
 bool A2PolicyDeployNode::update_command_from_source(
-    const A2LowStateSnapshot &state) {
+    const A2LowStateSnapshot &state, const A2RemoteState *remote) {
   if (command_source_ == CommandSource::kStatic) {
     return true;
   }
 
-  const auto remote = decode_a2_remote(
-      state.wireless_remote, static_cast<float>(remote_deadzone_));
-  return update_command_from_remote(remote);
+  A2RemoteState decoded_remote;
+  if (remote == nullptr) {
+    decoded_remote = decode_a2_remote(
+        state.wireless_remote, static_cast<float>(remote_deadzone_));
+    return update_command_from_remote(decoded_remote);
+  }
+  return update_command_from_remote(*remote);
 }
 
 bool A2PolicyDeployNode::update_command_from_remote(
@@ -673,32 +810,11 @@ bool A2PolicyDeployNode::update_command_from_remote(
   const std::string button_names = format_remote_button_names(remote);
 
   if (remote_requests_local_stop(remote)) {
-    set_zero_command();
-    reset_runtime_state();
-    if (enable_motion_) {
-      RCLCPP_WARN_THROTTLE(
-          this->get_logger(), *this->get_clock(), 1000,
-          "A2 remote local stop requested by buttons=%s. Resetting policy "
-          "runtime and publishing zero LowCmd.",
-          button_names.c_str());
-      publish_zero();
-    } else {
-      RCLCPP_WARN_THROTTLE(
-          this->get_logger(), *this->get_clock(), 1000,
-          "A2 remote local stop requested by buttons=%s. Runtime reset; zero "
-          "LowCmd not published because enable_motion=false.",
-          button_names.c_str());
-    }
-    return false;
+    return handle_remote_local_stop(remote);
   }
 
   if (!remote.valid) {
-    set_zero_command();
-    reset_runtime_state();
-    RCLCPP_ERROR_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "A2 remote packet has invalid stick floats; refusing policy publish.");
-    return false;
+    return handle_invalid_remote_packet();
   }
 
   RCLCPP_DEBUG_THROTTLE(
@@ -727,6 +843,331 @@ bool A2PolicyDeployNode::update_command_from_remote(
 bool A2PolicyDeployNode::remote_requests_local_stop(
     const A2RemoteState &remote) const {
   return remote.buttons.select || (remote.buttons.l2 && remote.buttons.b);
+}
+
+A2PolicyDeployNode::RemoteButtonEdges
+A2PolicyDeployNode::update_remote_button_edges(const A2RemoteState &remote) {
+  RemoteButtonEdges edges;
+  if (!remote.valid) {
+    return edges;
+  }
+
+  if (have_previous_remote_buttons_) {
+    edges.a_rising = remote.buttons.a && !previous_remote_a_pressed_;
+    edges.b_rising = remote.buttons.b && !previous_remote_b_pressed_;
+  }
+
+  previous_remote_a_pressed_ = remote.buttons.a;
+  previous_remote_b_pressed_ = remote.buttons.b;
+  have_previous_remote_buttons_ = true;
+  return edges;
+}
+
+void A2PolicyDeployNode::reset_remote_button_tracking() {
+  have_previous_remote_buttons_ = false;
+  previous_remote_a_pressed_ = false;
+  previous_remote_b_pressed_ = false;
+}
+
+bool A2PolicyDeployNode::handle_remote_local_stop(
+    const A2RemoteState &remote) {
+  const std::string button_names = format_remote_button_names(remote);
+  set_zero_command();
+  reset_runtime_state();
+  reset_standup_state();
+  if (enable_motion_) {
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 remote local stop requested by buttons=%s. Resetting policy/"
+        "stand-up runtime and publishing zero LowCmd.",
+        button_names.c_str());
+    publish_zero();
+  } else {
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 remote local stop requested by buttons=%s. Runtime reset; zero "
+        "LowCmd not published because enable_motion=false.",
+        button_names.c_str());
+  }
+  return false;
+}
+
+bool A2PolicyDeployNode::handle_invalid_remote_packet() {
+  set_zero_command();
+  reset_runtime_state();
+  reset_standup_state();
+  reset_remote_button_tracking();
+  RCLCPP_ERROR_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "A2 remote packet has invalid stick floats; refusing policy publish and "
+      "resetting stand-up handover to blocked.");
+  return false;
+}
+
+bool A2PolicyDeployNode::handle_required_standup_remote(
+    const A2LowStateSnapshot &state, const A2RemoteState &remote,
+    const RemoteButtonEdges &edges) {
+  if (standup_phase_ == StandupPhase::kPolicyActive) {
+    return false;
+  }
+
+  if (standup_phase_ == StandupPhase::kStandUpInterpolating ||
+      standup_phase_ == StandupPhase::kStandHoldWaitingForA ||
+      standup_phase_ == StandupPhase::kPolicyWarmupHold) {
+    if (edges.b_rising) {
+      return cancel_standup_with_b();
+    }
+  }
+
+  switch (standup_phase_) {
+    case StandupPhase::kIdleBlocked:
+      set_zero_command();
+      if (edges.a_rising) {
+        start_standup_from_state(state);
+        return publish_standup_interpolation();
+      }
+      RCLCPP_INFO_THROTTLE(
+          this->get_logger(), *this->get_clock(), 3000,
+          "A2 policy waiting for first A press: enable_motion=true, "
+          "command_source=remote, stand-up handover required. No LowCmd is "
+          "published while idle-blocked.");
+      return true;
+
+    case StandupPhase::kStandUpInterpolating:
+      return publish_standup_interpolation();
+
+    case StandupPhase::kStandHoldWaitingForA:
+      if (edges.a_rising) {
+        if (standup_require_l2_released_for_handover_ && remote.buttons.l2) {
+          RCLCPP_WARN_THROTTLE(
+              this->get_logger(), *this->get_clock(), 1000,
+              "A2 stand-up handover refused: release L2 before second A.");
+        } else if (!remote_sticks_are_zero_for_handover(remote)) {
+          RCLCPP_WARN_THROTTLE(
+              this->get_logger(), *this->get_clock(), 1000,
+              "A2 stand-up handover refused: sticks must be centered after "
+              "deadzone before second A (lx=%.3f rx=%.3f ly=%.3f).",
+              remote.lx, remote.rx, remote.ly);
+        } else {
+          reset_runtime_state();
+          set_zero_command();
+          gait_phase_ = 0.0;
+          standup_phase_ = StandupPhase::kPolicyWarmupHold;
+          RCLCPP_INFO(
+              this->get_logger(),
+              "A2 stand-up handover accepted: entering PolicyWarmupHold. "
+              "Publishing default stand pose until policy history and first "
+              "action validation are ready.");
+        }
+      }
+      publish_default_stand_hold();
+      return true;
+
+    case StandupPhase::kPolicyWarmupHold:
+      return run_policy_warmup_hold();
+
+    case StandupPhase::kPolicyActive:
+      return false;
+  }
+
+  return true;
+}
+
+void A2PolicyDeployNode::start_standup_from_state(
+    const A2LowStateSnapshot &state) {
+  standup_start_pos_ = map_a2_to_training(state.joint_q);
+  reset_runtime_state();
+  set_zero_command();
+  gait_phase_ = 0.0;
+  standup_step_ = 0;
+  standup_phase_ = StandupPhase::kStandUpInterpolating;
+  RCLCPP_INFO(
+      this->get_logger(),
+      "A2 stand-up started by first A press: interpolating current joint q to "
+      "policy default_joint_pos over %d steps.",
+      standup_stage1_steps_ + standup_stage2_steps_);
+}
+
+bool A2PolicyDeployNode::cancel_standup_with_b() {
+  set_zero_command();
+  reset_runtime_state();
+  reset_standup_state();
+  if (enable_motion_) {
+    RCLCPP_WARN(this->get_logger(),
+                "A2 stand-up handover canceled by B. Publishing zero LowCmd.");
+    publish_zero();
+  } else {
+    RCLCPP_WARN(this->get_logger(),
+                "A2 stand-up handover canceled by B. Zero LowCmd not "
+                "published because enable_motion=false.");
+  }
+  return true;
+}
+
+bool A2PolicyDeployNode::publish_standup_interpolation() {
+  if (!enable_motion_) {
+    reset_runtime_state();
+    reset_standup_state();
+    return true;
+  }
+
+  const int total_steps = standup_stage1_steps_ + standup_stage2_steps_;
+  const int current_step = std::min(standup_step_ + 1, total_steps);
+  const double alpha = std::clamp(
+      static_cast<double>(current_step) / static_cast<double>(total_steps),
+      0.0, 1.0);
+  const double front_alpha =
+      smoothstep01(alpha - standup_front_alpha_lag_);
+  const double rear_alpha = smoothstep01(alpha + standup_rear_alpha_lead_);
+  const double kp_factor = smoothstep01(alpha);
+
+  const auto commands =
+      build_standup_commands(front_alpha, rear_alpha, kp_factor);
+  if (!publish_joint_commands(commands)) {
+    reset_runtime_state();
+    reset_standup_state();
+    return true;
+  }
+
+  if (current_step == 1 ||
+      current_step % kStandupLogStepInterval == 0 ||
+      current_step == total_steps) {
+    const int stage =
+        current_step <= standup_stage1_steps_ ? 1 : 2;
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 stand-up phase=%s stage=%d step=%d/%d alpha=%.3f "
+        "front_alpha=%.3f rear_alpha=%.3f kp_factor=%.3f",
+        standup_phase_name(standup_phase_), stage, current_step, total_steps,
+        alpha, front_alpha, rear_alpha, kp_factor);
+  }
+
+  standup_step_ = current_step;
+  if (standup_step_ >= total_steps) {
+    standup_phase_ = StandupPhase::kStandHoldWaitingForA;
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 stand-up interpolation complete: holding policy default pose and "
+        "waiting for second A press. Release L2 and center sticks before "
+        "handover.");
+  }
+  return true;
+}
+
+bool A2PolicyDeployNode::publish_default_stand_hold() {
+  if (!enable_motion_) {
+    reset_runtime_state();
+    reset_standup_state();
+    return false;
+  }
+
+  const auto commands = build_standup_commands(1.0, 1.0, 1.0);
+  if (!publish_joint_commands(commands)) {
+    reset_runtime_state();
+    reset_standup_state();
+    return false;
+  }
+  return true;
+}
+
+bool A2PolicyDeployNode::run_policy_warmup_hold() {
+  if (!publish_default_stand_hold()) {
+    return true;
+  }
+
+  set_zero_command();
+  gait_phase_ = 0.0;
+  if (!compute_and_validate_policy_observation()) {
+    reset_standup_state();
+    return true;
+  }
+
+  warm_frames_ = std::min<std::size_t>(warm_frames_ + 1, kHistoryLength);
+  if (!is_history_warm()) {
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "A2 policy handover warmup hold: %zu/%zu fresh frames. Holding "
+        "default stand pose.",
+        warm_frames_, kHistoryLength);
+    advance_gait_clock();
+    return true;
+  }
+
+  if (!history_warm_logged_) {
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 policy handover history warm: validating one policy action while "
+        "continuing to hold default stand pose.");
+    history_warm_logged_ = true;
+  }
+
+  if (!validate_policy_action_for_handover()) {
+    advance_gait_clock();
+    return true;
+  }
+
+  standup_phase_ = StandupPhase::kPolicyActive;
+  RCLCPP_INFO(this->get_logger(),
+              "A2 policy handover complete: entering PolicyActive. First "
+              "policy action publish is allowed on the next control cycle.");
+  advance_gait_clock();
+  return true;
+}
+
+bool A2PolicyDeployNode::compute_and_validate_policy_observation() {
+  try {
+    computeObs(kPolicyId);
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                          "A2 policy observation update failed: %s",
+                          e.what());
+    reset_runtime_state();
+    return false;
+  }
+
+  if (policcy_obs.size() <= kPolicyId ||
+      policcy_obs[kPolicyId].numel() !=
+          static_cast<int64_t>(kFlattenedObsDim) ||
+      !vector_is_finite(policcy_obs[kPolicyId].data_)) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "Refusing A2 policy publish because observation is invalid.");
+    reset_runtime_state();
+    return false;
+  }
+
+  return true;
+}
+
+bool A2PolicyDeployNode::validate_policy_action_for_handover() {
+  SimpleTensor action;
+  try {
+    action = computeAction(kPolicyId);
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "A2 policy handover inference validation failed: %s. Continuing to "
+        "hold default stand pose.",
+        e.what());
+    reset_policy_states(kPolicyId);
+    return false;
+  }
+
+  const auto raw_action = ManagerBasedEnv::toVector<float>(action);
+  obs_actions[kPolicyId] = SimpleTensor::wrap(
+      std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
+  if (raw_action.size() != kTrainingJointCount ||
+      !vector_is_finite(raw_action)) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "A2 policy handover validation refused invalid action: dim=%zu "
+        "expected=%zu. Continuing to hold default stand pose.",
+        raw_action.size(), kTrainingJointCount);
+    reset_policy_states(kPolicyId);
+    return false;
+  }
+
+  return true;
 }
 
 void A2PolicyDeployNode::set_zero_command() {
@@ -773,6 +1214,12 @@ void A2PolicyDeployNode::reset_runtime_state() {
   reset_policy_states(kPolicyId);
 }
 
+void A2PolicyDeployNode::reset_standup_state() {
+  standup_phase_ = StandupPhase::kIdleBlocked;
+  standup_step_ = 0;
+  standup_start_pos_.fill(0.0f);
+}
+
 void A2PolicyDeployNode::log_enable_state_if_changed() {
   if (has_logged_enable_motion_ &&
       enable_motion_ == last_logged_enable_motion_) {
@@ -782,6 +1229,7 @@ void A2PolicyDeployNode::log_enable_state_if_changed() {
               enable_motion_ ? "true" : "false");
   if (has_logged_enable_motion_ && !enable_motion_) {
     reset_runtime_state();
+    reset_standup_state();
   }
   has_logged_enable_motion_ = true;
   last_logged_enable_motion_ = enable_motion_;
@@ -802,9 +1250,27 @@ void A2PolicyDeployNode::log_command_source_if_changed() {
               remote_deadzone_);
   if (has_logged_command_source_) {
     reset_runtime_state();
+    reset_standup_state();
   }
+  reset_remote_button_tracking();
   has_logged_command_source_ = true;
   last_logged_command_source_ = command_source_;
+}
+
+const char *A2PolicyDeployNode::standup_phase_name(StandupPhase phase) const {
+  switch (phase) {
+    case StandupPhase::kIdleBlocked:
+      return "IdleBlocked";
+    case StandupPhase::kStandUpInterpolating:
+      return "StandUpInterpolating";
+    case StandupPhase::kStandHoldWaitingForA:
+      return "StandHoldWaitingForA";
+    case StandupPhase::kPolicyWarmupHold:
+      return "PolicyWarmupHold";
+    case StandupPhase::kPolicyActive:
+      return "PolicyActive";
+  }
+  return "Unknown";
 }
 
 bool A2PolicyDeployNode::vector_is_finite(

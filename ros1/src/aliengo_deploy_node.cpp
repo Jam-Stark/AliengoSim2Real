@@ -589,11 +589,17 @@ void AliengoDeployNode::processRemoteButtons(
     // A button: start stand-up interpolation, then confirm policy handover.
     if (edges.a) {
         if (stand_up_waiting_for_handover_) {
+            if (stand_up_history_warm_steps_ < kHistoryLength) {
+                ROS_WARN("Stand-up history warm-up in progress: %d/%d frames. "
+                         "Keep holding default pose.",
+                         stand_up_history_warm_steps_, kHistoryLength);
+                return;
+            }
             stand_up_waiting_for_handover_ = false;
             is_standing_up_ = false;
+            stand_up_history_warm_steps_ = 0;
             is_stop_.store(false, std::memory_order_relaxed);
             gait_clock_.reset();
-            reset_observation_buffers();
             reset_policy_states();
             ROS_INFO("Stand-up confirmed by second A. Policy ENABLED.");
         } else {
@@ -602,6 +608,7 @@ void AliengoDeployNode::processRemoteButtons(
             stand_up_start_pos_ = getCurrentLegJointPos();
             stand_up_step_ = 0;
             stand_up_waiting_for_handover_ = false;
+            stand_up_history_warm_steps_ = 0;
             is_standing_up_ = true;
             is_stop_.store(true, std::memory_order_relaxed);  // keep stop until handover
             ROS_INFO("Stand-up started. Press A again after default pose to enable policy.");
@@ -612,6 +619,7 @@ void AliengoDeployNode::processRemoteButtons(
     if (edges.b) {
         is_standing_up_ = false;
         stand_up_waiting_for_handover_ = false;
+        stand_up_history_warm_steps_ = 0;
         startStopSequence();
         ROS_WARN("Controlled STOP requested by remote B button.");
     }
@@ -1031,11 +1039,28 @@ void AliengoDeployNode::writeStandUpCmd() {
         // ---- Wait for second A: full default pose with full Kp ----
         if (!stand_up_waiting_for_handover_) {
             stand_up_waiting_for_handover_ = true;
+            stand_up_history_warm_steps_ = 0;
+            gait_clock_.reset();
+            gait_clock_.setStanding(true);
+            reset_observation_buffers();
+            reset_policy_states();
             ROS_INFO("Stand-up reached default pose. Press A again to enable policy.");
         }
         for (int i = 0; i < kNumJoints; ++i)
             target[i] = kDefaultJointPos[i];
         kp_factor = 1.0f;
+
+        gait_clock_.setStanding(true);
+        gait_clock_.step();
+        computeObs(0);
+        if (stand_up_history_warm_steps_ < kHistoryLength) {
+            ++stand_up_history_warm_steps_;
+            if (stand_up_history_warm_steps_ == kHistoryLength) {
+                ROS_INFO("Stand-up observation history warmed: %d frames. "
+                         "Press A again to enable policy.",
+                         kHistoryLength);
+            }
+        }
     }
 
     // ---- Write command (common for all stages) ----

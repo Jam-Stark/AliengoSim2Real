@@ -17,7 +17,10 @@
   - 再运行旧 `remote` summary validation 和 `a2_lowlevel_smoke --ros-args -p log_remote:=true`，确认 decode range 与 button names 一致。
   - `a2_policy_deploy --ros-args -p command_source:=remote` 中 `L2` release 强制 policy command `[0,0,0]`。
   - `L2` held 时方向符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
-  - `Select` 和 `L2+B` 能触发 local stop 并要求 history 重新 warm；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd。
+  - `policy-enable-remote` 默认 `require_standup_before_policy=true`：first `A` 触发 stand-up interpolation，holder 持续发布 policy default pose，second `A` 在 `L2` released 且 `lx/rx/ly` deadzone 后为 zero 时进入 warmup/handover。
+  - `PolicyWarmupHold` 持续发布 default stand pose，同时 history warm 到 `32` fresh frames；first policy action validation 通过后，下一 cycle 才进入 `PolicyActive` publish。
+  - `Select` 和 `L2+B` 能触发 local stop 并要求重新 two-A handover；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd。
+  - stand-up / holder / warmup 阶段 `B` rising edge 能 cancel handover 并回到 `IdleBlocked`；`enable_motion=true` 下发布 zero LowCmd。
 
 ## 2026-06-05 19:49 HKT
 
@@ -33,7 +36,7 @@
   - guarded `motion-release enp131s0`
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
-  - last-stage guarded `policy-enable-remote`
+  - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` warmup/handover、`Select` / `L2+B` local stop 和 `B` cancel。
 
 ## 2026-06-05 20:10 HKT
 

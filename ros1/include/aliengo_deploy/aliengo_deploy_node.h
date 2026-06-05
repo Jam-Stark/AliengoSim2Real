@@ -172,6 +172,7 @@ private:
     bool is_standing_up_ = false;
     bool stand_up_waiting_for_handover_ = false;
     int stand_up_step_ = 0;
+    int stand_up_history_warm_steps_ = 0;
     std::array<float, aliengo::kNumJoints> stand_up_start_pos_{};
     void writeStandUpCmd();
 

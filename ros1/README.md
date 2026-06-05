@@ -112,8 +112,8 @@ roslaunch aliengo_deploy aliengo_deploy.launch \
 
 1. **Stage 1** (0~3s): 四条腿协调向默认站姿插值，日志显示 `front_alpha/rear_alpha`
 2. **Stage 2** (3~6s): 继续协调插值到默认站姿，后腿略提前、前腿略滞后以抑制后仰
-3. **Wait**: 持续保持默认站姿，不自动接入策略
-4. **Second A**: 再按 A 后 warm-start obs history → 策略接管
+3. **Wait + history warm**: 持续保持默认站姿，并用真实观测 warm 满 32 帧 history
+4. **Second A**: history warm 完成后，再按 A → 策略接管
 
 参数在 `aliengo_constants.h` 中可调。
 

@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-05 22:32 HKT"
+last_updated: "2026-06-05 22:54 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -28,6 +28,9 @@ read_when:
 - A2 policy action 先按 `action_clip` clip，再映射为 `default_joint_pos + action_scale * raw_action`；训练顺序到 A2 low-level order same signs / no inversion，低层发布只走 `A2LowLevelInterface::publish_joint_commands()`。
 - 实现 A2 Remote Control v1 decode contract：`wireless_remote[40]` 中 `lx/rx/ry/ly` 分别来自 offsets `4/8/12/20` 的 little-endian `float32`，button byte `2/3` 按 Unitree SDK2 sample bit order decode，并做 `deadzone`、`[-1,1]` clamp 和 NaN/Inf invalid guard。
 - `a2_policy_deploy` 支持 `command_source=static|remote`，默认 `static`；remote mapping 为 `cmd_vx=ly*max_remote_vx`、`cmd_vy=-lx*max_remote_vy`、`cmd_yaw=-rx*max_remote_yaw`，`L2` 是 nonzero command gate；`Select` 或 `L2+B` 触发 local stop、`set_zero_command()` 和 policy runtime reset，只有 `enable_motion=true` 时才额外 `publish_zero()`。
+- `a2_policy_deploy` 已实现 A2 Stand-Up + Policy Handover gate：默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下 first `A` 触发 stand-up interpolation，holder 持续发布 policy `default_joint_pos`，second `A` 在 `L2` released 且 `lx/rx/ly` deadzone 后为 zero 时进入 `PolicyWarmupHold`，history warm 和 first action validation 后下一 cycle 进入 `PolicyActive`。
+- stand-up / holder / warmup command 仍只调用 `A2LowLevelInterface::publish_joint_commands()`，不直接写 `unitree_hg::msg::LowCmd`，不绕过 fresh-state、mode routing 或 CRC；`command_source=static` 在默认 stand-up gate 下会拒绝 `enable_motion=true` motion publish，除非显式设置 `require_standup_before_policy=false`。
+- remote safety gate 已扩展：`Select` / `L2+B` 任意 phase local stop，stand-up / holder / warmup 阶段 `B` rising edge cancel；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下才发布 zero LowCmd。
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
@@ -104,6 +107,7 @@ read_when:
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop。
 - 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的 `L2` gate、`Select` / `L2+B` local stop `enable_motion` 分流和 mapping 方向。
+- 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
 
 ## DONE Summary
 
@@ -125,6 +129,7 @@ read_when:
 - 2026-06-05 22:03 HKT 已新增 `joints-live` / `remote-live` observe-only tools、wrapper env 和 docs，用于实时人工确认 joint mapping 及 remote raw/decode；当前 TODO 已调整为先用 live tools 验证。
 - 2026-06-05 22:20 HKT 已修复 MotionSwitcher helper 手写 `g++` compile path：自动去重打印 SDK2 include/lib dirs，加入 nested DDS `ddscxx` / `ddsc` headers 和 DDS lib dirs，并链接 `ddscxx` / `ddsc`，避免 `dds/topic/TopicTraits.hpp` header 修复后继续出现 DDS unresolved symbols。
 - 2026-06-05 22:32 HKT 已针对部署机 `motion-check` helper runtime `free(): invalid pointer` 加固：helper 通过 wrapper 前置 SDK2 `LD_LIBRARY_PATH`，打印 `ldd` 结果和 `ChannelFactory::Init` / `MotionSwitcherClient::Init` / `CheckMode` / `ChannelFactory::Release` 阶段日志，并在成功路径显式 release SDK2 channel factory。
+- 2026-06-05 22:54 HKT 已实现 A2 Stand-Up + Policy Handover gate：默认 remote two-A handover，stand-up/holder/warmup command 只走 `publish_joint_commands()`，static motion 默认 blocked unless `require_standup_before_policy=false`，并更新 real robot script/docs/README/memory。
 
 ## Recommended Next Files To Read
 

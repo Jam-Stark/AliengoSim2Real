@@ -542,17 +542,23 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 ros2 run a2_lowlevel a2_policy_deploy
 ```
 
-显式启用 motion，并使用静态 command provider：
+显式启用 motion，并使用静态 command provider 只作为 legacy/debug path。默认
+`require_standup_before_policy=true` 会阻止 `command_source=static` 在
+`enable_motion=true` 下直接进入 policy publish；如确需复现旧行为，必须显式关闭
+stand-up gate：
 
 ```bash
 ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   -p enable_motion:=true \
+  -p require_standup_before_policy:=false \
   -p cmd_vx:=0.0 \
   -p cmd_vy:=0.0 \
   -p cmd_yaw:=0.0
 ```
 
-显式启用 motion，并使用 A2 R3 remote command provider：
+显式启用 motion，并使用 A2 R3 remote command provider。默认 two-A handover 为：
+first `A` 起身到 policy default pose，保持 stand holder，second `A` 进入 history
+warmup 和 policy handover：
 
 ```bash
 ros2 run a2_lowlevel a2_policy_deploy --ros-args \
@@ -573,6 +579,18 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `cmd_vx` / `cmd_vy` / `cmd_yaw`：static command provider，默认全 `0.0`。
 - `max_remote_vx` / `max_remote_vy` / `max_remote_yaw`：remote stick 映射上限，默认 `0.4`、`0.25`、`0.6`。
 - `remote_deadzone`：remote stick deadzone，默认 `0.08`。
+- `require_standup_before_policy`：默认 `true`。为 `true` 时，`enable_motion=true`
+  只允许 `command_source=remote` 通过 two-A stand-up handover 进入 policy；static
+  motion publish 会被拒绝。
+- `standup_stage1_steps` / `standup_stage2_steps`：默认 `150` / `150`，合计
+  `300` 个 50 Hz control steps。
+- `standup_rear_alpha_lead` / `standup_front_alpha_lag`：默认 `0.10` / `0.04`，
+  rear joints 先行、front joints 滞后进入 smoothstep interpolation。
+- `standup_kp_start` / `standup_kd_start`：默认 `3.0` / `0.5`。
+- `standup_final_gain_scale`：默认 `1.0`，stand-up 最终 holder gain 相对 policy
+  PD gain 的 scale。
+- `standup_require_l2_released_for_handover`：默认 `true`，second `A` handover
+  前要求 `L2` release。
 - `state_timeout_ms`：默认 `200`，沿用 `A2LowLevelInterface` fresh-state 判断。
 - `lowstate_topic`：默认 `lowstate`，ROS2 graph 通常显示为 `/lowstate`。
 - `lowcmd_topic`：默认 `lowcmd`，ROS2 graph 通常显示为 `/lowcmd`。
@@ -587,15 +605,35 @@ cmd_yaw = -rx * max_remote_yaw
 
 `ry` 不参与 command，只在 debug log 中保留。Remote 只作为 command provider 和 safety gate；不会直接写 `LowCmd`，policy output 仍然只经过 `A2LowLevelInterface::publish_joint_commands()`。
 
+### Stand-Up Handover
+
+默认 `require_standup_before_policy=true` 时，`a2_policy_deploy` 在
+`enable_motion=true`、`command_source=remote` 下先运行高优先级 stand-up safety layer：
+
+1. `IdleBlocked`：不发布 `LowCmd`，等待 first `A` rising edge。
+2. `StandUpInterpolating`：记录当前 joint q，按 training order 插值到
+   `policy.json` 的 `default_joint_pos`；rear training indices
+   `2,3,6,7,10,11` 使用 lead，front indices `0,1,4,5,8,9` 使用 lag。
+3. `StandHoldWaitingForA`：持续发布 default stand pose，等待 second `A`。
+4. `PolicyWarmupHold`：继续发布 default stand pose，同时填满 policy history；
+   history warm 后先做一次 action dim/finite validation，本 cycle 不发布 policy action。
+5. `PolicyActive`：下一 cycle 才允许 normal policy action publish。
+
+`Select` 或 `L2+B` 在任意 phase 触发 local stop；`enable_motion=true` 时发布 zero
+LowCmd，`enable_motion=false` 时只 reset runtime。stand-up / hold / warmup 阶段额外支持
+`B` rising edge cancel，cancel 后回到 `IdleBlocked`。
+
 ## Safety
 
-真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。当前不会自动 stand-up，也不会自动关闭 `ai_sport` / `ai_sports`。
+真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。`a2_policy_deploy` 现在只在 remote two-A handover 下执行 stand-up，不会自动关闭 `ai_sport` / `ai_sports`。
 
 `stand_test` 只是接口 smoke，不包含起身流程、姿态保护、limit check 或 emergency stop；首次运行应离地、限功率、有人值守，并准备硬件急停。
 
 `a2_policy_deploy` 的 publish refusal 条件：
 
 - `enable_motion=false`：node 仍监听 fresh `LowState`、更新 command provider、计算 observation 并 warm history，但在 `computeAction()` / `publish_joint_commands()` 前拒绝 motion publish
+- `require_standup_before_policy=true` 且 `enable_motion=true` / `command_source=static`：拒绝 motion publish，避免 static default command 绕过 stand-up gate
+- `require_standup_before_policy=true` 且 `command_source=remote`：first `A` 前保持 `IdleBlocked`，不会发布 `LowCmd`
 - missing/stale configured lowstate topic（默认 `/lowstate`）
 - `LowState`、observation 或 action 出现 `NaN` / `Inf`
 - `command_source` 非 `static` / `remote`
@@ -609,6 +647,7 @@ Remote safety gate：
 
 - `L2` 必须按住才允许 nonzero policy command；未按住时 active command 强制为 `[0,0,0]`。
 - `Select` 或 `L2+B` 触发 local stop：清空 policy/history/action runtime，并要求 release 后重新 fresh-state + history warmup。`enable_motion=false` 时只 reset runtime，不发布任何 LowCmd；`enable_motion=true` 时才调用 `publish_zero()` 发布显式 zero/stop LowCmd，不发布 policy motion command。
+- stand-up / hold / warmup 阶段 `B` rising edge 可 cancel，清空 handover runtime；`enable_motion=true` 时发布 zero LowCmd。
 
 ## CRC
 
@@ -629,5 +668,8 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 - `a2_lowlevel_smoke --ros-args -p log_remote:=true` 能随 stick/button 变化打印对应 `lx/rx/ry/ly` 和 button names。
 - `L2` gate release 时 `a2_policy_deploy command_source=remote` 只给 policy command `[0,0,0]`。
 - `L2` held 时 mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
-- `Select` 与 `L2+B` 会触发 local stop 并要求 history 重新 warm 到 `32` fresh frames；只有 `enable_motion=true` 的 motion path 会发布 zero LowCmd。
+- `policy-enable-remote` 使用 two-A sequence：first `A` stand-up、holder default pose、
+  second `A` warmup/handover、下一 cycle policy active。
+- `Select` 与 `L2+B` 会触发 local stop 并要求重新 two-A handover；stand-up / hold /
+  warmup 阶段 `B` 可 cancel；只有 `enable_motion=true` 的 motion path 会发布 zero LowCmd。
 - 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop。
