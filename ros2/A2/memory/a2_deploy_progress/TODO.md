@@ -48,3 +48,12 @@
   - 必要时再运行旧 `joints` 并设置 `A2_JOINT_CSV` 记录 time series，确认 `candidate_changed_joints` 与目标 label 一致。
   - 沿 sim/training convention 的 `+q` 方向移动，记录 `delta_from_start` sign 是否符合 no-inversion 假设。
   - 如发现 mapping mismatch 或 per-joint sign inversion 需求，先修正并复验，再进入任何 configured LowCmd topic（默认 `/lowcmd`）control path。
+
+## 2026-06-08 20:08 HKT
+
+- [ ] brake gate 后续启用前必须先确认 policy aux layout 和 force-estimator semantics：
+
+  - 用 `A2/scripts/a2_real_robot_test.sh policy-aux-live` 在部署机/实机运行 listen-only / no-lowcmd monitor。
+  - 在 active `policy-enable-remote` 正常控制期间，用第二个 Docker terminal 运行 `A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0` 订阅 `/a2/policy_aux`。
+  - 确认 aux dim 是否为 `6`，并验证 `pred_base_lin_vel[0..2]` / `pred_base_force_local[0..2]` 的 layout、符号和单位。
+  - 未确认前不要把 `A2_POLICY_BRAKE_*` 从 comment-only config 字段升级为 node active behavior，也不要让 wrapper 传入 brake gate params。

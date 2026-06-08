@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-06 00:12 HKT"
+last_updated: "2026-06-08 20:31 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -32,6 +32,11 @@ read_when:
 - `a2_policy_deploy` 已实现 A2 Stand-Up + Policy Handover gate：默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下 first `A` 触发 stand-up interpolation，holder 持续发布 policy `default_joint_pos`，second `A` 在 `lx/rx/ly` deadzone 后为 zero 时进入 `PolicyWarmupHold`，history warm 和 first action validation 后下一 cycle 进入 `PolicyActive`。
 - stand-up / holder / warmup command 仍只调用 `A2LowLevelInterface::publish_joint_commands()`，不直接写 `unitree_hg::msg::LowCmd`，不绕过 fresh-state、mode routing 或 CRC；`command_source=static` 在默认 stand-up gate 下会拒绝 `enable_motion=true` motion publish，除非显式设置 `require_standup_before_policy=false`。
 - remote safety 已扩展：`Select` 是 primary local stop，`L2+B` 仅保留为附加 local stop path；任意 phase local stop 会 `set_zero_command()`、reset policy/stand-up runtime，且只有 `enable_motion=true` 时才额外 `publish_zero()`。stand-up / holder / warmup 阶段 `B` rising edge cancel 保持不变。
+- 2026-06-08 20:08 HKT 已新增 A2 policy run config：`ros2/A2/config/a2_policy_remote.env`，由 `a2_real_robot_test.sh` 的 policy subcommands 加载；优先级是 script defaults < config file < operator `A2_POLICY_*` env，且 `A2_ALLOW_ENABLE_MOTION=1` 不允许通过 config 取得。
+- 2026-06-08 20:08 HKT 已新增 `policy-aux-live`：`enable_motion=false command_source=remote monitor_policy_aux=true`，同时启动 `no-lowcmd` observer；history warm 后只做 policy inference / aux output monitor，不发布 LowCmd。默认 aux expected dim 是 `6`，按 Aliengo convention 打印 `pred_base_lin_vel[0..2]` 和 `pred_base_force_local[0..2]`。
+- 2026-06-08 20:31 HKT 已新增 active policy aux debug topic：`a2_policy_deploy` 支持 `publish_aux_debug` / `aux_debug_topic`，每次 policy inference 后把 `policys[kPolicyId].get_last_aux_output()` 发布为 `std_msgs/msg/Float32MultiArray`，默认 wrapper config 为 `/a2/policy_aux`。
+- 2026-06-08 20:31 HKT 已新增 `policy-aux-monitor`：只订阅 active `/a2/policy_aux` topic，不启动 policy node、不启动 no-lowcmd observer、不发布 LowCmd；用于另一个 Docker terminal 在 `policy-enable-remote` 期间实时打印 force estimator。
+- brake gate config fields 当前只作为 comment-only placeholder 保留，wrapper 不传给 active behavior；后续启用前必须先通过 `policy-aux-live` 的 independent listen-only smoke 和 `policy-aux-monitor` 的 active topic flow 确认 aux layout / force-estimator semantics。
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
@@ -113,6 +118,7 @@ read_when:
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
 - 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` primary local stop、`L2+B` 附加 stop path 和 `enable_motion` 分流。
 - 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
+- brake gate 后续启用前必须先用 `policy-aux-live` 做 independent listen-only / no-lowcmd smoke，并用 active `policy-aux-monitor` 在 `policy-enable-remote` 期间确认 aux dim=6 layout、`pred_base_force_local[0]` 符号/单位和 no-lowcmd/motion safety；未确认前不要把 `A2_POLICY_BRAKE_*` 传入 node active behavior。
 
 ## DONE Summary
 
@@ -139,6 +145,8 @@ read_when:
 - 2026-06-05 23:38 HKT 已新增 A2 内置 motion service guarded restore/select：`motion-select IFACE MODE` 调用 `MotionSwitcherClient::SelectMode(MODE)` 并前后 `CheckMode`，`motion-restore IFACE` 默认恢复 `ai_sport`；恢复前要求停止 policy/LowCmd 并通过 `no-lowcmd`。
 - 2026-06-06 00:03 HKT 已新增正式 operator-facing `A2_REAL_DEPLOY_RUNBOOK.md`，区分 day-to-day real deployment operation 与 `A2_REAL_ROBOT_TEST.md` validation/reference，并在 README 增加入口。
 - 2026-06-06 00:12 HKT 已将 A2 remote command 上限从 conservative `0.10/0.06/0.15` wrapper caps 和旧 `0.4/0.25/0.6` node defaults 统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
+- 2026-06-08 20:08 HKT 已新增 A2 policy remote run config 和 aux output monitor：policy wrapper 只在 policy subcommands 加载 config，`policy-aux-live` 在 `enable_motion=false` 下执行 inference-only aux monitor 并由 `no-lowcmd` observer 覆盖，文档已记录 brake gate 暂不启用。
+- 2026-06-08 20:31 HKT 已实现 active aux debug topic：`a2_policy_deploy` 发布 `/a2/policy_aux`，wrapper 默认透传 `publish_aux_debug=true`，并新增 topic-only `policy-aux-monitor` 用于第二个 Docker terminal 实时查看 force estimator。
 
 ## Recommended Next Files To Read
 

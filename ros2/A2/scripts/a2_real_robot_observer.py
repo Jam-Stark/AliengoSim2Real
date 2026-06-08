@@ -40,14 +40,16 @@ rclpy = None
 Node = object
 LowCmd = object
 LowState = object
+Float32MultiArray = object
 
 
 def ensure_ros_imports() -> None:
-    global rclpy, Node, LowCmd, LowState
+    global rclpy, Node, LowCmd, LowState, Float32MultiArray
     if rclpy is not None:
         return
     import rclpy as rclpy_module
     from rclpy.node import Node as NodeClass
+    from std_msgs.msg import Float32MultiArray as Float32MultiArrayClass
     from unitree_hg.msg import LowCmd as LowCmdClass
     from unitree_hg.msg import LowState as LowStateClass
 
@@ -55,6 +57,7 @@ def ensure_ros_imports() -> None:
     Node = NodeClass
     LowCmd = LowCmdClass
     LowState = LowStateClass
+    Float32MultiArray = Float32MultiArrayClass
 
 
 def is_finite(value: float) -> bool:
@@ -832,6 +835,163 @@ def print_remote_live_summary(args: argparse.Namespace, stats: Dict[str, object]
             print(f"{name}_raw_range=unavailable")
 
 
+def format_first_values(values: Sequence[float], max_count: int = 8) -> str:
+    shown = [float(value) for value in values[:max_count]]
+    suffix = ", ..." if len(values) > max_count else ""
+    return "[" + ", ".join(f"{value:+.4f}" for value in shown) + suffix + "]"
+
+
+def aux_warning_lines(values: Sequence[float], expected_dim: int) -> List[str]:
+    warnings = []
+    dim = len(values)
+    if dim == 0:
+        warnings.append("WARN: latest aux vector is empty")
+    if dim != expected_dim:
+        warnings.append(f"WARN: latest aux dim={dim}, expected_dim={expected_dim}")
+    if not finite_values(values):
+        warnings.append("WARN: latest aux contains NaN or Inf")
+    return warnings
+
+
+def print_policy_aux_topic_live_display(
+    args: argparse.Namespace,
+    started_at: float,
+    stats: Dict[str, object],
+) -> None:
+    now = time.monotonic()
+    latest = stats.get("latest")
+    clear_terminal(bool(args.clear_screen))
+    duration_text = "until Ctrl-C" if args.duration <= 0.0 else f"{args.duration:g}s"
+    print(
+        "policy_aux_topic_live subscribe_only_no_publish=True "
+        f"topic={args.topic} duration={duration_text} "
+        f"elapsed={now - started_at:.1f}s print_period={args.print_period:g}s "
+        f"expected_dim={args.expected_dim}"
+    )
+    print(
+        f"sample_count={int(stats['sample_count'])} "
+        f"empty_count={int(stats['empty_count'])} "
+        f"dim_mismatch_count={int(stats['dim_mismatch_count'])} "
+        f"nonfinite_count={int(stats['nonfinite_count'])}"
+    )
+
+    if latest is None:
+        print(f"WAIT: no {args.topic} Float32MultiArray messages received yet.")
+        sys.stdout.flush()
+        return
+
+    values = latest["values"]
+    dim = len(values)
+    recv_age = now - float(latest["recv_time"])
+    print(
+        f"latest_sample={int(latest['sample_index'])} "
+        f"latest_age={recv_age:.3f}s dim={dim} values_first8={format_first_values(values, 8)}"
+    )
+    if dim == 6:
+        print(
+            "pred_base_lin_vel="
+            f"[{float(values[0]):+.4f}, {float(values[1]):+.4f}, {float(values[2]):+.4f}]"
+        )
+        print(
+            "pred_base_force_local="
+            f"[{float(values[3]):+.4f}, {float(values[4]):+.4f}, {float(values[5]):+.4f}]"
+        )
+    for warning in aux_warning_lines(values, args.expected_dim):
+        print(warning)
+    sys.stdout.flush()
+
+
+def print_policy_aux_topic_live_summary(
+    args: argparse.Namespace,
+    stats: Dict[str, object],
+) -> None:
+    print("policy_aux_topic_live_summary subscribe_only_no_publish=True")
+    print(f"topic={args.topic}")
+    print(f"sample_count={int(stats['sample_count'])}")
+    print(f"empty_count={int(stats['empty_count'])}")
+    print(f"dim_mismatch_count={int(stats['dim_mismatch_count'])}")
+    print(f"nonfinite_count={int(stats['nonfinite_count'])}")
+    dims = sorted(int(value) for value in stats["dims_seen"])
+    print(f"dims_seen={dims if dims else 'none'}")
+    latest = stats.get("latest")
+    if latest is not None:
+        values = latest["values"]
+        print(f"latest_dim={len(values)}")
+        print(f"latest_values_first8={format_first_values(values, 8)}")
+
+
+def run_policy_aux_topic_live(args: argparse.Namespace) -> int:
+    if args.duration < 0.0:
+        print("FAIL: duration must be non-negative; use 0 for Ctrl-C live mode", file=sys.stderr)
+        return 2
+    if args.print_period <= 0.0:
+        print("FAIL: --print-period must be positive", file=sys.stderr)
+        return 2
+    if args.expected_dim < 0:
+        print("FAIL: --expected-dim must be non-negative", file=sys.stderr)
+        return 2
+
+    ensure_ros_imports()
+    rclpy.init()
+    node = rclpy.create_node("a2_policy_aux_topic_live_observer")
+    stats: Dict[str, object] = {
+        "sample_count": 0,
+        "empty_count": 0,
+        "dim_mismatch_count": 0,
+        "nonfinite_count": 0,
+        "dims_seen": set(),
+        "latest": None,
+    }
+
+    def callback(msg: Float32MultiArray) -> None:
+        values = [float(value) for value in msg.data]
+        dim = len(values)
+        stats["sample_count"] = int(stats["sample_count"]) + 1
+        stats["dims_seen"].add(dim)
+        if dim == 0:
+            stats["empty_count"] = int(stats["empty_count"]) + 1
+        if dim != args.expected_dim:
+            stats["dim_mismatch_count"] = int(stats["dim_mismatch_count"]) + 1
+        if not finite_values(values):
+            stats["nonfinite_count"] = int(stats["nonfinite_count"]) + 1
+        stats["latest"] = {
+            "sample_index": int(stats["sample_count"]),
+            "recv_time": time.monotonic(),
+            "values": values,
+        }
+
+    node.create_subscription(Float32MultiArray, args.topic, callback, 10)
+    started_at = time.monotonic()
+    deadline = None if args.duration <= 0.0 else started_at + args.duration
+    next_print = started_at
+    interrupted = False
+    try:
+        while rclpy.ok():
+            now = time.monotonic()
+            if deadline is not None and now >= deadline:
+                break
+            timeout = min(0.05, max(0.0, next_print - now))
+            if deadline is not None:
+                timeout = min(timeout, max(0.0, deadline - now))
+            rclpy.spin_once(node, timeout_sec=timeout)
+            now = time.monotonic()
+            if now >= next_print:
+                print_policy_aux_topic_live_display(args, started_at, stats)
+                next_print = now + args.print_period
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+    if interrupted:
+        print("policy_aux_topic_live interrupted by Ctrl-C")
+    print_policy_aux_topic_live_summary(args, stats)
+    if int(stats["sample_count"]) == 0:
+        print(f"WARN: no {args.topic} Float32MultiArray messages received")
+    return 0
+
+
 def run_remote_live(args: argparse.Namespace) -> int:
     if args.duration < 0.0:
         print("FAIL: duration must be non-negative; use 0 for Ctrl-C live mode", file=sys.stderr)
@@ -1175,6 +1335,17 @@ def build_parser() -> argparse.ArgumentParser:
     add_clear_screen_args(remote_live)
     add_lowstate_topic_arg(remote_live)
     remote_live.set_defaults(func=run_remote_live)
+
+    policy_aux_topic_live = subparsers.add_parser(
+        "policy-aux-topic-live",
+        help="live print std_msgs/Float32MultiArray policy aux topic without publishing",
+    )
+    policy_aux_topic_live.add_argument("duration", nargs="?", type=float, default=0.0)
+    policy_aux_topic_live.add_argument("--topic", default="/a2/policy_aux")
+    policy_aux_topic_live.add_argument("--expected-dim", type=int, default=6)
+    policy_aux_topic_live.add_argument("--print-period", type=float, default=0.2)
+    add_clear_screen_args(policy_aux_topic_live)
+    policy_aux_topic_live.set_defaults(func=run_policy_aux_topic_live)
 
     lowcmd_crc = subparsers.add_parser("lowcmd-crc", help="verify lowcmd CRC and safety shape")
     lowcmd_crc.add_argument("duration", nargs="?", type=float, default=8.0)

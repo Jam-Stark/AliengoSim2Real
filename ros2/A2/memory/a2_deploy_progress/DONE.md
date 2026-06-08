@@ -185,3 +185,19 @@
 
 - [x] 将 A2 remote command 上限统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
 - [x] 更新 `a2_policy_deploy` 默认参数、`policy-enable-remote` wrapper 参数、README、real robot validation guide、real deployment runbook 和 A2 memory。
+
+## 2026-06-08 20:08 HKT
+
+- [x] 新增默认 A2 policy remote run config `ros2/A2/config/a2_policy_remote.env`，记录 remote caps、deadzone、stand-up gate 和 aux monitor defaults；`A2_ALLOW_ENABLE_MOTION=1` 明确不写入 config。
+- [x] `a2_real_robot_test.sh` policy subcommands 新增加载 config：默认读取 repo config，可用 `A2_POLICY_RUN_CONFIG` 覆盖；优先级为 script defaults < config file < operator `A2_POLICY_*` env；brake gate fields 只打印为 ignored/comment-only，不传给 active behavior。
+- [x] 新增 `policy-aux-live` wrapper：`enable_motion=false command_source=remote monitor_policy_aux=true`，同时启动 `no-lowcmd` observer；duration `0` 表示持续运行直到 Ctrl-C，finite duration 下 observer 覆盖收尾窗口。
+- [x] `a2_policy_deploy` 新增 aux monitor params：`monitor_policy_aux`、`policy_aux_expected_dim`、`policy_aux_print_period_sec`；history warm 后可在 `enable_motion=false` 下执行 inference-only aux monitor，不发布 LowCmd。
+- [x] aux monitor 打印 action dim、aux dim 和 values；aux dim `6` 按 Aliengo convention 输出 `pred_base_lin_vel[0..2]` 与 `pred_base_force_local[0..2]`，aux empty / dim mismatch / NaN/Inf 都有明确 log。
+- [x] 更新 `A2_REAL_DEPLOY_RUNBOOK.md`、`A2_REAL_ROBOT_TEST.md` 和 `README.md`，记录 run config、`policy-aux-live`、listen-only/no-lowcmd safety，以及 brake gate 暂不启用。
+
+## 2026-06-08 20:31 HKT
+
+- [x] `a2_policy_deploy` 新增 active aux debug publisher：`publish_aux_debug` 默认由 wrapper config 开启，`aux_debug_topic` 默认 `/a2/policy_aux`，每次 `computeAction()` 后发布 `policys[kPolicyId].get_last_aux_output()` 的 aux vector。
+- [x] `enable_motion=false` early return 已扩展为仅在 `monitor_policy_aux=false` 且 `publish_aux_debug=false` 时跳过 inference；因此 `policy-listen-remote` 可以在 no-LowCmd 前提下发布 `/a2/policy_aux`。
+- [x] 新增 `a2_real_robot_observer.py policy-aux-topic-live` 和 wrapper `policy-aux-monitor [duration]`，只订阅 `std_msgs/msg/Float32MultiArray`，打印 sample count、age、dim、first8 values 和 dim 6 force-estimator layout warning。
+- [x] 更新 `a2_policy_remote.env`、`a2_real_robot_test.sh`、`A2_REAL_DEPLOY_RUNBOOK.md`、`A2_REAL_ROBOT_TEST.md` 和 `README.md`，记录 `policy-aux-live` 是 independent listen-only smoke，`policy-aux-monitor` 是 active policy aux topic subscriber。

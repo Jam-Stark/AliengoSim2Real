@@ -4,6 +4,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -212,6 +213,24 @@ std::string format_remote_button_names(const A2RemoteState &remote) {
   return out.str();
 }
 
+std::string format_float_values(const std::vector<float> &values,
+                                std::size_t max_count) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(4) << "[";
+  const std::size_t count = std::min(values.size(), max_count);
+  for (std::size_t i = 0; i < count; ++i) {
+    if (i != 0) {
+      out << ", ";
+    }
+    out << values[i];
+  }
+  if (values.size() > count) {
+    out << ", ...";
+  }
+  out << "]";
+  return out.str();
+}
+
 }  // namespace
 
 A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
@@ -239,6 +258,16 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("remote_deadzone", 0.08);
   require_standup_before_policy_ =
       this->declare_parameter<bool>("require_standup_before_policy", true);
+  monitor_policy_aux_ =
+      this->declare_parameter<bool>("monitor_policy_aux", false);
+  publish_aux_debug_ =
+      this->declare_parameter<bool>("publish_aux_debug", false);
+  aux_debug_topic_ =
+      this->declare_parameter<std::string>("aux_debug_topic", "/a2/policy_aux");
+  policy_aux_expected_dim_ =
+      this->declare_parameter<int>("policy_aux_expected_dim", 6);
+  policy_aux_print_period_sec_ =
+      this->declare_parameter<double>("policy_aux_print_period_sec", 0.2);
   standup_stage1_steps_ =
       this->declare_parameter<int>("standup_stage1_steps", 150);
   standup_stage2_steps_ =
@@ -264,6 +293,7 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
 
   load_and_validate_policy_contract(policy_json_path_);
   init_manager();
+  ensure_aux_debug_publisher();
 
   const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::duration<double>(1.0 / kDeployControlHz));
@@ -272,11 +302,14 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
 
   RCLCPP_INFO(this->get_logger(),
               "A2 policy deploy ready: policy=%s, json=%s, control_hz=%.1f, "
-              "enable_motion=%s, command_source=%s",
+              "enable_motion=%s, command_source=%s, publish_aux_debug=%s, "
+              "aux_debug_topic=%s",
               canonical_or_absolute(policy_path_).string().c_str(),
               canonical_or_absolute(policy_json_path_).string().c_str(),
               kDeployControlHz, enable_motion_ ? "true" : "false",
-              command_source_param_.c_str());
+              command_source_param_.c_str(),
+              publish_aux_debug_ ? "true" : "false",
+              aux_debug_topic_.c_str());
 }
 
 void A2PolicyDeployNode::load_and_validate_policy_contract(
@@ -637,10 +670,12 @@ void A2PolicyDeployNode::control_loop() {
     history_warm_logged_ = true;
   }
 
-  if (!enable_motion_) {
+  if (!enable_motion_ && !monitor_policy_aux_ && !publish_aux_debug_) {
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 3000,
         "A2 policy publish refused because enable_motion=false.");
+    obs_actions[kPolicyId] = SimpleTensor::wrap(
+        std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
     advance_gait_clock();
     return;
   }
@@ -656,6 +691,10 @@ void A2PolicyDeployNode::control_loop() {
   }
 
   const auto raw_action = ManagerBasedEnv::toVector<float>(action);
+  const SimpleTensor aux = policys[kPolicyId].get_last_aux_output();
+  publish_policy_aux_debug(aux);
+  const bool aux_values_finite =
+      log_policy_aux_output(action, aux, false);
   if (raw_action.size() != kTrainingJointCount ||
       !vector_is_finite(raw_action)) {
     RCLCPP_ERROR_THROTTLE(
@@ -669,6 +708,25 @@ void A2PolicyDeployNode::control_loop() {
   }
 
   std::array<float, kTrainingJointCount> clipped_raw{};
+  if (!enable_motion_) {
+    for (std::size_t i = 0; i < kTrainingJointCount; ++i) {
+      clipped_raw[i] = std::clamp(
+          raw_action[i], static_cast<float>(-contract_.action_clip),
+          static_cast<float>(contract_.action_clip));
+    }
+    last_raw_action_ = clipped_raw;
+    obs_actions[kPolicyId] = SimpleTensor::wrap(
+        std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
+    if (!aux_values_finite) {
+      RCLCPP_WARN_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "A2 policy aux monitor saw NaN/Inf auxiliary output. LowCmd remains "
+          "blocked because enable_motion=false.");
+    }
+    advance_gait_clock();
+    return;
+  }
+
   auto commands = build_low_level_commands(raw_action, clipped_raw);
   if (!publish_joint_commands(commands)) {
     obs_actions[kPolicyId] = SimpleTensor::wrap(
@@ -694,6 +752,21 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("remote_deadzone", remote_deadzone_);
   this->get_parameter("require_standup_before_policy",
                       require_standup_before_policy_);
+  this->get_parameter("monitor_policy_aux", monitor_policy_aux_);
+  this->get_parameter("publish_aux_debug", publish_aux_debug_);
+  std::string requested_aux_debug_topic = aux_debug_topic_;
+  this->get_parameter("aux_debug_topic", requested_aux_debug_topic);
+  if (requested_aux_debug_topic != aux_debug_topic_) {
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "A2 aux debug topic parameter changed from '%s' to '%s' at runtime; "
+        "keeping existing publisher topic.",
+        aux_debug_topic_.c_str(), requested_aux_debug_topic.c_str());
+  }
+  ensure_aux_debug_publisher();
+  this->get_parameter("policy_aux_expected_dim", policy_aux_expected_dim_);
+  this->get_parameter("policy_aux_print_period_sec",
+                      policy_aux_print_period_sec_);
   this->get_parameter("standup_stage1_steps", standup_stage1_steps_);
   this->get_parameter("standup_stage2_steps", standup_stage2_steps_);
   this->get_parameter("standup_rear_alpha_lead", standup_rear_alpha_lead_);
@@ -702,6 +775,18 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("standup_kd_start", standup_kd_start_);
   this->get_parameter("standup_final_gain_scale",
                       standup_final_gain_scale_);
+  if (monitor_policy_aux_ &&
+      (policy_aux_expected_dim_ < 0 ||
+       !std::isfinite(policy_aux_print_period_sec_) ||
+       policy_aux_print_period_sec_ <= 0.0)) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 policy aux monitor params invalid: policy_aux_expected_dim must "
+        "be >=0 and policy_aux_print_period_sec must be finite positive. "
+        "Refusing policy publish/monitor.");
+    return false;
+  }
+
   if (standup_stage1_steps_ < 1 || standup_stage2_steps_ < 1 ||
       !std::isfinite(standup_rear_alpha_lead_) ||
       !std::isfinite(standup_front_alpha_lag_) ||
@@ -1134,6 +1219,9 @@ bool A2PolicyDeployNode::validate_policy_action_for_handover() {
   }
 
   const auto raw_action = ManagerBasedEnv::toVector<float>(action);
+  const SimpleTensor aux = policys[kPolicyId].get_last_aux_output();
+  publish_policy_aux_debug(aux);
+  log_policy_aux_output(action, aux, false);
   obs_actions[kPolicyId] = SimpleTensor::wrap(
       std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
   if (raw_action.size() != kTrainingJointCount ||
@@ -1148,6 +1236,139 @@ bool A2PolicyDeployNode::validate_policy_action_for_handover() {
   }
 
   return true;
+}
+
+bool A2PolicyDeployNode::should_log_policy_aux(bool force) {
+  if (!monitor_policy_aux_) {
+    return false;
+  }
+  if (force || !have_policy_aux_log_time_) {
+    last_policy_aux_log_time_ = std::chrono::steady_clock::now();
+    have_policy_aux_log_time_ = true;
+    return true;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  const auto elapsed =
+      std::chrono::duration<double>(now - last_policy_aux_log_time_).count();
+  if (elapsed < policy_aux_print_period_sec_) {
+    return false;
+  }
+
+  last_policy_aux_log_time_ = now;
+  return true;
+}
+
+bool A2PolicyDeployNode::log_policy_aux_output(const SimpleTensor &action,
+                                               const SimpleTensor &aux,
+                                               bool force) {
+  if (!monitor_policy_aux_) {
+    return true;
+  }
+
+  const bool action_finite = vector_is_finite(action.data_);
+  const bool aux_finite = vector_is_finite(aux.data_);
+  const bool should_log = should_log_policy_aux(force || !aux_finite);
+  if (!should_log) {
+    return aux_finite;
+  }
+
+  const std::vector<float> action_values = action.data_;
+  const std::vector<float> aux_values = aux.data_;
+  const std::string action_preview = format_float_values(action_values, 8);
+
+  if (!action_finite) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "A2 policy aux monitor: action_dim=%lld action_first8=%s "
+                 "contains NaN/Inf.",
+                 static_cast<long long>(action.numel()),
+                 action_preview.c_str());
+  }
+
+  if (!aux_finite) {
+    RCLCPP_WARN(this->get_logger(),
+                "A2 policy aux monitor: action_dim=%lld action_first8=%s "
+                "aux_dim=%lld expected_aux_dim=%d aux_first8=%s contains "
+                "NaN/Inf; monitor mode will not publish LowCmd.",
+                static_cast<long long>(action.numel()),
+                action_preview.c_str(),
+                static_cast<long long>(aux.numel()), policy_aux_expected_dim_,
+                format_float_values(aux_values, 8).c_str());
+    return false;
+  }
+
+  if (aux.numel() == 0) {
+    RCLCPP_INFO(this->get_logger(),
+                "A2 policy aux monitor: action_dim=%lld action_first8=%s "
+                "aux_dim=0 expected_aux_dim=%d; model may not return "
+                "tuple[1].",
+                static_cast<long long>(action.numel()),
+                action_preview.c_str(), policy_aux_expected_dim_);
+    return true;
+  }
+
+  if (aux.numel() == 6 &&
+      policy_aux_expected_dim_ == static_cast<int>(aux.numel())) {
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 policy aux monitor: action_dim=%lld action_first8=%s aux_dim=6 "
+        "expected_aux_dim=%d pred_base_lin_vel=[%.4f, %.4f, %.4f] "
+        "pred_base_force_local=[%.4f, %.4f, %.4f]",
+        static_cast<long long>(action.numel()), action_preview.c_str(),
+        policy_aux_expected_dim_, aux_values[0], aux_values[1], aux_values[2],
+        aux_values[3], aux_values[4], aux_values[5]);
+    return true;
+  }
+
+  if (aux.numel() == 6) {
+    RCLCPP_WARN(
+        this->get_logger(),
+        "A2 policy aux monitor: action_dim=%lld action_first8=%s aux_dim=6 "
+        "expected_aux_dim=%d pred_base_lin_vel=[%.4f, %.4f, %.4f] "
+        "pred_base_force_local=[%.4f, %.4f, %.4f] aux_first8=%s; layout "
+        "unverified because aux_dim != expected_aux_dim.",
+        static_cast<long long>(action.numel()), action_preview.c_str(),
+        policy_aux_expected_dim_, aux_values[0], aux_values[1], aux_values[2],
+        aux_values[3], aux_values[4], aux_values[5],
+        format_float_values(aux_values, 8).c_str());
+    return true;
+  }
+
+  RCLCPP_WARN(this->get_logger(),
+              "A2 policy aux monitor: action_dim=%lld action_first8=%s "
+              "aux_dim=%lld expected_aux_dim=%d aux_first8=%s; layout "
+              "unverified.",
+              static_cast<long long>(action.numel()), action_preview.c_str(),
+              static_cast<long long>(aux.numel()), policy_aux_expected_dim_,
+              format_float_values(aux_values, 8).c_str());
+  return true;
+}
+
+void A2PolicyDeployNode::ensure_aux_debug_publisher() {
+  if (!publish_aux_debug_ || aux_debug_pub_) {
+    return;
+  }
+
+  aux_debug_pub_ =
+      this->create_publisher<std_msgs::msg::Float32MultiArray>(
+          aux_debug_topic_, 10);
+  RCLCPP_INFO(this->get_logger(),
+              "A2 policy aux debug publisher enabled: topic=%s",
+              aux_debug_topic_.c_str());
+}
+
+void A2PolicyDeployNode::publish_policy_aux_debug(const SimpleTensor &aux) {
+  if (!publish_aux_debug_) {
+    return;
+  }
+  ensure_aux_debug_publisher();
+  if (!aux_debug_pub_) {
+    return;
+  }
+
+  std_msgs::msg::Float32MultiArray msg;
+  msg.data = aux.data_;
+  aux_debug_pub_->publish(msg);
 }
 
 void A2PolicyDeployNode::set_zero_command() {
@@ -1182,6 +1403,7 @@ void A2PolicyDeployNode::advance_gait_clock() {
 void A2PolicyDeployNode::reset_runtime_state() {
   warm_frames_ = 0;
   history_warm_logged_ = false;
+  have_policy_aux_log_time_ = false;
   gait_phase_ = 0.0;
   last_raw_action_.fill(0.0f);
   if (!obs_terms.empty()) {

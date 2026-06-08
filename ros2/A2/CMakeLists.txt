@@ -14,6 +14,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(unitree_hg REQUIRED)
 
 set(A2_POLICY_DEFAULT_PATH
@@ -37,6 +38,7 @@ target_include_directories(a2_lowlevel PUBLIC
 target_compile_features(a2_lowlevel PUBLIC cxx_std_17)
 ament_target_dependencies(a2_lowlevel
   rclcpp
+  std_msgs
   unitree_hg
 )
 
@@ -97,6 +99,7 @@ if(BUILD_A2_POLICY_DEPLOY)
   )
   ament_target_dependencies(a2_policy_deploy
     rclcpp
+    std_msgs
     unitree_hg
   )
   list(APPEND A2_INSTALL_TARGETS a2_policy_deploy)
@@ -117,7 +120,7 @@ install(DIRECTORY include/
 ament_export_include_directories(include)
 ament_export_libraries(a2_lowlevel)
 ament_export_targets(a2_lowlevelTargets HAS_LIBRARY_TARGET)
-ament_export_dependencies(rclcpp unitree_hg)
+ament_export_dependencies(rclcpp std_msgs unitree_hg)
 
 if(BUILD_TESTING)
   enable_testing()

@@ -12,6 +12,7 @@
 #include "a2_lowlevel/a2_lowlevel_interface.h"
 #include "a2_lowlevel/a2_remote.h"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 
 namespace a2_lowlevel {
 
@@ -87,6 +88,11 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   bool run_policy_warmup_hold();
   bool compute_and_validate_policy_observation();
   bool validate_policy_action_for_handover();
+  bool log_policy_aux_output(const SimpleTensor &action,
+                             const SimpleTensor &aux, bool force);
+  bool should_log_policy_aux(bool force);
+  void ensure_aux_debug_publisher();
+  void publish_policy_aux_debug(const SimpleTensor &aux);
   void set_zero_command();
   bool is_history_warm() const;
   bool is_standing_command() const;
@@ -138,6 +144,13 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   double max_remote_yaw_ = 0.6;
   double remote_deadzone_ = 0.08;
   bool require_standup_before_policy_ = true;
+  bool monitor_policy_aux_ = false;
+  bool publish_aux_debug_ = false;
+  std::string aux_debug_topic_ = "/a2/policy_aux";
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr
+      aux_debug_pub_;
+  int policy_aux_expected_dim_ = 6;
+  double policy_aux_print_period_sec_ = 0.2;
   int standup_stage1_steps_ = 150;
   int standup_stage2_steps_ = 150;
   double standup_rear_alpha_lead_ = 0.10;
@@ -158,6 +171,8 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   std::array<float, kTrainingJointCount> last_raw_action_{};
   double gait_phase_ = 0.0;
   SimpleTensor gravity_;
+  bool have_policy_aux_log_time_ = false;
+  std::chrono::steady_clock::time_point last_policy_aux_log_time_{};
 };
 
 }  // namespace a2_lowlevel

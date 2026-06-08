@@ -206,16 +206,92 @@ Confirmation:
 
 If any `/lowcmd` message is observed in this stage, do not continue to real policy.
 
+Optional force-estimator auxiliary monitor, still listen-only and independent of active motion:
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-live 30
+```
+
+For continuous live output, use duration `0` and stop with Ctrl-C:
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-live 0
+```
+
+Ideal result:
+
+- `policy-aux-live` prints action dim and aux dim after history warm.
+- If aux dim is `6`, logs show `pred_base_lin_vel` and `pred_base_force_local`.
+- The paired no-lowcmd observer still prints no configured `/lowcmd` messages.
+- `A2_POLICY_BRAKE_*` fields in run config remain comment-only; brake gate is not enabled in this runbook.
+
 ## 8. Start Real Policy
 
 This is the first day-to-day deployment motion command. Confirm robot support/clearance,
 hardware emergency stop, one LowCmd publisher, released built-in motion mode, and centered sticks.
 
-Container terminal:
+先检查 run config。默认路径是
+`/work/projects/AliengoSim2Real/ros2/A2/config/a2_policy_remote.env`；如现场需要临时
+覆盖速度上限、deadzone 或 aux monitor 参数，复制/编辑一个 `.env`，然后通过
+`A2_POLICY_RUN_CONFIG=/path/to/file.env` 指定。Operator shell 中已有的 `A2_POLICY_*`
+env 会覆盖 config 文件值。
+
+```bash
+sed -n '1,120p' A2/config/a2_policy_remote.env
+```
+
+确认至少包含：
+
+```text
+A2_POLICY_MAX_REMOTE_VX=0.80
+A2_POLICY_MAX_REMOTE_VY=0.50
+A2_POLICY_MAX_REMOTE_YAW=0.6
+A2_POLICY_REMOTE_DEADZONE=0.08
+A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY=true
+A2_POLICY_PUBLISH_AUX_DEBUG=true
+A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
+A2_POLICY_AUX_EXPECTED_DIM=6
+A2_POLICY_AUX_PRINT_PERIOD=0.2
+```
+
+不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 run config；它必须只在执行真运动命令的
+operator shell 里显式设置。
+`A2_POLICY_BRAKE_*` entries are placeholders only and are not passed to active
+`a2_policy_deploy` behavior.
+
+Use two Docker terminals if you want live force-estimator aux while the active policy runs.
+
+Terminal 1, active policy motion path:
 
 ```bash
 A2_ALLOW_ENABLE_MOTION=1 A2/scripts/a2_real_robot_test.sh policy-enable-remote 120
 ```
+
+Terminal 2, aux topic subscriber only:
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0
+```
+
+`policy-aux-monitor` only subscribes to `A2_POLICY_AUX_DEBUG_TOPIC` (default `/a2/policy_aux`).
+It does not start a policy node, does not start no-lowcmd observer, and never publishes LowCmd.
+It can be started before or after Terminal 1; it will not print samples until the active
+`a2_policy_deploy` instance has warmed history and completed policy inference.
+
+Optional topic check from either container terminal:
+
+```bash
+ros2 topic info /a2/policy_aux -v
+```
+
+Expected aux topic check:
+
+- type is `std_msgs/msg/Float32MultiArray`.
+- publisher is the active `a2_policy_deploy` node from Terminal 1.
+- Terminal 2 monitor is subscription-only.
+- no aux samples before history warmup is normal; no aux samples after policy inference means
+  check `A2_POLICY_PUBLISH_AUX_DEBUG`, `A2_POLICY_AUX_DEBUG_TOPIC`, and
+  `policy_enable_remote_*.log`.
 
 Remote handover sequence:
 
@@ -232,12 +308,16 @@ PolicyActive stick mapping:
 - `-rx -> yaw`
 - `L2` is not a locomotion gate.
 
-Default script speed caps:
+Default run config speed caps:
 
 ```text
 max_remote_vx=0.80
 max_remote_vy=0.50
 max_remote_yaw=0.6
+remote_deadzone=0.08
+require_standup_before_policy=true
+publish_aux_debug=true
+aux_debug_topic=/a2/policy_aux
 ```
 
 Any abnormal behavior: release sticks, press `Select`, then use hardware emergency stop if the robot
@@ -318,6 +398,9 @@ Expected log families:
 - `motion_release_*.log`
 - `policy_listen_remote_*.log`
 - `policy_listen_no_lowcmd_*.log`
+- `policy_aux_live_*.log`
+- `policy_aux_live_no_lowcmd_*.log`
+- `policy_aux_monitor_*.log`
 - `policy_enable_remote_*.log`
 - `motion_select_*.log`
 
@@ -333,6 +416,7 @@ ros2 topic list
 ros2 topic info /lowstate -v || true
 ros2 topic info /lf/lowstate -v || true
 ros2 topic info /lowcmd -v || true
+ros2 topic info /a2/policy_aux -v || true
 find /tmp/a2_real_robot_tests -maxdepth 1 -type f -name '*.log' -print
 ```
 

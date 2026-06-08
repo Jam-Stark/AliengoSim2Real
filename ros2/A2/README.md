@@ -554,6 +554,65 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 ros2 run a2_lowlevel a2_policy_deploy
 ```
 
+Real robot wrapper 的 policy subcommands 使用 run config：
+
+```text
+ros2/A2/config/a2_policy_remote.env
+```
+
+该文件只用于 `policy-listen-remote`、`policy-enable-remote`、`policy-aux-live`
+和 `policy-aux-monitor`；
+其它 tests 不加载它。优先级是 script defaults < config file < operator shell 中已有的
+`A2_POLICY_*` env。可用 `A2_POLICY_RUN_CONFIG=/path/to/file.env` 指定现场临时 config。
+不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 config；真运动 guard 必须只在执行
+`policy-enable-remote` 的 shell 中显式设置。
+
+默认 run config：
+
+```text
+A2_POLICY_MAX_REMOTE_VX=0.80
+A2_POLICY_MAX_REMOTE_VY=0.50
+A2_POLICY_MAX_REMOTE_YAW=0.6
+A2_POLICY_REMOTE_DEADZONE=0.08
+A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY=true
+A2_POLICY_PUBLISH_AUX_DEBUG=true
+A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
+A2_POLICY_AUX_EXPECTED_DIM=6
+A2_POLICY_AUX_PRINT_PERIOD=0.2
+```
+
+Brake gate 字段当前只在 config 里作为 comment-only placeholder 保留；wrapper 不会把
+`A2_POLICY_BRAKE_*` 传给 `a2_policy_deploy` active behavior。后续如要启用 brake gate，
+必须先用 `policy-aux-live` 做 independent listen-only smoke，并用 active
+`policy-aux-monitor` 确认 aux dim/layout 和 force-estimator semantics。
+
+`policy-aux-live` 是 independent listen-only smoke：
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-live
+```
+
+该 wrapper 运行 `a2_policy_deploy` with `enable_motion=false`、`command_source=remote`、
+`monitor_policy_aux=true`，同时启动 `no-lowcmd` observer。history warm 后 node 会执行
+policy inference 只用于监测，并打印 action dim、aux dim 和 aux values；dim 6 按
+Aliengo convention 打印 `pred_base_lin_vel[0..2]` 与
+`pred_base_force_local[0..2]`。aux 为空表示模型可能没有返回 `tuple[1]`；aux dim 与
+expected dim 不一致时会标记 layout unverified；aux NaN/Inf 会 warning，但
+`enable_motion=false` monitor path 不发布 LowCmd。
+
+`policy-aux-monitor` 只订阅 active policy 发布的 aux debug topic，不启动 policy node、
+不启动 no-lowcmd observer、也不发布 LowCmd。典型用法是在另一个 Docker terminal 中配合
+`policy-enable-remote` 实时观察 force estimator：
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0
+```
+
+该 subscriber 默认读取 `A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux`、
+`A2_POLICY_AUX_EXPECTED_DIM=6` 和 `A2_POLICY_AUX_PRINT_PERIOD=0.2`。收到 dim 6 时按
+Aliengo convention 打印 `pred_base_lin_vel[0..2]` 与
+`pred_base_force_local[0..2]`；aux 为空、dim mismatch 或 NaN/Inf 只显示 warning。
+
 显式启用 motion，并使用静态 command provider 只作为 legacy/debug path。默认
 `require_standup_before_policy=true` 会阻止 `command_source=static` 在
 `enable_motion=true` 下直接进入 policy publish；如确需复现旧行为，必须显式关闭
@@ -594,6 +653,17 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `require_standup_before_policy`：默认 `true`。为 `true` 时，`enable_motion=true`
   只允许 `command_source=remote` 通过 two-A stand-up handover 进入 policy；static
   motion publish 会被拒绝。
+- `monitor_policy_aux`：默认 `false`。为 `true` 且 `enable_motion=false` 时，history
+  warm 后允许执行 policy inference 只用于 aux monitor，不发布 LowCmd。
+- `publish_aux_debug`：默认 `false`。为 `true` 时，每次 policy inference 后将 aux vector
+  作为 `std_msgs/msg/Float32MultiArray` 发布；aux 为空会发布 empty vector，aux NaN/Inf
+  也会发布，由 monitor 报警。它不影响 action validation，也不阻断 motion。
+- `aux_debug_topic`：默认 `/a2/policy_aux`。构造 publisher 时使用；runtime 改名不会重建
+  publisher，只会保留构造时 topic 并 warning。
+- `policy_aux_expected_dim`：默认 `6`。仅用于 aux monitor layout check；必须为
+  non-negative。
+- `policy_aux_print_period_sec`：默认 `0.2`。仅用于 aux monitor log cadence；必须为
+  finite positive。
 - `standup_stage1_steps` / `standup_stage2_steps`：默认 `150` / `150`，合计
   `300` 个 50 Hz control steps。
 - `standup_rear_alpha_lead` / `standup_front_alpha_lag`：默认 `0.10` / `0.04`，
@@ -659,7 +729,8 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 
 `a2_policy_deploy` 的 publish refusal 条件：
 
-- `enable_motion=false`：node 仍监听 fresh `LowState`、更新 command provider、计算 observation 并 warm history，但在 `computeAction()` / `publish_joint_commands()` 前拒绝 motion publish
+- `enable_motion=false` 且 `monitor_policy_aux=false` 且 `publish_aux_debug=false`：node 仍监听 fresh `LowState`、更新 command provider、计算 observation 并 warm history，但在 `computeAction()` / `publish_joint_commands()` 前拒绝 motion publish
+- `enable_motion=false` 且 `monitor_policy_aux=true` 或 `publish_aux_debug=true`：history warm 后执行 inference-only，用于 aux log/topic debug；仍然在 LowCmd publish 前 return，不调用 `publish_joint_commands()`
 - `require_standup_before_policy=true` 且 `enable_motion=true` / `command_source=static`：拒绝 motion publish，避免 static default command 绕过 stand-up gate
 - `require_standup_before_policy=true` 且 `command_source=remote`：first `A` 前保持 `IdleBlocked`，不会发布 `LowCmd`
 - missing/stale configured lowstate topic（默认 `/lowstate`）

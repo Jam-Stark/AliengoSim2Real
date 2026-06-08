@@ -16,7 +16,7 @@
 
 硬性边界：
 
-- `connected-preflight`、`no-lowcmd`、`lowstate`、`joints-live`、`joints`、`remote-live`、`remote`、`smoke-remote`、`motion-check`、`policy-listen-remote` 默认不发布 configured LowCmd topic message。
+- `connected-preflight`、`no-lowcmd`、`lowstate`、`joints-live`、`joints`、`remote-live`、`remote`、`smoke-remote`、`motion-check`、`policy-listen-remote`、`policy-aux-live`、`policy-aux-monitor` 默认不发布 configured LowCmd topic message。
 - `motion-release` 会调用 Unitree `MotionSwitcherClient::ReleaseMode()`，必须显式设置 `A2_ALLOW_RELEASE_MODE=1`。
 - `motion-select` / `motion-restore` 会调用 Unitree `MotionSwitcherClient::SelectMode()` 恢复内置 motion service，必须先停止 policy/LowCmd publisher、重新运行 `no-lowcmd` pass，并显式设置 `A2_ALLOW_SELECT_MODE=1`。
 - `zero-lowcmd` 会发布 zero `LowCmd`，必须显式设置 `A2_ALLOW_ZERO_LOWCMD=1`。
@@ -502,7 +502,8 @@ Ideal result：
 - observer log 写入 `/tmp/a2_real_robot_tests/policy_listen_no_lowcmd_*.log`。
 - policy 输出 `Validated A2 policy contract...`。
 - policy 输出 `enable_motion=false` 和 `command_source=remote`。
-- policy history warmup 后仍输出 `A2 policy publish refused because enable_motion=false.`。
+- 默认 run config 会传入 `publish_aux_debug=true`，因此 policy history warmup 后会执行
+  inference-only 并发布 `/a2/policy_aux`，但仍然不会发布 configured LowCmd topic。
 - 按 `Select` 时 policy 只记录 local stop / runtime reset，不发布 zero LowCmd；`L2+B`
   仍可作为附加 stop path，但现场 primary stop 是 `Select`。
 - no-lowcmd observer 会以 `policy duration + 2s` 运行，覆盖完整 policy runtime 和收尾窗口。
@@ -510,6 +511,72 @@ Ideal result：
   `A2_LOWCMD_TOPIC`。
 
 如果此步骤观察到任何 configured LowCmd topic message，不要继续。
+
+`policy-aux-live` 是 independent listen-only / no-lowcmd smoke。它运行
+`a2_policy_deploy`，设置 `enable_motion=false`、`command_source=remote`、
+`monitor_policy_aux=true`，并同时启动 `no-lowcmd` observer 覆盖完整 duration。默认
+duration 是 `0`，表示持续运行直到 Ctrl-C；finite duration 时 observer 会额外覆盖收尾窗口。
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-live
+```
+
+或限制运行时间：
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-live 30
+```
+
+Ideal aux monitor result：
+
+- policy log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_*.log`。
+- no-lowcmd observer log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_no_lowcmd_*.log`。
+- wrapper 会读取 `A2/config/a2_policy_remote.env`，并打印 effective remote caps、deadzone、
+  `require_standup_before_policy`、`policy_aux_expected_dim` 和 print period。
+- policy 输出 `enable_motion=false`、`command_source=remote`、`monitor_policy_aux=true`。
+- history warm 后 policy 会执行 inference 只用于监测，不发布 LowCmd。
+- aux 输出默认按 Aliengo convention 解释 dim 6：
+  `pred_base_lin_vel[0..2]` 和 `pred_base_force_local[0..2]`。如果 aux 为空，说明模型可能
+  没有返回 `tuple[1]`；如果 dim 不是 expected dim，会标记 layout unverified 并打印前
+  最多 8 个值。
+- aux monitor 的 history / gait 是由当前 lowstate、remote command 和 policy action obs
+  独立滚动估计；它不是 robot base velocity/force 的外部传感器测量。
+- no-lowcmd observer 必须输出 `PASS: no /lowcmd messages observed`，或显示 operator
+  配置的 `A2_LOWCMD_TOPIC` 并 pass。
+
+如果 aux 中出现 NaN/Inf、dim/layout 不符合预期，或者 no-lowcmd observer 失败，不要继续
+启用 brake gate 或 real policy motion；先保存 logs 并确认 policy aux layout。
+
+`policy-aux-monitor` 是 active policy aux topic subscriber。它只订阅
+`std_msgs/msg/Float32MultiArray` topic，不启动 policy node、不启动 no-lowcmd observer、
+不发布 LowCmd。它用于另一个 Docker terminal 实时观察正在运行的 `policy-enable-remote`
+发出的 `/a2/policy_aux`，也可以观察 `policy-listen-remote` 在 `enable_motion=false`
+下发布的 same aux debug topic：
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0
+```
+
+如果需要确认 topic publisher/type，另一个 terminal 可执行：
+
+```bash
+ros2 topic info /a2/policy_aux -v
+```
+
+Ideal active-topic monitor result：
+
+- wrapper 打印 `publish_aux_debug`、`aux_debug_topic`、`aux_expected_dim` 和 print period。
+- `ros2 topic info /a2/policy_aux -v` 显示 type 是
+  `std_msgs/msg/Float32MultiArray`，且 publisher 来自当前 active `a2_policy_deploy`
+  instance。monitor 自己不会成为 publisher。
+- live output 显示 `sample_count`、latest age、dim 和 values first8。
+- dim 6 时显示 `pred_base_lin_vel` 和 `pred_base_force_local`。
+- dim 0、dim mismatch 或 NaN/Inf 都显示 `WARN`，但 monitor 本身不影响 active motion。
+- 如果 terminal 暂时没有 sample，先确认 active policy node 已 history warm 并实际完成
+  inference；stand-up/holder 或 history warmup 前可能还没有 aux message。
+- 如果始终没有 sample，检查 `A2/config/a2_policy_remote.env` 或 operator env 中
+  `A2_POLICY_PUBLISH_AUX_DEBUG=true`、`A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux`，并查看
+  `policy_enable_remote_*.log` 或 `policy_listen_remote_*.log`。
 
 ## 10. Last Stage: enable_motion=true Remote Policy
 
@@ -526,13 +593,20 @@ Ideal result：
   发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
   rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
 
-运行小速度上限的 remote policy：
+按 run config 中的 remote speed caps 运行 remote policy，并在第二个 terminal 订阅 active aux topic：
 
 ```bash
 A2_ALLOW_ENABLE_MOTION=1 A2/scripts/a2_real_robot_test.sh policy-enable-remote 20
 ```
 
-脚本实际运行参数：
+另一个 Docker terminal：
+
+```bash
+A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0
+```
+
+脚本实际运行参数来自 `A2/config/a2_policy_remote.env`，并允许 operator shell 中已有的
+`A2_POLICY_*` env 覆盖。默认 run config 值：
 
 ```text
 enable_motion:=true
@@ -540,6 +614,12 @@ command_source:=remote
 max_remote_vx:=0.80
 max_remote_vy:=0.50
 max_remote_yaw:=0.6
+remote_deadzone:=0.08
+require_standup_before_policy:=true
+publish_aux_debug:=true
+aux_debug_topic:=/a2/policy_aux
+policy_aux_expected_dim:=6
+policy_aux_print_period_sec:=0.2
 ```
 
 Ideal result：
@@ -572,6 +652,10 @@ Ideal result：
 - MotionSwitcher `CheckMode` 可读，`ReleaseMode` 或 App 能关闭 `ai_sports` / `ai_sport`。
 - `zero-lowcmd` CRC、zero shape、`mode_machine` follow state 全部 pass。
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
+- `policy-aux-live` 在 `enable_motion=false` 下没有 configured LowCmd topic message，并已确认
+  aux dim/layout；brake gate 后续启用前必须先确认 dim 6 的 force-estimator layout。
+- `policy-aux-monitor` 可在 active `policy-enable-remote` 期间订阅 `/a2/policy_aux`，
+  并实时显示 dim/value/warning；该 monitor 不启动 policy node，也不发布 LowCmd。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`
   stand-up、holder default pose、second `A` warmup/handover、local stop 和 `B` cancel。
 - 测试结束恢复内置 motion service 前，已停止 policy/LowCmd publisher、`no-lowcmd` 重新 pass，
@@ -617,6 +701,9 @@ find /tmp/a2_real_robot_tests -maxdepth 1 -type f -name '*.log' -print
 - `zero_lowcmd_smoke_*.log`
 - `policy_listen_remote_*.log`
 - `policy_listen_no_lowcmd_*.log`
+- `policy_aux_live_*.log`
+- `policy_aux_live_no_lowcmd_*.log`
+- `policy_aux_monitor_*.log`
 - `policy_enable_remote_*.log`
 
 ## 13. Official References

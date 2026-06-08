@@ -104,6 +104,99 @@ require_env_flag() {
   fi
 }
 
+load_policy_run_config() {
+  local config_path="${A2_POLICY_RUN_CONFIG:-$repo_root/ros2/A2/config/a2_policy_remote.env}"
+  local override_file
+  local source_status
+  local allow_was_set=0
+  local allow_value=""
+  local names=(
+    A2_POLICY_MAX_REMOTE_VX
+    A2_POLICY_MAX_REMOTE_VY
+    A2_POLICY_MAX_REMOTE_YAW
+    A2_POLICY_REMOTE_DEADZONE
+    A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY
+    A2_POLICY_PUBLISH_AUX_DEBUG
+    A2_POLICY_AUX_DEBUG_TOPIC
+    A2_POLICY_AUX_EXPECTED_DIM
+    A2_POLICY_AUX_PRINT_PERIOD
+    A2_POLICY_BRAKE_GATE_ENABLED
+    A2_POLICY_BRAKE_FORCE_X_THRESHOLD_N
+    A2_POLICY_BRAKE_MIN_CMD_VX
+    A2_POLICY_BRAKE_MAX_ABS_YAW
+    A2_POLICY_BRAKE_HOLD_STEPS
+  )
+  local name
+
+  if [ ! -f "$config_path" ]; then
+    echo "ERROR: A2 policy run config not found: $config_path" >&2
+    echo "Set A2_POLICY_RUN_CONFIG=/path/to/file.env to override." >&2
+    exit 2
+  fi
+  if ! bash -n "$config_path"; then
+    echo "ERROR: A2 policy run config has invalid bash syntax: $config_path" >&2
+    exit 2
+  fi
+
+  override_file="$(mktemp)"
+  for name in "${names[@]}"; do
+    if [ "${!name+x}" = "x" ]; then
+      printf 'export %s=%q\n' "$name" "${!name}" >> "$override_file"
+    fi
+  done
+
+  if [ "${A2_ALLOW_ENABLE_MOTION+x}" = "x" ]; then
+    allow_was_set=1
+    allow_value="$A2_ALLOW_ENABLE_MOTION"
+  fi
+
+  A2_POLICY_MAX_REMOTE_VX=0.80
+  A2_POLICY_MAX_REMOTE_VY=0.50
+  A2_POLICY_MAX_REMOTE_YAW=0.6
+  A2_POLICY_REMOTE_DEADZONE=0.08
+  A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY=true
+  A2_POLICY_PUBLISH_AUX_DEBUG=true
+  A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
+  A2_POLICY_AUX_EXPECTED_DIM=6
+  A2_POLICY_AUX_PRINT_PERIOD=0.2
+
+  set +e
+  # shellcheck disable=SC1090
+  source "$config_path"
+  source_status=$?
+  set -e
+  if [ "$source_status" -ne 0 ]; then
+    rm -f "$override_file"
+    echo "ERROR: failed to source A2 policy run config: $config_path" >&2
+    exit "$source_status"
+  fi
+
+  # Operator-provided environment wins over repo defaults and config file.
+  # A2_ALLOW_ENABLE_MOTION is intentionally not accepted from the config file.
+  # shellcheck disable=SC1090
+  source "$override_file"
+  rm -f "$override_file"
+  if [ "$allow_was_set" -eq 1 ]; then
+    A2_ALLOW_ENABLE_MOTION="$allow_value"
+    export A2_ALLOW_ENABLE_MOTION
+  else
+    unset A2_ALLOW_ENABLE_MOTION
+  fi
+
+  A2_POLICY_EFFECTIVE_CONFIG="$config_path"
+}
+
+print_policy_run_config() {
+  echo "[a2-real-test] policy_run_config=${A2_POLICY_EFFECTIVE_CONFIG:-UNSET}"
+  echo "[a2-real-test] remote_caps: vx=${A2_POLICY_MAX_REMOTE_VX} vy=${A2_POLICY_MAX_REMOTE_VY} yaw=${A2_POLICY_MAX_REMOTE_YAW}"
+  echo "[a2-real-test] remote_deadzone=${A2_POLICY_REMOTE_DEADZONE}"
+  echo "[a2-real-test] require_standup_before_policy=${A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY}"
+  echo "[a2-real-test] publish_aux_debug=${A2_POLICY_PUBLISH_AUX_DEBUG} aux_debug_topic=${A2_POLICY_AUX_DEBUG_TOPIC}"
+  echo "[a2-real-test] aux_expected_dim=${A2_POLICY_AUX_EXPECTED_DIM} aux_print_period=${A2_POLICY_AUX_PRINT_PERIOD}"
+  echo "[a2-real-test] brake_gate=ignored/comment-only; not passed to a2_policy_deploy"
+  echo "[a2-real-test] A2_ALLOW_ENABLE_MOTION is an operator env guard, not a config-file setting"
+}
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -122,6 +215,8 @@ Usage:
   A2_ALLOW_ZERO_LOWCMD=1 a2_real_robot_test.sh zero-lowcmd [duration]
   a2_real_robot_test.sh policy-listen-remote [duration]
   A2_ALLOW_ENABLE_MOTION=1 a2_real_robot_test.sh policy-enable-remote [duration]
+  a2_real_robot_test.sh policy-aux-live [duration]
+  a2_real_robot_test.sh policy-aux-monitor [duration]
   a2_real_robot_test.sh help
 
 Run inside the A2 Docker container after entering with A2_NET_IFACE=<robot NIC>.
@@ -135,6 +230,11 @@ the configured LowState topic and never publish LowCmd. Their duration defaults
 to 0, meaning run until Ctrl-C.
 Live env: A2_LIVE_PRINT_PERIOD=0.2, A2_LIVE_CLEAR_SCREEN=1,
 A2_JOINT_MIN_DELTA=0.03, A2_REMOTE_DEADZONE=0.08.
+Policy env: A2_POLICY_RUN_CONFIG defaults to ros2/A2/config/a2_policy_remote.env.
+Operator env A2_POLICY_* overrides config values; A2_ALLOW_ENABLE_MOTION=1 must
+be set only in the shell for policy-enable-remote, never in the config file.
+policy-aux-live is an independent listen-only smoke. policy-aux-monitor only
+subscribes to the active policy aux topic and never starts a policy node.
 USAGE
 }
 
@@ -689,6 +789,8 @@ zero_lowcmd() {
 policy_listen_remote() {
   local duration="${1:-20}"
   local obs_log obs_status obs_pid policy_status observer_duration
+  load_policy_run_config
+  print_policy_run_config
   observer_duration="$(python3 - "$duration" <<'PY'
 import sys
 print(f"{float(sys.argv[1]) + 2.0:g}")
@@ -709,7 +811,14 @@ PY
       -p lowstate_topic:="$lowstate_topic" \
       -p lowcmd_topic:="$lowcmd_topic" \
       -p enable_motion:=false \
-      -p command_source:=remote
+      -p command_source:=remote \
+      -p max_remote_vx:="$A2_POLICY_MAX_REMOTE_VX" \
+      -p max_remote_vy:="$A2_POLICY_MAX_REMOTE_VY" \
+      -p max_remote_yaw:="$A2_POLICY_MAX_REMOTE_YAW" \
+      -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
+      -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
+      -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
+      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC"
   policy_status=$?
 
   set +e
@@ -725,6 +834,8 @@ PY
 
 policy_enable_remote() {
   local duration="${1:-20}"
+  load_policy_run_config
+  print_policy_run_config
   require_env_flag A2_ALLOW_ENABLE_MOTION "enable_motion=true is a real motion path: first A publishes stand-up/hold LowCmd, second A starts handover warmup/policy."
   echo "WARNING: enable_motion=true publishes LowCmd only after first A starts stand-up."
   echo "WARNING: first A = stand-up interpolation; holder keeps policy default pose."
@@ -737,9 +848,237 @@ policy_enable_remote() {
       -p lowcmd_topic:="$lowcmd_topic" \
       -p enable_motion:=true \
       -p command_source:=remote \
-      -p max_remote_vx:=0.80 \
-      -p max_remote_vy:=0.50 \
-      -p max_remote_yaw:=0.6
+      -p max_remote_vx:="$A2_POLICY_MAX_REMOTE_VX" \
+      -p max_remote_vy:="$A2_POLICY_MAX_REMOTE_VY" \
+      -p max_remote_yaw:="$A2_POLICY_MAX_REMOTE_YAW" \
+      -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
+      -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
+      -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
+      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC"
+}
+
+policy_aux_live() {
+  local duration="${1:-0}"
+  local duration_info duration_mode observer_duration
+  local obs_log policy_log obs_pid policy_pid obs_tail_pid policy_tail_pid
+  local obs_status_file policy_status_file obs_status policy_status
+
+  load_policy_run_config
+  print_policy_run_config
+
+  if ! duration_info="$(python3 - "$duration" <<'PY'
+import math
+import sys
+
+try:
+    duration = float(sys.argv[1])
+except ValueError:
+    print("ERROR: duration must be numeric", file=sys.stderr)
+    sys.exit(2)
+if not math.isfinite(duration) or duration < 0.0:
+    print("ERROR: duration must be finite and non-negative", file=sys.stderr)
+    sys.exit(2)
+if duration == 0.0:
+    print("live 31536000")
+else:
+    print(f"finite {duration + 2.0:g}")
+PY
+)"; then
+    exit 2
+  fi
+  duration_mode="${duration_info%% *}"
+  observer_duration="${duration_info#* }"
+
+  obs_log="$(log_file policy_aux_live_no_lowcmd)"
+  policy_log="$(log_file policy_aux_live)"
+  obs_status_file="$(mktemp)"
+  policy_status_file="$(mktemp)"
+  print_log_path "$obs_log"
+  print_log_path "$policy_log"
+  echo "[a2-real-test] policy-aux-live duration=${duration}s mode=${duration_mode}; no-lowcmd observer duration=${observer_duration}s"
+
+  terminate_process_tree() {
+    local pid="${1:-}"
+    if [ -z "$pid" ]; then
+      return 0
+    fi
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return 0
+    fi
+    if command -v pkill >/dev/null 2>&1; then
+      pkill -TERM -P "$pid" >/dev/null 2>&1 || true
+    fi
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 0.2
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      if command -v pkill >/dev/null 2>&1; then
+        pkill -KILL -P "$pid" >/dev/null 2>&1 || true
+      fi
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+  }
+
+  cleanup_policy_aux_live() {
+    local exit_code=$?
+    trap - INT TERM EXIT
+    terminate_process_tree "${policy_pid:-}"
+    terminate_process_tree "${obs_pid:-}"
+    terminate_process_tree "${policy_tail_pid:-}"
+    terminate_process_tree "${obs_tail_pid:-}"
+    wait "$policy_pid" >/dev/null 2>&1 || true
+    wait "$obs_pid" >/dev/null 2>&1 || true
+    wait "$policy_tail_pid" >/dev/null 2>&1 || true
+    wait "$obs_tail_pid" >/dev/null 2>&1 || true
+    rm -f "$obs_status_file" "$policy_status_file"
+    exit "$exit_code"
+  }
+  trap cleanup_policy_aux_live INT TERM EXIT
+
+  : > "$obs_log"
+  : > "$policy_log"
+  tail -n +1 -f "$obs_log" &
+  obs_tail_pid=$!
+  tail -n +1 -f "$policy_log" &
+  policy_tail_pid=$!
+
+  (
+    set +e
+    python3 "$observer" no-lowcmd "$observer_duration" \
+      --lowcmd-topic "$lowcmd_topic"
+    echo "$?" > "$obs_status_file"
+  ) > "$obs_log" 2>&1 &
+  obs_pid=$!
+  sleep 1
+
+  (
+    set +e
+    if [ "$duration_mode" = "finite" ]; then
+      timeout "$duration" ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+        -p lowstate_topic:="$lowstate_topic" \
+        -p lowcmd_topic:="$lowcmd_topic" \
+        -p enable_motion:=false \
+        -p command_source:=remote \
+        -p monitor_policy_aux:=true \
+        -p max_remote_vx:="$A2_POLICY_MAX_REMOTE_VX" \
+        -p max_remote_vy:="$A2_POLICY_MAX_REMOTE_VY" \
+        -p max_remote_yaw:="$A2_POLICY_MAX_REMOTE_YAW" \
+        -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
+        -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
+        -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
+        -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+        -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
+        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD"
+    else
+      ros2 run a2_lowlevel a2_policy_deploy --ros-args \
+        -p lowstate_topic:="$lowstate_topic" \
+        -p lowcmd_topic:="$lowcmd_topic" \
+        -p enable_motion:=false \
+        -p command_source:=remote \
+        -p monitor_policy_aux:=true \
+        -p max_remote_vx:="$A2_POLICY_MAX_REMOTE_VX" \
+        -p max_remote_vy:="$A2_POLICY_MAX_REMOTE_VY" \
+        -p max_remote_yaw:="$A2_POLICY_MAX_REMOTE_YAW" \
+        -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
+        -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
+        -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
+        -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+        -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
+        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD"
+    fi
+    echo "$?" > "$policy_status_file"
+  ) > "$policy_log" 2>&1 &
+  policy_pid=$!
+
+  if [ "$duration_mode" = "live" ]; then
+    while true; do
+      if ! kill -0 "$obs_pid" >/dev/null 2>&1; then
+        set +e
+        wait "$obs_pid"
+        set -e
+        obs_status="$(cat "$obs_status_file" 2>/dev/null || echo 130)"
+        terminate_process_tree "$policy_pid"
+        wait "$policy_pid" >/dev/null 2>&1 || true
+        trap - INT TERM EXIT
+        terminate_process_tree "$policy_tail_pid"
+        terminate_process_tree "$obs_tail_pid"
+        wait "$policy_tail_pid" >/dev/null 2>&1 || true
+        wait "$obs_tail_pid" >/dev/null 2>&1 || true
+        rm -f "$obs_status_file" "$policy_status_file"
+        if [ "$obs_status" -ne 0 ]; then
+          echo "ERROR: no-lowcmd observer failed with exit=$obs_status" >&2
+          return "$obs_status"
+        fi
+        return 0
+      fi
+      if ! kill -0 "$policy_pid" >/dev/null 2>&1; then
+        set +e
+        wait "$policy_pid"
+        set -e
+        policy_status="$(cat "$policy_status_file" 2>/dev/null || echo 130)"
+        terminate_process_tree "$obs_pid"
+        wait "$obs_pid" >/dev/null 2>&1 || true
+        obs_status="$(cat "$obs_status_file" 2>/dev/null || echo 130)"
+        trap - INT TERM EXIT
+        terminate_process_tree "$policy_tail_pid"
+        terminate_process_tree "$obs_tail_pid"
+        wait "$policy_tail_pid" >/dev/null 2>&1 || true
+        wait "$obs_tail_pid" >/dev/null 2>&1 || true
+        rm -f "$obs_status_file" "$policy_status_file"
+        if [ "$obs_status" -ne 0 ] && [ "$obs_status" -ne 143 ] && [ "$obs_status" -ne 130 ]; then
+          echo "ERROR: no-lowcmd observer failed with exit=$obs_status" >&2
+          return "$obs_status"
+        fi
+        return "$policy_status"
+      fi
+      sleep 0.2
+    done
+  fi
+
+  set +e
+  wait "$policy_pid"
+  set -e
+  policy_status="$(cat "$policy_status_file" 2>/dev/null || echo 130)"
+
+  set +e
+  wait "$obs_pid"
+  set -e
+  obs_status="$(cat "$obs_status_file" 2>/dev/null || echo 130)"
+
+  trap - INT TERM EXIT
+  terminate_process_tree "$policy_tail_pid"
+  terminate_process_tree "$obs_tail_pid"
+  wait "$policy_tail_pid" >/dev/null 2>&1 || true
+  wait "$obs_tail_pid" >/dev/null 2>&1 || true
+  rm -f "$obs_status_file" "$policy_status_file"
+
+  if [ "$obs_status" -ne 0 ]; then
+    echo "ERROR: no-lowcmd observer failed with exit=$obs_status" >&2
+    return "$obs_status"
+  fi
+  if [ "$policy_status" -eq 0 ] || [ "$policy_status" -eq 124 ]; then
+    echo "[a2-real-test] accepted policy-aux-live exit=$policy_status"
+    return 0
+  fi
+  echo "ERROR: policy-aux-live failed with exit=$policy_status" >&2
+  return "$policy_status"
+}
+
+policy_aux_monitor() {
+  local duration="${1:-0}"
+  load_policy_run_config
+  print_policy_run_config
+  local args=(
+    policy-aux-topic-live "$duration"
+    --topic "$A2_POLICY_AUX_DEBUG_TOPIC"
+    --expected-dim "$A2_POLICY_AUX_EXPECTED_DIM"
+    --print-period "$A2_POLICY_AUX_PRINT_PERIOD"
+  )
+  if [ "${A2_LIVE_CLEAR_SCREEN:-1}" = "0" ]; then
+    args+=(--no-clear-screen)
+  else
+    args+=(--clear-screen)
+  fi
+  run_logged policy_aux_monitor python3 "$observer" "${args[@]}"
 }
 
 command="${1:-help}"
@@ -790,6 +1129,12 @@ case "$command" in
     ;;
   policy-enable-remote)
     policy_enable_remote "$@"
+    ;;
+  policy-aux-live)
+    policy_aux_live "$@"
+    ;;
+  policy-aux-monitor)
+    policy_aux_monitor "$@"
     ;;
   help|-h|--help)
     usage
