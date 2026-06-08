@@ -442,7 +442,7 @@ real robot validation/reference 流程见 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md
 
 History length 是 `32`，通过 `ManagerBasedEnv` observation terms 展平。`a2_policy_deploy` 不让 policy 直接写 `unitree_hg::msg::LowCmd`；policy output 先映射成 `std::array<A2JointCommand, 12>`，再交给 `A2LowLevelInterface` 处理 fresh-state guard、mode routing 和 CRC。
 
-Command provider 可选 `static` 或 `remote`，最终进入 observation 的 command 仍按 `[2, 2, 0.25]` scale。gait clock 使用未 scale 的 raw requested command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。brake active 时只 override observation command，不改 gait phase 逻辑。
+Command provider 可选 `static` 或 `remote`，最终进入 observation 的 command 仍按 `[2, 2, 0.25]` scale。gait clock 使用进入 policy observation 的 active command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。brake active 时 observation command 被 override 为 `[0,0,0]`，因此 gait clock 也 freeze 在 standing phase。
 
 ## A2 Remote Decode Contract
 
@@ -595,8 +595,9 @@ standing 时 latch。threshold 是 A2 observed unitless aux scale，不是 Newto
 `fx <= threshold`。触发当前 tick 不发布 zero LowCmd、不切 stop mode、不清 PD，也不跳过
 policy joint command；该 tick 已经基于旧 command 计算出的 action 继续走正常
 `publish_joint_commands()`。从下一轮 observation 前开始，只把 policy observation 中的
-command override 为 `[0, 0, 0]`。raw requested command 仍用于 eligibility / release，
-因此 stick 回中、command standing、eligibility 不满足、local stop 或 runtime reset 后释放。
+command override 为 `[0, 0, 0]`，同时 gait clock freeze/reset 为 standing phase `[0,1]`。
+raw requested command 仍用于 eligibility / release，因此 stick 回中、command standing、
+eligibility 不满足、local stop 或 runtime reset 后释放。
 `policy-aux-monitor` 只用于观察 gate 前后的 `fx`，不改变 active behavior。
 
 `policy-aux-live` 是 independent listen-only smoke：
@@ -685,7 +686,8 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
 - `brake_min_cmd_vx` / `brake_max_abs_yaw`：默认 `0.2` / `0.10`。brake gate
   eligibility 要求 raw requested `cmd_vx >= brake_min_cmd_vx` 且
   `abs(cmd_yaw) <= brake_max_abs_yaw`；不检查 `vy`。brake active 后 observation command
-  会被 override 成 zero，但 release 判断仍使用 raw requested command。
+  会被 override 成 zero，gait clock 也 freeze 在 standing phase，但 release 判断仍使用 raw
+  requested command。
 - `brake_hold_steps`：默认 `2`。force trigger 连续满足该 step 数后 latch active；latch
   active 不进入 zero LowCmd stop path，仍继续正常 policy joint command publishing。
 - `standup_stage1_steps` / `standup_stage2_steps`：默认 `150` / `150`，合计
@@ -765,9 +767,9 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 - history 尚未 warm 到 `32` fresh frames
 
 这些条件下 node 不发布 policy joint motion command。brake gate active 不是 publish
-refusal 条件：它只把下一轮 policy observation command override 为 zero，并继续通过
-`publish_joint_commands()` 发布正常 policy joint command；如果 aux dim < 6 或包含 NaN/Inf，
-不会新触发 brake，只 throttled warning。
+refusal 条件：它只把下一轮 policy observation command override 为 zero，并 freeze gait
+clock 到 standing phase，同时继续通过 `publish_joint_commands()` 发布正常 policy joint
+command；如果 aux dim < 6 或包含 NaN/Inf，不会新触发 brake，只 throttled warning。
 
 Remote safety handling：
 

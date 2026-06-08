@@ -100,6 +100,7 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   bool brake_gate_eligible() const;
   void set_zero_command();
   bool is_history_warm() const;
+  bool is_policy_observation_standing_command() const;
   bool is_requested_standing_command() const;
   void advance_gait_clock();
   void log_enable_state_if_changed();

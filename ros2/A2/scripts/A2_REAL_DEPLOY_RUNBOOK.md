@@ -269,8 +269,9 @@ command is not standing. Current tick does not publish zero LowCmd, does not
 switch stop mode, does not clear PD, and does not skip the policy joint command;
 the already-computed action continues through normal `publish_joint_commands()`.
 From the next observation, brake active overrides only the policy observation
-command to `[0, 0, 0]`. Centering the stick / command standing, losing
-eligibility, local stop, or runtime reset releases the latch.
+command to `[0, 0, 0]` and freezes gait clock at the standing phase. Centering
+the stick / command standing, losing eligibility, local stop, or runtime reset
+releases the latch.
 
 Use two Docker terminals if you want live force-estimator aux while the active policy runs.
 

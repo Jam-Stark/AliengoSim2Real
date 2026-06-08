@@ -661,10 +661,10 @@ void A2PolicyDeployNode::control_loop() {
     return;
   }
 
-  if (is_requested_standing_command()) {
+  update_policy_observation_command();
+  if (is_policy_observation_standing_command()) {
     gait_phase_ = 0.0;
   }
-  update_policy_observation_command();
 
   if (!compute_and_validate_policy_observation()) {
     return;
@@ -1588,6 +1588,12 @@ bool A2PolicyDeployNode::is_history_warm() const {
   return warm_frames_ >= kHistoryLength;
 }
 
+bool A2PolicyDeployNode::is_policy_observation_standing_command() const {
+  return std::abs(cmd_vx_) < kStandingCmdVxThreshold &&
+         std::abs(cmd_vy_) < kStandingCmdVyThreshold &&
+         std::abs(cmd_yaw_) < kStandingCmdYawThreshold;
+}
+
 bool A2PolicyDeployNode::is_requested_standing_command() const {
   return std::abs(requested_cmd_vx_) < kStandingCmdVxThreshold &&
          std::abs(requested_cmd_vy_) < kStandingCmdVyThreshold &&
@@ -1595,7 +1601,7 @@ bool A2PolicyDeployNode::is_requested_standing_command() const {
 }
 
 void A2PolicyDeployNode::advance_gait_clock() {
-  if (is_requested_standing_command()) {
+  if (is_policy_observation_standing_command()) {
     gait_phase_ = 0.0;
     return;
   }

@@ -218,7 +218,13 @@
 
 ## 2026-06-08 22:20 HKT
 
-- [x] 将 A2 brake gate 从 zero LowCmd stop path 改为 command override only：触发当前 tick 不再 `publish_zero()`、不切 LowCmd stop mode、不清 PD/last action/gait phase、不提前 return 跳过 policy joint command。
+- [x] 将 A2 brake gate 从 zero LowCmd stop path 改为 command override only：触发当前 tick 不再 `publish_zero()`、不切 LowCmd stop mode、不清 PD/last action/gait phase、不提前 return 跳过 policy joint command。该 “不清 gait phase” 事实已被 2026-06-08 22:21 HKT gait-clock freeze 行为 supersede。
 - [x] `a2_policy_deploy` 新增 raw requested command tracking，remote/static 先更新 requested command；brake eligibility/release 使用 raw requested command，只有写入 policy observation 前才把 `cmd_vx_` / `cmd_vy_` / `cmd_yaw_` override 为 `[0,0,0]`。
 - [x] Brake active 时仍继续 `computeAction()`、action validation 和 `A2LowLevelInterface::publish_joint_commands()`；command standing / stick 回中 / eligibility 失效 / local stop / `reset_runtime_state()` 仍能 release 或清 brake state。
 - [x] 更新 `README.md`、`A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 A2 memory，实机 TODO 改为验证 no zero-LowCmd stop、normal PD command continues、command override/release 稳定性。
+
+## 2026-06-08 22:21 HKT
+
+- [x] Brake active command override 后，gait clock 改为跟随进入 policy observation 的 active command 判断 standing；因此 brake override `[0,0,0]` 会把 gait phase freeze/reset 到 `0`，gait clock 固定为 standing phase `[0,1]`。
+- [x] 保留 raw requested command 仅用于 brake eligibility/release；不新增 ramp/phase 过渡，不改变 `publish_joint_commands()` path。
+- [x] 更新 README、real robot validation guide、real deployment runbook 和 A2 memory，要求实机验证 command override + gait-clock freeze / release 稳定性。
