@@ -223,7 +223,8 @@ Ideal result:
 - `policy-aux-live` prints action dim and aux dim after history warm.
 - If aux dim is `6`, logs show `pred_base_lin_vel` and `pred_base_force_local`.
 - The paired no-lowcmd observer still prints no configured `/lowcmd` messages.
-- `A2_POLICY_BRAKE_*` fields in run config remain comment-only; brake gate is not enabled in this runbook.
+- Brake gate params are passed but cannot publish LowCmd in this `enable_motion=false`
+  listen-only path.
 
 ## 8. Start Real Policy
 
@@ -252,12 +253,21 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_BRAKE_GATE_ENABLED=true
+A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
+A2_POLICY_BRAKE_MIN_CMD_VX=0.2
+A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
+A2_POLICY_BRAKE_HOLD_STEPS=2
 ```
 
 不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 run config；它必须只在执行真运动命令的
 operator shell 里显式设置。
-`A2_POLICY_BRAKE_*` entries are placeholders only and are not passed to active
-`a2_policy_deploy` behavior.
+Brake gate is active in the real motion path. It uses A2 observed unitless aux
+scale, not Newton: default trigger is `pred_base_force_local[0] <= -0.6` for 2
+consecutive control steps while `cmd_vx >= 0.2`, `abs(cmd_yaw) <= 0.10`, and the
+command is not standing. Current tick publishes zero LowCmd and skips the policy
+joint command; centering the stick / command standing, losing eligibility, local
+stop, or runtime reset releases the latch.
 
 Use two Docker terminals if you want live force-estimator aux while the active policy runs.
 
@@ -277,6 +287,8 @@ A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0
 It does not start a policy node, does not start no-lowcmd observer, and never publishes LowCmd.
 It can be started before or after Terminal 1; it will not print samples until the active
 `a2_policy_deploy` instance has warmed history and completed policy inference.
+Use it to observe `pred_base_force_local[0]` before/after brake gate events and verify
+the `-0.6` sign/threshold margin; it does not control the brake gate.
 
 Optional topic check from either container terminal:
 
@@ -318,6 +330,11 @@ remote_deadzone=0.08
 require_standup_before_policy=true
 publish_aux_debug=true
 aux_debug_topic=/a2/policy_aux
+brake_gate_enabled=true
+brake_force_x_threshold=-0.6
+brake_min_cmd_vx=0.2
+brake_max_abs_yaw=0.10
+brake_hold_steps=2
 ```
 
 Any abnormal behavior: release sticks, press `Select`, then use hardware emergency stop if the robot

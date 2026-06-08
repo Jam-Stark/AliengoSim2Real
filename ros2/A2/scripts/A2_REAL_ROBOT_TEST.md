@@ -548,7 +548,9 @@ Ideal aux monitor result：
   配置的 `A2_LOWCMD_TOPIC` 并 pass。
 
 如果 aux 中出现 NaN/Inf、dim/layout 不符合预期，或者 no-lowcmd observer 失败，不要继续
-启用 brake gate 或 real policy motion；先保存 logs 并确认 policy aux layout。
+进入 real policy motion；先保存 logs 并确认 policy aux layout。当前 run config 已启用
+brake gate，`policy-aux-live` 仍是 `enable_motion=false` listen-only path，因此即使传入
+brake 参数也不会发布 LowCmd。
 
 `policy-aux-monitor` 是 active policy aux topic subscriber。它只订阅
 `std_msgs/msg/Float32MultiArray` topic，不启动 policy node、不启动 no-lowcmd observer、
@@ -592,6 +594,10 @@ Ideal active-topic monitor result：
 - 遥控器 operator 知道 two-A sequence：first `A` 起身，holder 保持 policy default pose；second `A` 才开始 policy warmup/handover。
 - second `A` 前让 `lx/rx/ly` stick 在 deadzone 后为 zero；否则 node 会继续 holder。
 - `L2` 不再强制 locomotion command 为 zero；PolicyActive 中 valid sticks 会直接映射 command。
+- Brake gate 是 real motion behavior：PolicyActive inference 后读取 aux
+  `pred_base_force_local[0]`，默认 `<= -0.6` 连续 2 steps 且 forward/yaw eligibility
+  满足时，当前 tick 发布 zero LowCmd 并跳过 policy joint command。threshold 是 A2
+  observed unitless aux scale，不是 Newton。
 - `Select` 是 primary local stop，会触发 local stop、runtime reset，并调用 `publish_zero()`
   发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
   rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
@@ -623,6 +629,11 @@ publish_aux_debug:=true
 aux_debug_topic:=/a2/policy_aux
 policy_aux_expected_dim:=6
 policy_aux_print_period_sec:=0.2
+brake_gate_enabled:=true
+brake_force_x_threshold:=-0.6
+brake_min_cmd_vx:=0.2
+brake_max_abs_yaw:=0.10
+brake_hold_steps:=2
 ```
 
 Ideal result：
@@ -634,6 +645,11 @@ Ideal result：
 - PolicyActive 中 centered sticks 对应 zero locomotion command；moving sticks 不要求
   `L2` held。
 - 遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- brake gate 只在 `cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、非 standing command
+  时 eligible；忽略 `vy`。触发后 latch，直到 stick 回中/command standing、eligibility
+  不满足、local stop 或 runtime reset。
+- 第二个 terminal 的 `policy-aux-monitor` 用于观察 gate 前后的
+  `pred_base_force_local[0]` 符号、阈值裕量和稳定性；monitor 不控制 gate。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
 
 任何异常立即松开 sticks、按 primary local stop `Select` 或 e-stop，并保存 logs；`L2+B`
@@ -656,7 +672,8 @@ Ideal result：
 - `zero-lowcmd` CRC、zero shape、`mode_machine` follow state 全部 pass。
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
 - `policy-aux-live` 在 `enable_motion=false` 下没有 configured LowCmd topic message，并已确认
-  aux dim/layout；brake gate 后续启用前必须先确认 dim 6 的 force-estimator layout。
+  aux dim/layout；brake gate 已实现，仍需在部署机/实机验证 `-0.6` 阈值、force x 符号和
+  latch/release 稳定性。
 - `policy-aux-monitor` 可在 active `policy-enable-remote` 期间订阅 `/a2/policy_aux`，
   并实时显示 dim/value/warning；该 monitor 不启动 policy node，也不发布 LowCmd。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`

@@ -207,3 +207,11 @@
 - [x] 加固 `a2_real_robot_test.sh` 生成的 MotionSwitcher helper：按 Unitree SDK2 sample 对 `CheckMode form/name` 做 normalized `service` 输出，至少覆盖 `form='0'` 下 `normal->sport_mode`、`ai->ai_sport`、`advanced->advanced_sport`，并保留 wheel aliases / unknown fallback。
 - [x] `motion-select` / `motion-restore` 成功条件改为 `SelectMode ret==0` 且 after `CheckMode` raw `name` 等于 target mode 或 normalized `service` 等于 target mode；仍不接受任意非空 mode，错误信息同时打印 after raw `name` 和 normalized `service`。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 `README.md` restore expected output，记录 `form='0', name='ai', service='ai_sport'` 是恢复 `ai_sport` 的 expected alias。
+
+## 2026-06-08 21:51 HKT
+
+- [x] 重新实现 A2 brake gate：`a2_policy_deploy` 新增 `brake_gate_enabled`、`brake_force_x_threshold`、`brake_min_cmd_vx`、`brake_max_abs_yaw`、`brake_hold_steps` params，裸 node 默认关闭。
+- [x] Brake gate 只在 `enable_motion=true` 的 policy publish path 生效；`computeAction()` 后读取 aux dim 6 `pred_base_force_local[0]`，默认用 A2 observed unitless threshold `<= -0.6` 连续 2 steps latch。
+- [x] Brake active 当前 tick 调用 `publish_zero()`、`set_zero_command()`，清空 `last_raw_action_` / `obs_actions[kPolicyId]`，重置 `gait_phase_` 并跳过 policy joint command；listen-only / `policy-aux-live` 仍不发布 LowCmd。
+- [x] `a2_real_robot_test.sh` 和 `a2_policy_remote.env` 已改为 active brake gate config，使用 `A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6`，不再使用 `_N` 命名；`A2_ALLOW_ENABLE_MOTION=1` 仍只允许 operator shell guard。
+- [x] 更新 `README.md`、`A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 memory，记录 brake gate 已实现但仍需部署机/实机验证阈值、force x 符号、latch/release 和稳定性。

@@ -93,6 +93,10 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   bool should_log_policy_aux(bool force);
   void ensure_aux_debug_publisher();
   void publish_policy_aux_debug(const SimpleTensor &aux);
+  bool apply_brake_gate(const SimpleTensor &aux);
+  void reset_brake_gate_state();
+  bool brake_force_triggered(double force_x) const;
+  void publish_brake_zero_command(double force_x);
   void set_zero_command();
   bool is_history_warm() const;
   bool is_standing_command() const;
@@ -151,6 +155,13 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
       aux_debug_pub_;
   int policy_aux_expected_dim_ = 6;
   double policy_aux_print_period_sec_ = 0.2;
+  bool brake_gate_enabled_ = false;
+  double brake_force_x_threshold_ = -0.6;
+  double brake_min_cmd_vx_ = 0.2;
+  double brake_max_abs_yaw_ = 0.10;
+  int brake_hold_steps_ = 2;
+  int brake_hold_count_ = 0;
+  bool brake_active_ = false;
   int standup_stage1_steps_ = 150;
   int standup_stage2_steps_ = 150;
   double standup_rear_alpha_lead_ = 0.10;

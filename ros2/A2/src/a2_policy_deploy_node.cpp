@@ -268,6 +268,16 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<int>("policy_aux_expected_dim", 6);
   policy_aux_print_period_sec_ =
       this->declare_parameter<double>("policy_aux_print_period_sec", 0.2);
+  brake_gate_enabled_ =
+      this->declare_parameter<bool>("brake_gate_enabled", false);
+  brake_force_x_threshold_ =
+      this->declare_parameter<double>("brake_force_x_threshold", -0.6);
+  brake_min_cmd_vx_ =
+      this->declare_parameter<double>("brake_min_cmd_vx", 0.2);
+  brake_max_abs_yaw_ =
+      this->declare_parameter<double>("brake_max_abs_yaw", 0.10);
+  brake_hold_steps_ =
+      this->declare_parameter<int>("brake_hold_steps", 2);
   standup_stage1_steps_ =
       this->declare_parameter<int>("standup_stage1_steps", 150);
   standup_stage2_steps_ =
@@ -303,13 +313,18 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
   RCLCPP_INFO(this->get_logger(),
               "A2 policy deploy ready: policy=%s, json=%s, control_hz=%.1f, "
               "enable_motion=%s, command_source=%s, publish_aux_debug=%s, "
-              "aux_debug_topic=%s",
+              "aux_debug_topic=%s, brake_gate_enabled=%s, "
+              "brake_force_x_threshold=%.3f, brake_min_cmd_vx=%.3f, "
+              "brake_max_abs_yaw=%.3f, brake_hold_steps=%d",
               canonical_or_absolute(policy_path_).string().c_str(),
               canonical_or_absolute(policy_json_path_).string().c_str(),
               kDeployControlHz, enable_motion_ ? "true" : "false",
               command_source_param_.c_str(),
               publish_aux_debug_ ? "true" : "false",
-              aux_debug_topic_.c_str());
+              aux_debug_topic_.c_str(),
+              brake_gate_enabled_ ? "true" : "false",
+              brake_force_x_threshold_, brake_min_cmd_vx_,
+              brake_max_abs_yaw_, brake_hold_steps_);
 }
 
 void A2PolicyDeployNode::load_and_validate_policy_contract(
@@ -695,6 +710,10 @@ void A2PolicyDeployNode::control_loop() {
   publish_policy_aux_debug(aux);
   const bool aux_values_finite =
       log_policy_aux_output(action, aux, false);
+  if (apply_brake_gate(aux)) {
+    return;
+  }
+
   if (raw_action.size() != kTrainingJointCount ||
       !vector_is_finite(raw_action)) {
     RCLCPP_ERROR_THROTTLE(
@@ -767,6 +786,12 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("policy_aux_expected_dim", policy_aux_expected_dim_);
   this->get_parameter("policy_aux_print_period_sec",
                       policy_aux_print_period_sec_);
+  this->get_parameter("brake_gate_enabled", brake_gate_enabled_);
+  this->get_parameter("brake_force_x_threshold",
+                      brake_force_x_threshold_);
+  this->get_parameter("brake_min_cmd_vx", brake_min_cmd_vx_);
+  this->get_parameter("brake_max_abs_yaw", brake_max_abs_yaw_);
+  this->get_parameter("brake_hold_steps", brake_hold_steps_);
   this->get_parameter("standup_stage1_steps", standup_stage1_steps_);
   this->get_parameter("standup_stage2_steps", standup_stage2_steps_);
   this->get_parameter("standup_rear_alpha_lead", standup_rear_alpha_lead_);
@@ -784,6 +809,19 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
         "A2 policy aux monitor params invalid: policy_aux_expected_dim must "
         "be >=0 and policy_aux_print_period_sec must be finite positive. "
         "Refusing policy publish/monitor.");
+    return false;
+  }
+
+  if (!std::isfinite(brake_force_x_threshold_) ||
+      !is_finite_nonnegative(brake_min_cmd_vx_) ||
+      !is_finite_nonnegative(brake_max_abs_yaw_) ||
+      brake_hold_steps_ < 1) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 brake gate params invalid: brake_force_x_threshold must be "
+        "finite, brake_min_cmd_vx and brake_max_abs_yaw must be finite "
+        "nonnegative, and brake_hold_steps must be >=1. Refusing policy "
+        "publish/monitor.");
     return false;
   }
 
@@ -1371,6 +1409,125 @@ void A2PolicyDeployNode::publish_policy_aux_debug(const SimpleTensor &aux) {
   aux_debug_pub_->publish(msg);
 }
 
+bool A2PolicyDeployNode::brake_force_triggered(double force_x) const {
+  if (brake_force_x_threshold_ >= 0.0) {
+    return force_x >= brake_force_x_threshold_;
+  }
+  return force_x <= brake_force_x_threshold_;
+}
+
+void A2PolicyDeployNode::publish_brake_zero_command(double force_x) {
+  RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 1000,
+      "A2 brake gate active: publishing zero LowCmd instead of policy joint "
+      "command (force_x=%.4f threshold=%.4f cmd_vx=%.3f cmd_yaw=%.3f "
+      "hold_count=%d/%d).",
+      force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
+      brake_hold_count_, brake_hold_steps_);
+  publish_zero();
+  set_zero_command();
+  last_raw_action_.fill(0.0f);
+  if (!obs_actions.empty()) {
+    obs_actions[kPolicyId] = SimpleTensor::wrap(
+        std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
+  }
+  gait_phase_ = 0.0;
+}
+
+bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
+  if (!enable_motion_) {
+    reset_brake_gate_state();
+    return false;
+  }
+
+  if (!brake_gate_enabled_) {
+    if (brake_active_ || brake_hold_count_ > 0) {
+      RCLCPP_INFO(
+          this->get_logger(),
+          "A2 brake gate disabled: clearing previous brake latch state.");
+    }
+    reset_brake_gate_state();
+    return false;
+  }
+
+  const bool eligible =
+      cmd_vx_ >= brake_min_cmd_vx_ &&
+      std::abs(cmd_yaw_) <= brake_max_abs_yaw_ && !is_standing_command();
+  if (!eligible) {
+    if (brake_active_ || brake_hold_count_ > 0) {
+      RCLCPP_INFO(
+          this->get_logger(),
+          "A2 brake gate released/not eligible: cmd_vx=%.3f min=%.3f "
+          "cmd_yaw=%.3f max_abs=%.3f standing=%s hold_count=%d/%d.",
+          cmd_vx_, brake_min_cmd_vx_, cmd_yaw_, brake_max_abs_yaw_,
+          is_standing_command() ? "true" : "false", brake_hold_count_,
+          brake_hold_steps_);
+    }
+    reset_brake_gate_state();
+    return false;
+  }
+
+  if (brake_active_) {
+    const bool aux_valid = aux.numel() >= 6 && vector_is_finite(aux.data_);
+    const double force_x =
+        aux_valid ? aux.data_[3]
+                  : std::numeric_limits<double>::quiet_NaN();
+    publish_brake_zero_command(force_x);
+    return true;
+  }
+
+  const bool aux_finite = vector_is_finite(aux.data_);
+  if (aux.numel() < 6 || !aux_finite) {
+    brake_hold_count_ = 0;
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 brake gate skipped: aux invalid for force gate "
+        "(aux_dim=%lld, finite=%s). Need dim>=6 finite aux; no brake trigger.",
+        static_cast<long long>(aux.numel()),
+        aux_finite ? "true" : "false");
+    return false;
+  }
+
+  const double force_x = static_cast<double>(aux.data_[3]);
+  const bool triggered = brake_force_triggered(force_x);
+  if (triggered) {
+    brake_hold_count_ = std::min(brake_hold_count_ + 1, brake_hold_steps_);
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 500,
+        "A2 brake gate force trigger: force_x=%.4f threshold=%.4f "
+        "cmd_vx=%.3f cmd_yaw=%.3f hold_count=%d/%d.",
+        force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
+        brake_hold_count_, brake_hold_steps_);
+    if (brake_hold_count_ >= brake_hold_steps_) {
+      brake_active_ = true;
+      RCLCPP_WARN(
+          this->get_logger(),
+          "A2 brake gate activated: force_x=%.4f threshold=%.4f "
+          "cmd_vx=%.3f cmd_yaw=%.3f hold_count=%d/%d. Current tick will "
+          "publish zero LowCmd and skip policy joint command.",
+          force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
+          brake_hold_count_, brake_hold_steps_);
+      publish_brake_zero_command(force_x);
+      return true;
+    }
+  } else if (brake_hold_count_ > 0) {
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 brake gate force trigger cleared before latch: force_x=%.4f "
+        "threshold=%.4f hold_count=%d/%d.",
+        force_x, brake_force_x_threshold_, brake_hold_count_,
+        brake_hold_steps_);
+    brake_hold_count_ = 0;
+  }
+
+  return false;
+}
+
+void A2PolicyDeployNode::reset_brake_gate_state() {
+  brake_hold_count_ = 0;
+  brake_active_ = false;
+}
+
 void A2PolicyDeployNode::set_zero_command() {
   cmd_vx_ = 0.0;
   cmd_vy_ = 0.0;
@@ -1404,6 +1561,7 @@ void A2PolicyDeployNode::reset_runtime_state() {
   warm_frames_ = 0;
   history_warm_logged_ = false;
   have_policy_aux_log_time_ = false;
+  reset_brake_gate_state();
   gait_phase_ = 0.0;
   last_raw_action_.fill(0.0f);
   if (!obs_terms.empty()) {

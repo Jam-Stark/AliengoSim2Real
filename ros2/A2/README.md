@@ -580,12 +580,22 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_BRAKE_GATE_ENABLED=true
+A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
+A2_POLICY_BRAKE_MIN_CMD_VX=0.2
+A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
+A2_POLICY_BRAKE_HOLD_STEPS=2
 ```
 
-Brake gate 字段当前只在 config 里作为 comment-only placeholder 保留；wrapper 不会把
-`A2_POLICY_BRAKE_*` 传给 `a2_policy_deploy` active behavior。后续如要启用 brake gate，
-必须先用 `policy-aux-live` 做 independent listen-only smoke，并用 active
-`policy-aux-monitor` 确认 aux dim/layout 和 force-estimator semantics。
+Brake gate 已在 wrapper 默认配置中启用，但只在 `enable_motion=true` 的 real motion
+publish path 生效。它使用 active aux layout `pred_base_lin_vel[0..2]` +
+`pred_base_force_local[0..2]`，当 `pred_base_force_local[0] <= -0.6` 连续
+`2` control steps，且 `cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、command 不是
+standing 时 latch。threshold 是 A2 observed unitless aux scale，不是 Newton；负阈值表示
+`fx <= threshold`。触发当前 tick 会发布 zero LowCmd、跳过 policy joint command，并清空
+last action / gait phase。stick 回中、command standing、eligibility 不满足、local stop 或
+runtime reset 后释放。`policy-aux-monitor` 只用于观察 gate 前后的 `fx`，不改变 active
+behavior。
 
 `policy-aux-live` 是 independent listen-only smoke：
 
@@ -665,6 +675,15 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   non-negative。
 - `policy_aux_print_period_sec`：默认 `0.2`。仅用于 aux monitor log cadence；必须为
   finite positive。
+- `brake_gate_enabled`：默认 `false`。裸 node 默认关闭；wrapper run config 默认传入
+  `true`。只在 `enable_motion=true` 的 publish path 生效。
+- `brake_force_x_threshold`：默认 `-0.6`。使用 aux `pred_base_force_local[0]`；
+  threshold >= 0 时按 `force_x >= threshold` 触发，threshold < 0 时按
+  `force_x <= threshold` 触发。A2 当前默认是 unitless `-0.6`，不是 Newton。
+- `brake_min_cmd_vx` / `brake_max_abs_yaw`：默认 `0.2` / `0.10`。brake gate
+  eligibility 要求 `cmd_vx >= brake_min_cmd_vx` 且 `abs(cmd_yaw) <= brake_max_abs_yaw`；
+  不检查 `vy`。
+- `brake_hold_steps`：默认 `2`。force trigger 连续满足该 step 数后 latch active。
 - `standup_stage1_steps` / `standup_stage2_steps`：默认 `150` / `150`，合计
   `300` 个 50 Hz control steps。
 - `standup_rear_alpha_lead` / `standup_front_alpha_lag`：默认 `0.10` / `0.04`，
@@ -740,8 +759,11 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 - `command_source=remote` 时 remote stick decode invalid
 - observation/action dimension 不符合 contract
 - history 尚未 warm 到 `32` fresh frames
+- brake gate active：当前 tick 发布 zero LowCmd，并跳过 policy joint command；如果 aux
+  dim < 6 或包含 NaN/Inf，不触发 brake，只 throttled warning
 
-这些条件下 node 不发布 motion command。
+这些条件下 node 不发布 policy joint motion command；brake gate active 是例外 stop path，
+会发布 zero LowCmd。
 
 Remote safety handling：
 
