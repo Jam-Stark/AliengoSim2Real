@@ -38,7 +38,7 @@
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
   - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` primary local stop、`L2+B` 附加 stop path 和 `B` cancel。
-  - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认；新版 helper 会打印 raw `CheckMode form/name` 和 normalized `service`，其中 `form='0', name='ai', service='ai_sport'` 是 restore `ai_sport` 的 expected alias。
+  - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认；新版 helper 会打印 raw `CheckMode form/name` 和 normalized `service`，其中 `form='0', name='ai', service='ai_sport'` 是 restore `ai_sport` 的 expected alias。若使用 optional `pose-hold`，必须在 policy stop 后先 `no-lowcmd 5` pass，再用 explicit 12-value `A2_POLICY_STOP_POSE_Q` + `A2_ALLOW_POSE_LOWCMD=1` 运行，结束后再次 `no-lowcmd 5` pass 才 `motion-restore`。
 
 ## 2026-06-05 20:10 HKT
 
@@ -49,11 +49,11 @@
   - 沿 sim/training convention 的 `+q` 方向移动，记录 `delta_from_start` sign 是否符合 no-inversion 假设。
   - 如发现 mapping mismatch 或 per-joint sign inversion 需求，先修正并复验，再进入任何 configured LowCmd topic（默认 `/lowcmd`）control path。
 
-## 2026-06-08 20:08 HKT
+## 2026-06-08 21:38 HKT
 
-- [ ] brake gate 后续启用前必须先确认 policy aux layout 和 force-estimator semantics：
+- [ ] A2 brake gate 已实现并由 wrapper config 默认启用；仍需部署机/实机验证阈值、符号和稳定性：
 
-  - 用 `A2/scripts/a2_real_robot_test.sh policy-aux-live` 在部署机/实机运行 listen-only / no-lowcmd monitor。
-  - 在 active `policy-enable-remote` 正常控制期间，用第二个 Docker terminal 运行 `A2/scripts/a2_real_robot_test.sh policy-aux-monitor 0` 订阅 `/a2/policy_aux`。
-  - 确认 aux dim 是否为 `6`，并验证 `pred_base_lin_vel[0..2]` / `pred_base_force_local[0..2]` 的 layout、符号和单位。
-  - 未确认前不要把 `A2_POLICY_BRAKE_*` 从 comment-only config 字段升级为 node active behavior，也不要让 wrapper 传入 brake gate params。
+  - 用 `policy-aux-live` / `policy-aux-monitor` 复核 active aux dim 6 layout：`pred_base_lin_vel[0..2] + pred_base_force_local[0..2]`。
+  - 在 guarded `policy-enable-remote` 中验证 `pred_base_force_local[0] <= -0.6` 是否是正确 unitless threshold 和符号；注意不是 Newton。
+  - 验证连续 `2` steps hold、`cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、非 standing command 的 eligibility。
+  - 验证触发当前 tick 只发布 zero LowCmd、不发布 policy joint command，并在 stick 回中/command standing、eligibility lost、local stop 或 runtime reset 后释放。

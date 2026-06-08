@@ -110,6 +110,8 @@ load_policy_run_config() {
   local source_status
   local allow_was_set=0
   local allow_value=""
+  local pose_allow_was_set=0
+  local pose_allow_value=""
   local names=(
     A2_POLICY_MAX_REMOTE_VX
     A2_POLICY_MAX_REMOTE_VY
@@ -120,8 +122,12 @@ load_policy_run_config() {
     A2_POLICY_AUX_DEBUG_TOPIC
     A2_POLICY_AUX_EXPECTED_DIM
     A2_POLICY_AUX_PRINT_PERIOD
+    A2_POLICY_STOP_POSE_Q
+    A2_POLICY_STOP_POSE_KP
+    A2_POLICY_STOP_POSE_KD
+    A2_POLICY_STOP_POSE_INTERPOLATE_SEC
     A2_POLICY_BRAKE_GATE_ENABLED
-    A2_POLICY_BRAKE_FORCE_X_THRESHOLD_N
+    A2_POLICY_BRAKE_FORCE_X_THRESHOLD
     A2_POLICY_BRAKE_MIN_CMD_VX
     A2_POLICY_BRAKE_MAX_ABS_YAW
     A2_POLICY_BRAKE_HOLD_STEPS
@@ -149,6 +155,10 @@ load_policy_run_config() {
     allow_was_set=1
     allow_value="$A2_ALLOW_ENABLE_MOTION"
   fi
+  if [ "${A2_ALLOW_POSE_LOWCMD+x}" = "x" ]; then
+    pose_allow_was_set=1
+    pose_allow_value="$A2_ALLOW_POSE_LOWCMD"
+  fi
 
   A2_POLICY_MAX_REMOTE_VX=0.80
   A2_POLICY_MAX_REMOTE_VY=0.50
@@ -159,6 +169,14 @@ load_policy_run_config() {
   A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
   A2_POLICY_AUX_EXPECTED_DIM=6
   A2_POLICY_AUX_PRINT_PERIOD=0.2
+  A2_POLICY_BRAKE_GATE_ENABLED=true
+  A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
+  A2_POLICY_BRAKE_MIN_CMD_VX=0.2
+  A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
+  A2_POLICY_BRAKE_HOLD_STEPS=2
+  A2_POLICY_STOP_POSE_KP=20.0
+  A2_POLICY_STOP_POSE_KD=2.0
+  A2_POLICY_STOP_POSE_INTERPOLATE_SEC=2.0
 
   set +e
   # shellcheck disable=SC1090
@@ -172,7 +190,7 @@ load_policy_run_config() {
   fi
 
   # Operator-provided environment wins over repo defaults and config file.
-  # A2_ALLOW_ENABLE_MOTION is intentionally not accepted from the config file.
+  # A2_ALLOW_* guards are intentionally not accepted from the config file.
   # shellcheck disable=SC1090
   source "$override_file"
   rm -f "$override_file"
@@ -181,6 +199,12 @@ load_policy_run_config() {
     export A2_ALLOW_ENABLE_MOTION
   else
     unset A2_ALLOW_ENABLE_MOTION
+  fi
+  if [ "$pose_allow_was_set" -eq 1 ]; then
+    A2_ALLOW_POSE_LOWCMD="$pose_allow_value"
+    export A2_ALLOW_POSE_LOWCMD
+  else
+    unset A2_ALLOW_POSE_LOWCMD
   fi
 
   A2_POLICY_EFFECTIVE_CONFIG="$config_path"
@@ -193,8 +217,10 @@ print_policy_run_config() {
   echo "[a2-real-test] require_standup_before_policy=${A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY}"
   echo "[a2-real-test] publish_aux_debug=${A2_POLICY_PUBLISH_AUX_DEBUG} aux_debug_topic=${A2_POLICY_AUX_DEBUG_TOPIC}"
   echo "[a2-real-test] aux_expected_dim=${A2_POLICY_AUX_EXPECTED_DIM} aux_print_period=${A2_POLICY_AUX_PRINT_PERIOD}"
-  echo "[a2-real-test] brake_gate=ignored/comment-only; not passed to a2_policy_deploy"
-  echo "[a2-real-test] A2_ALLOW_ENABLE_MOTION is an operator env guard, not a config-file setting"
+  echo "[a2-real-test] stop_pose_q=${A2_POLICY_STOP_POSE_Q:-UNSET}"
+  echo "[a2-real-test] stop_pose_gains: kp=${A2_POLICY_STOP_POSE_KP} kd=${A2_POLICY_STOP_POSE_KD} interpolate_sec=${A2_POLICY_STOP_POSE_INTERPOLATE_SEC}"
+  echo "[a2-real-test] brake_gate: enabled=${A2_POLICY_BRAKE_GATE_ENABLED} force_x_threshold=${A2_POLICY_BRAKE_FORCE_X_THRESHOLD} min_cmd_vx=${A2_POLICY_BRAKE_MIN_CMD_VX} max_abs_yaw=${A2_POLICY_BRAKE_MAX_ABS_YAW} hold_steps=${A2_POLICY_BRAKE_HOLD_STEPS}"
+  echo "[a2-real-test] A2_ALLOW_ENABLE_MOTION and A2_ALLOW_POSE_LOWCMD are operator env guards, not config-file settings"
 }
 
 usage() {
@@ -215,6 +241,7 @@ Usage:
   A2_ALLOW_ZERO_LOWCMD=1 a2_real_robot_test.sh zero-lowcmd [duration]
   a2_real_robot_test.sh policy-listen-remote [duration]
   A2_ALLOW_ENABLE_MOTION=1 a2_real_robot_test.sh policy-enable-remote [duration]
+  A2_ALLOW_POSE_LOWCMD=1 a2_real_robot_test.sh pose-hold [duration]
   a2_real_robot_test.sh policy-aux-live [duration]
   a2_real_robot_test.sh policy-aux-monitor [duration]
   a2_real_robot_test.sh help
@@ -231,8 +258,9 @@ to 0, meaning run until Ctrl-C.
 Live env: A2_LIVE_PRINT_PERIOD=0.2, A2_LIVE_CLEAR_SCREEN=1,
 A2_JOINT_MIN_DELTA=0.03, A2_REMOTE_DEADZONE=0.08.
 Policy env: A2_POLICY_RUN_CONFIG defaults to ros2/A2/config/a2_policy_remote.env.
-Operator env A2_POLICY_* overrides config values; A2_ALLOW_ENABLE_MOTION=1 must
-be set only in the shell for policy-enable-remote, never in the config file.
+Operator env A2_POLICY_* overrides config values; A2_ALLOW_ENABLE_MOTION=1 and
+A2_ALLOW_POSE_LOWCMD=1 must be set only in the shell for guarded publish paths,
+never in the config file.
 policy-aux-live is an independent listen-only smoke. policy-aux-monitor only
 subscribes to the active policy aux topic and never starts a policy node.
 USAGE
@@ -849,7 +877,12 @@ PY
       -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
       -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
       -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
-      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC"
+      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+      -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
+      -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
+      -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
+      -p brake_max_abs_yaw:="$A2_POLICY_BRAKE_MAX_ABS_YAW" \
+      -p brake_hold_steps:="$A2_POLICY_BRAKE_HOLD_STEPS"
   policy_status=$?
 
   set +e
@@ -885,7 +918,82 @@ policy_enable_remote() {
       -p remote_deadzone:="$A2_POLICY_REMOTE_DEADZONE" \
       -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
       -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
-      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC"
+      -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+      -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
+      -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
+      -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
+      -p brake_max_abs_yaw:="$A2_POLICY_BRAKE_MAX_ABS_YAW" \
+      -p brake_hold_steps:="$A2_POLICY_BRAKE_HOLD_STEPS"
+}
+
+require_custom_pose_q() {
+  local raw="${A2_POLICY_STOP_POSE_Q:-}"
+  local canonical
+  if [ -z "$raw" ]; then
+    echo "ERROR: set A2_POLICY_STOP_POSE_Q to an explicit 12-value joint target before pose-hold." >&2
+    echo "Example A2 low-level order: [FR_BODY,FR_THIGH,FR_CALF,FL_BODY,FL_THIGH,FL_CALF,RR_BODY,RR_THIGH,RR_CALF,RL_BODY,RL_THIGH,RL_CALF]" >&2
+    exit 2
+  fi
+  if ! canonical="$(python3 - "$raw" <<'PY'
+import ast
+import math
+import sys
+
+raw = sys.argv[1]
+order = [
+    "FR_BODY", "FR_THIGH", "FR_CALF",
+    "FL_BODY", "FL_THIGH", "FL_CALF",
+    "RR_BODY", "RR_THIGH", "RR_CALF",
+    "RL_BODY", "RL_THIGH", "RL_CALF",
+]
+try:
+    values = ast.literal_eval(raw)
+except (SyntaxError, ValueError) as exc:
+    print(f"ERROR: A2_POLICY_STOP_POSE_Q must be a Python/ROS-style numeric list: {exc}", file=sys.stderr)
+    sys.exit(2)
+if not isinstance(values, (list, tuple)) or len(values) != 12:
+    print(f"ERROR: A2_POLICY_STOP_POSE_Q must contain exactly 12 values in A2 low-level order; got {len(values) if isinstance(values, (list, tuple)) else 'non-list'}", file=sys.stderr)
+    sys.exit(2)
+normalized = []
+for index, value in enumerate(values):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        print(f"ERROR: A2_POLICY_STOP_POSE_Q[{index}] {order[index]} is not numeric: {value!r}", file=sys.stderr)
+        sys.exit(2)
+    value = float(value)
+    if not math.isfinite(value):
+        print(f"ERROR: A2_POLICY_STOP_POSE_Q[{index}] {order[index]} is not finite: {value!r}", file=sys.stderr)
+        sys.exit(2)
+    normalized.append(value)
+print("[" + ",".join(f"{value:.9g}" for value in normalized) + "]")
+PY
+)"; then
+    exit 2
+  fi
+  A2_POLICY_STOP_POSE_Q="$canonical"
+  export A2_POLICY_STOP_POSE_Q
+}
+
+pose_hold() {
+  local duration="${1:-4}"
+  load_policy_run_config
+  print_policy_run_config
+  require_env_flag A2_ALLOW_POSE_LOWCMD "pose-hold publishes custom stop-pose LowCmd frames after policy stop and before MotionSwitcher restore."
+  require_custom_pose_q
+  echo "WARNING: pose-hold publishes LowCmd custom pose targets to ${lowcmd_topic}."
+  echo "WARNING: stop the policy node and every LowCmd publisher first."
+  echo "WARNING: run 'A2/scripts/a2_real_robot_test.sh no-lowcmd 5' and require PASS before pose-hold."
+  echo "WARNING: confirm the official motion service remains released before pose-hold."
+  echo "WARNING: do not run pose-hold at the same time as motion-restore or motion-select."
+  echo "WARNING: after pose-hold exits, run no-lowcmd until PASS before motion-restore."
+  run_timeout_accept_124 pose_hold "$duration" \
+    ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
+      -p lowstate_topic:="$lowstate_topic" \
+      -p lowcmd_topic:="$lowcmd_topic" \
+      -p custom_pose:=true \
+      -p custom_pose_q:="$A2_POLICY_STOP_POSE_Q" \
+      -p custom_pose_kp:="$A2_POLICY_STOP_POSE_KP" \
+      -p custom_pose_kd:="$A2_POLICY_STOP_POSE_KD" \
+      -p custom_pose_interpolate_sec:="$A2_POLICY_STOP_POSE_INTERPOLATE_SEC"
 }
 
 policy_aux_live() {
@@ -998,7 +1106,12 @@ PY
         -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
         -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
         -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
-        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD"
+        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD" \
+        -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
+        -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
+        -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
+        -p brake_max_abs_yaw:="$A2_POLICY_BRAKE_MAX_ABS_YAW" \
+        -p brake_hold_steps:="$A2_POLICY_BRAKE_HOLD_STEPS"
     else
       ros2 run a2_lowlevel a2_policy_deploy --ros-args \
         -p lowstate_topic:="$lowstate_topic" \
@@ -1014,7 +1127,12 @@ PY
         -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
         -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
         -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
-        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD"
+        -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD" \
+        -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
+        -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
+        -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
+        -p brake_max_abs_yaw:="$A2_POLICY_BRAKE_MAX_ABS_YAW" \
+        -p brake_hold_steps:="$A2_POLICY_BRAKE_HOLD_STEPS"
     fi
     echo "$?" > "$policy_status_file"
   ) > "$policy_log" 2>&1 &
@@ -1160,6 +1278,9 @@ case "$command" in
     ;;
   policy-enable-remote)
     policy_enable_remote "$@"
+    ;;
+  pose-hold)
+    pose_hold "$@"
     ;;
   policy-aux-live)
     policy_aux_live "$@"

@@ -26,6 +26,9 @@ second `A` handover 后会进入 policy warmup / active path。不要把该流�
 - low-level control 前关闭 Unitree built-in motion service；结束后恢复前也必须先停止
   policy/LowCmd publisher 并重新 `no-lowcmd 5` pass。
 - `Select` 是 primary local stop。`L2+B` 只作为 additional stop path；只有 `L2` decode 正常时才可靠。
+- optional `pose-hold` 只在 policy/LowCmd publisher 已停止、official motion service 仍保持
+  released、且 operator 显式提供 12-value pose target 时运行；不要和 `motion-restore`
+  或 `motion-select` 同时运行。
 - `B` 只用于 stand-up / hold / warmup phase 的 cancel。
 - `stand_test` 不用于 real deployment runbook。
 
@@ -223,7 +226,8 @@ Ideal result:
 - `policy-aux-live` prints action dim and aux dim after history warm.
 - If aux dim is `6`, logs show `pred_base_lin_vel` and `pred_base_force_local`.
 - The paired no-lowcmd observer still prints no configured `/lowcmd` messages.
-- `A2_POLICY_BRAKE_*` fields in run config remain comment-only; brake gate is not enabled in this runbook.
+- Wrapper config already passes active brake gate params, but `policy-aux-live` still runs
+  `enable_motion=false`; it does not publish LowCmd.
 
 ## 8. Start Real Policy
 
@@ -252,12 +256,30 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_BRAKE_GATE_ENABLED=true
+A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
+A2_POLICY_BRAKE_MIN_CMD_VX=0.2
+A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
+A2_POLICY_BRAKE_HOLD_STEPS=2
+A2_POLICY_STOP_POSE_KP=20.0
+A2_POLICY_STOP_POSE_KD=2.0
+A2_POLICY_STOP_POSE_INTERPOLATE_SEC=2.0
+# A2_POLICY_STOP_POSE_Q='[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]'
 ```
 
-不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 run config；它必须只在执行真运动命令的
-operator shell 里显式设置。
-`A2_POLICY_BRAKE_*` entries are placeholders only and are not passed to active
-`a2_policy_deploy` behavior.
+`A2_POLICY_STOP_POSE_Q` 是 explicit-only；repo config 只给 commented example，不设置
+default target。使用 `pose-hold` 前必须由 operator shell 或现场显式 config 提供 exact
+12 finite values，否则 wrapper fail fast，不发布 LowCmd。
+
+不要把 `A2_ALLOW_ENABLE_MOTION=1` 或 `A2_ALLOW_POSE_LOWCMD=1` 写进 run config；它们必须只在执行 guarded publish 命令的 operator shell 里显式设置。
+`A2_POLICY_BRAKE_*` entries are active real motion behavior. Default gate uses
+active `/a2/policy_aux` dim 6 `pred_base_force_local[0] <= -0.6` for 2
+consecutive policy cycles, with `cmd_vx >= 0.2`, `abs(cmd_yaw) <= 0.10`, and
+non-standing command. The threshold is A2 observed unitless aux scale, not
+Newton; a negative threshold means `fx <= threshold`. When triggered, the
+current tick publishes zero LowCmd and skips policy joint command publish. It
+releases when sticks return to standing/center, eligibility is lost, local stop
+fires, or runtime resets.
 
 Use two Docker terminals if you want live force-estimator aux while the active policy runs.
 
@@ -318,6 +340,11 @@ remote_deadzone=0.08
 require_standup_before_policy=true
 publish_aux_debug=true
 aux_debug_topic=/a2/policy_aux
+brake_gate_enabled=true
+brake_force_x_threshold=-0.6
+brake_min_cmd_vx=0.2
+brake_max_abs_yaw=0.10
+brake_hold_steps=2
 ```
 
 Any abnormal behavior: release sticks, press `Select`, then use hardware emergency stop if the robot
@@ -330,6 +357,7 @@ Primary local stop:
 - Press `Select`.
 - Policy node resets runtime and requires a new two-A handover before motion resumes.
 - In `enable_motion=true`, local stop publishes zero LowCmd.
+- `Select` remains immediate local stop; it does not run custom pose recovery or `pose-hold`.
 
 Additional stop/cancel paths:
 
@@ -338,7 +366,20 @@ Additional stop/cancel paths:
 - hardware emergency stop is mandatory for abnormal behavior.
 - Ctrl-C stops the process in terminal, but do not use Ctrl-C as the only safety mechanism.
 
-After stopping the policy process, verify no active LowCmd traffic:
+Optional controlled stop-pose hold before restore:
+
+```bash
+# Stop policy/LowCmd publisher first. Confirm MotionSwitcher mode remains released.
+A2/scripts/a2_real_robot_test.sh no-lowcmd 5
+A2_POLICY_STOP_POSE_Q='[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]' \
+  A2_ALLOW_POSE_LOWCMD=1 A2/scripts/a2_real_robot_test.sh pose-hold 4
+```
+
+`A2_POLICY_STOP_POSE_Q` above is only an example policy default mapped to A2 low-level order.
+Replace it with the operator-selected exact 12 finite values. If the env is missing, malformed,
+wrong length, or contains NaN/Inf, `pose-hold` fails before starting `a2_lowlevel_smoke`.
+
+After stopping the policy process, and again after optional `pose-hold` if used, verify no active LowCmd traffic:
 
 ```bash
 A2/scripts/a2_real_robot_test.sh no-lowcmd 5
