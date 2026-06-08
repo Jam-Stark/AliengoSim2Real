@@ -265,9 +265,12 @@ operator shell 里显式设置。
 Brake gate is active in the real motion path. It uses A2 observed unitless aux
 scale, not Newton: default trigger is `pred_base_force_local[0] <= -0.6` for 2
 consecutive control steps while `cmd_vx >= 0.2`, `abs(cmd_yaw) <= 0.10`, and the
-command is not standing. Current tick publishes zero LowCmd and skips the policy
-joint command; centering the stick / command standing, losing eligibility, local
-stop, or runtime reset releases the latch.
+command is not standing. Current tick does not publish zero LowCmd, does not
+switch stop mode, does not clear PD, and does not skip the policy joint command;
+the already-computed action continues through normal `publish_joint_commands()`.
+From the next observation, brake active overrides only the policy observation
+command to `[0, 0, 0]`. Centering the stick / command standing, losing
+eligibility, local stop, or runtime reset releases the latch.
 
 Use two Docker terminals if you want live force-estimator aux while the active policy runs.
 

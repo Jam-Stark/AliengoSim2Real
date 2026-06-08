@@ -212,6 +212,13 @@
 
 - [x] 重新实现 A2 brake gate：`a2_policy_deploy` 新增 `brake_gate_enabled`、`brake_force_x_threshold`、`brake_min_cmd_vx`、`brake_max_abs_yaw`、`brake_hold_steps` params，裸 node 默认关闭。
 - [x] Brake gate 只在 `enable_motion=true` 的 policy publish path 生效；`computeAction()` 后读取 aux dim 6 `pred_base_force_local[0]`，默认用 A2 observed unitless threshold `<= -0.6` 连续 2 steps latch。
-- [x] Brake active 当前 tick 调用 `publish_zero()`、`set_zero_command()`，清空 `last_raw_action_` / `obs_actions[kPolicyId]`，重置 `gait_phase_` 并跳过 policy joint command；listen-only / `policy-aux-live` 仍不发布 LowCmd。
+- [x] Brake active 当前 tick 调用 `publish_zero()`、`set_zero_command()`，清空 `last_raw_action_` / `obs_actions[kPolicyId]`，重置 `gait_phase_` 并跳过 policy joint command；listen-only / `policy-aux-live` 仍不发布 LowCmd。该 zero LowCmd stop path 已被 2026-06-08 22:20 HKT command override only 行为 supersede。
 - [x] `a2_real_robot_test.sh` 和 `a2_policy_remote.env` 已改为 active brake gate config，使用 `A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6`，不再使用 `_N` 命名；`A2_ALLOW_ENABLE_MOTION=1` 仍只允许 operator shell guard。
 - [x] 更新 `README.md`、`A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 memory，记录 brake gate 已实现但仍需部署机/实机验证阈值、force x 符号、latch/release 和稳定性。
+
+## 2026-06-08 22:20 HKT
+
+- [x] 将 A2 brake gate 从 zero LowCmd stop path 改为 command override only：触发当前 tick 不再 `publish_zero()`、不切 LowCmd stop mode、不清 PD/last action/gait phase、不提前 return 跳过 policy joint command。
+- [x] `a2_policy_deploy` 新增 raw requested command tracking，remote/static 先更新 requested command；brake eligibility/release 使用 raw requested command，只有写入 policy observation 前才把 `cmd_vx_` / `cmd_vy_` / `cmd_yaw_` override 为 `[0,0,0]`。
+- [x] Brake active 时仍继续 `computeAction()`、action validation 和 `A2LowLevelInterface::publish_joint_commands()`；command standing / stick 回中 / eligibility 失效 / local stop / `reset_runtime_state()` 仍能 release 或清 brake state。
+- [x] 更新 `README.md`、`A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 A2 memory，实机 TODO 改为验证 no zero-LowCmd stop、normal PD command continues、command override/release 稳定性。

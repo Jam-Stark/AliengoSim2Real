@@ -596,8 +596,9 @@ Ideal active-topic monitor result：
 - `L2` 不再强制 locomotion command 为 zero；PolicyActive 中 valid sticks 会直接映射 command。
 - Brake gate 是 real motion behavior：PolicyActive inference 后读取 aux
   `pred_base_force_local[0]`，默认 `<= -0.6` 连续 2 steps 且 forward/yaw eligibility
-  满足时，当前 tick 发布 zero LowCmd 并跳过 policy joint command。threshold 是 A2
-  observed unitless aux scale，不是 Newton。
+  满足时 latch。threshold 是 A2 observed unitless aux scale，不是 Newton。触发当前 tick
+  不发布 zero LowCmd、不切 stop mode、不清 PD，也不跳过 policy joint command；该 tick
+  继续正常 `publish_joint_commands()`，下一轮 observation command 才 override 为 zero。
 - `Select` 是 primary local stop，会触发 local stop、runtime reset，并调用 `publish_zero()`
   发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
   rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
@@ -645,9 +646,10 @@ Ideal result：
 - PolicyActive 中 centered sticks 对应 zero locomotion command；moving sticks 不要求
   `L2` held。
 - 遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
-- brake gate 只在 `cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、非 standing command
-  时 eligible；忽略 `vy`。触发后 latch，直到 stick 回中/command standing、eligibility
-  不满足、local stop 或 runtime reset。
+- brake gate 只在 raw requested `cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、非
+  standing command 时 eligible；忽略 `vy`。触发后 latch，下一轮 policy observation
+  command 为 `[0, 0, 0]`，但 action validation 和 `publish_joint_commands()` 继续执行。
+  stick 回中/command standing、eligibility 不满足、local stop 或 runtime reset 会释放 latch。
 - 第二个 terminal 的 `policy-aux-monitor` 用于观察 gate 前后的
   `pred_base_force_local[0]` 符号、阈值裕量和稳定性；monitor 不控制 gate。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
@@ -673,7 +675,7 @@ Ideal result：
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
 - `policy-aux-live` 在 `enable_motion=false` 下没有 configured LowCmd topic message，并已确认
   aux dim/layout；brake gate 已实现，仍需在部署机/实机验证 `-0.6` 阈值、force x 符号和
-  latch/release 稳定性。
+  no zero-LowCmd stop、normal PD command continues、command override/release 稳定性。
 - `policy-aux-monitor` 可在 active `policy-enable-remote` 期间订阅 `/a2/policy_aux`，
   并实时显示 dim/value/warning；该 monitor 不启动 policy node，也不发布 LowCmd。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`

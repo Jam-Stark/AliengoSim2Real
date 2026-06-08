@@ -245,9 +245,12 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
   enable_motion_ = this->declare_parameter<bool>("enable_motion", false);
   command_source_param_ =
       this->declare_parameter<std::string>("command_source", "static");
-  cmd_vx_ = this->declare_parameter<double>("cmd_vx", 0.0);
-  cmd_vy_ = this->declare_parameter<double>("cmd_vy", 0.0);
-  cmd_yaw_ = this->declare_parameter<double>("cmd_yaw", 0.0);
+  requested_cmd_vx_ = this->declare_parameter<double>("cmd_vx", 0.0);
+  requested_cmd_vy_ = this->declare_parameter<double>("cmd_vy", 0.0);
+  requested_cmd_yaw_ = this->declare_parameter<double>("cmd_yaw", 0.0);
+  cmd_vx_ = requested_cmd_vx_;
+  cmd_vy_ = requested_cmd_vy_;
+  cmd_yaw_ = requested_cmd_yaw_;
   max_remote_vx_ =
       this->declare_parameter<double>("max_remote_vx", 0.8);
   max_remote_vy_ =
@@ -658,9 +661,10 @@ void A2PolicyDeployNode::control_loop() {
     return;
   }
 
-  if (is_standing_command()) {
+  if (is_requested_standing_command()) {
     gait_phase_ = 0.0;
   }
+  update_policy_observation_command();
 
   if (!compute_and_validate_policy_observation()) {
     return;
@@ -710,9 +714,7 @@ void A2PolicyDeployNode::control_loop() {
   publish_policy_aux_debug(aux);
   const bool aux_values_finite =
       log_policy_aux_output(action, aux, false);
-  if (apply_brake_gate(aux)) {
-    return;
-  }
+  apply_brake_gate(aux);
 
   if (raw_action.size() != kTrainingJointCount ||
       !vector_is_finite(raw_action)) {
@@ -762,9 +764,12 @@ void A2PolicyDeployNode::control_loop() {
 bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("enable_motion", enable_motion_);
   this->get_parameter("command_source", command_source_param_);
-  this->get_parameter("cmd_vx", cmd_vx_);
-  this->get_parameter("cmd_vy", cmd_vy_);
-  this->get_parameter("cmd_yaw", cmd_yaw_);
+  double static_cmd_vx = requested_cmd_vx_;
+  double static_cmd_vy = requested_cmd_vy_;
+  double static_cmd_yaw = requested_cmd_yaw_;
+  this->get_parameter("cmd_vx", static_cmd_vx);
+  this->get_parameter("cmd_vy", static_cmd_vy);
+  this->get_parameter("cmd_yaw", static_cmd_yaw);
   this->get_parameter("max_remote_vx", max_remote_vx_);
   this->get_parameter("max_remote_vy", max_remote_vy_);
   this->get_parameter("max_remote_yaw", max_remote_yaw_);
@@ -851,16 +856,21 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   }
 
   if (command_source_ == CommandSource::kStatic &&
-      (!std::isfinite(cmd_vx_) || !std::isfinite(cmd_vy_) ||
-       !std::isfinite(cmd_yaw_))) {
+      (!std::isfinite(static_cmd_vx) || !std::isfinite(static_cmd_vy) ||
+       !std::isfinite(static_cmd_yaw))) {
     RCLCPP_ERROR_THROTTLE(
         this->get_logger(), *this->get_clock(), 3000,
         "A2 static command params contain NaN/Inf; refusing policy publish.");
     return false;
   }
 
+  if (command_source_ == CommandSource::kStatic) {
+    requested_cmd_vx_ = static_cmd_vx;
+    requested_cmd_vy_ = static_cmd_vy;
+    requested_cmd_yaw_ = static_cmd_yaw;
+  }
+
   if (command_source_ == CommandSource::kRemote) {
-    set_zero_command();
     if (!is_finite_nonnegative(max_remote_vx_) ||
         !is_finite_nonnegative(max_remote_vy_) ||
         !is_finite_nonnegative(max_remote_yaw_) ||
@@ -938,13 +948,13 @@ bool A2PolicyDeployNode::update_command_from_remote(
       "A2 remote decode: lx=%.3f rx=%.3f ry=%.3f ly=%.3f buttons=%s",
       remote.lx, remote.rx, remote.ry, remote.ly, button_names.c_str());
 
-  cmd_vx_ = static_cast<double>(remote.ly) * max_remote_vx_;
-  cmd_vy_ = -static_cast<double>(remote.lx) * max_remote_vy_;
-  cmd_yaw_ = -static_cast<double>(remote.rx) * max_remote_yaw_;
+  requested_cmd_vx_ = static_cast<double>(remote.ly) * max_remote_vx_;
+  requested_cmd_vy_ = -static_cast<double>(remote.lx) * max_remote_vy_;
+  requested_cmd_yaw_ = -static_cast<double>(remote.rx) * max_remote_yaw_;
   RCLCPP_DEBUG_THROTTLE(
       this->get_logger(), *this->get_clock(), 1000,
       "A2 remote command: vx=%.3f vy=%.3f yaw=%.3f (ry=%.3f unused)",
-      cmd_vx_, cmd_vy_, cmd_yaw_, remote.ry);
+      requested_cmd_vx_, requested_cmd_vy_, requested_cmd_yaw_, remote.ry);
   return true;
 }
 
@@ -1416,28 +1426,69 @@ bool A2PolicyDeployNode::brake_force_triggered(double force_x) const {
   return force_x <= brake_force_x_threshold_;
 }
 
-void A2PolicyDeployNode::publish_brake_zero_command(double force_x) {
-  RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 1000,
-      "A2 brake gate active: publishing zero LowCmd instead of policy joint "
-      "command (force_x=%.4f threshold=%.4f cmd_vx=%.3f cmd_yaw=%.3f "
-      "hold_count=%d/%d).",
-      force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
-      brake_hold_count_, brake_hold_steps_);
-  publish_zero();
-  set_zero_command();
-  last_raw_action_.fill(0.0f);
-  if (!obs_actions.empty()) {
-    obs_actions[kPolicyId] = SimpleTensor::wrap(
-        std::vector<float>(last_raw_action_.begin(), last_raw_action_.end()));
-  }
-  gait_phase_ = 0.0;
+bool A2PolicyDeployNode::brake_gate_eligible() const {
+  return requested_cmd_vx_ >= brake_min_cmd_vx_ &&
+         std::abs(requested_cmd_yaw_) <= brake_max_abs_yaw_ &&
+         !is_requested_standing_command();
 }
 
-bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
+void A2PolicyDeployNode::update_policy_observation_command() {
+  if (!enable_motion_) {
+    cmd_vx_ = requested_cmd_vx_;
+    cmd_vy_ = requested_cmd_vy_;
+    cmd_yaw_ = requested_cmd_yaw_;
+    reset_brake_gate_state();
+    return;
+  }
+
+  if (!brake_gate_enabled_) {
+    if (brake_active_ || brake_hold_count_ > 0) {
+      RCLCPP_INFO(
+          this->get_logger(),
+          "A2 brake gate disabled: clearing previous brake latch state.");
+    }
+    cmd_vx_ = requested_cmd_vx_;
+    cmd_vy_ = requested_cmd_vy_;
+    cmd_yaw_ = requested_cmd_yaw_;
+    reset_brake_gate_state();
+    return;
+  }
+
+  if (brake_active_ && !brake_gate_eligible()) {
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 brake command override released/not eligible: "
+        "requested_cmd_vx=%.3f min=%.3f requested_cmd_yaw=%.3f "
+        "max_abs=%.3f requested_standing=%s hold_count=%d/%d.",
+        requested_cmd_vx_, brake_min_cmd_vx_, requested_cmd_yaw_,
+        brake_max_abs_yaw_, is_requested_standing_command() ? "true" : "false",
+        brake_hold_count_, brake_hold_steps_);
+    reset_brake_gate_state();
+  }
+
+  if (brake_active_) {
+    cmd_vx_ = 0.0;
+    cmd_vy_ = 0.0;
+    cmd_yaw_ = 0.0;
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 brake command override active: policy observation command is "
+        "[0, 0, 0] while requested command is vx=%.3f vy=%.3f yaw=%.3f. "
+        "Continuing normal policy joint command publishing via "
+        "publish_joint_commands().",
+        requested_cmd_vx_, requested_cmd_vy_, requested_cmd_yaw_);
+    return;
+  }
+
+  cmd_vx_ = requested_cmd_vx_;
+  cmd_vy_ = requested_cmd_vy_;
+  cmd_yaw_ = requested_cmd_yaw_;
+}
+
+void A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
   if (!enable_motion_) {
     reset_brake_gate_state();
-    return false;
+    return;
   }
 
   if (!brake_gate_enabled_) {
@@ -1447,33 +1498,31 @@ bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
           "A2 brake gate disabled: clearing previous brake latch state.");
     }
     reset_brake_gate_state();
-    return false;
+    return;
   }
 
-  const bool eligible =
-      cmd_vx_ >= brake_min_cmd_vx_ &&
-      std::abs(cmd_yaw_) <= brake_max_abs_yaw_ && !is_standing_command();
-  if (!eligible) {
+  if (!brake_gate_eligible()) {
     if (brake_active_ || brake_hold_count_ > 0) {
       RCLCPP_INFO(
           this->get_logger(),
-          "A2 brake gate released/not eligible: cmd_vx=%.3f min=%.3f "
-          "cmd_yaw=%.3f max_abs=%.3f standing=%s hold_count=%d/%d.",
-          cmd_vx_, brake_min_cmd_vx_, cmd_yaw_, brake_max_abs_yaw_,
-          is_standing_command() ? "true" : "false", brake_hold_count_,
-          brake_hold_steps_);
+          "A2 brake gate released/not eligible: requested_cmd_vx=%.3f "
+          "min=%.3f requested_cmd_yaw=%.3f max_abs=%.3f "
+          "requested_standing=%s hold_count=%d/%d.",
+          requested_cmd_vx_, brake_min_cmd_vx_, requested_cmd_yaw_,
+          brake_max_abs_yaw_, is_requested_standing_command() ? "true" : "false",
+          brake_hold_count_, brake_hold_steps_);
     }
     reset_brake_gate_state();
-    return false;
+    return;
   }
 
   if (brake_active_) {
-    const bool aux_valid = aux.numel() >= 6 && vector_is_finite(aux.data_);
-    const double force_x =
-        aux_valid ? aux.data_[3]
-                  : std::numeric_limits<double>::quiet_NaN();
-    publish_brake_zero_command(force_x);
-    return true;
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 brake command override remains active after policy inference. "
+        "No zero LowCmd stop path is used; current action continues through "
+        "normal validation and publish_joint_commands().");
+    return;
   }
 
   const bool aux_finite = vector_is_finite(aux.data_);
@@ -1485,7 +1534,7 @@ bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
         "(aux_dim=%lld, finite=%s). Need dim>=6 finite aux; no brake trigger.",
         static_cast<long long>(aux.numel()),
         aux_finite ? "true" : "false");
-    return false;
+    return;
   }
 
   const double force_x = static_cast<double>(aux.data_[3]);
@@ -1495,20 +1544,20 @@ bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
     RCLCPP_INFO_THROTTLE(
         this->get_logger(), *this->get_clock(), 500,
         "A2 brake gate force trigger: force_x=%.4f threshold=%.4f "
-        "cmd_vx=%.3f cmd_yaw=%.3f hold_count=%d/%d.",
-        force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
-        brake_hold_count_, brake_hold_steps_);
+        "requested_cmd_vx=%.3f requested_cmd_yaw=%.3f hold_count=%d/%d.",
+        force_x, brake_force_x_threshold_, requested_cmd_vx_,
+        requested_cmd_yaw_, brake_hold_count_, brake_hold_steps_);
     if (brake_hold_count_ >= brake_hold_steps_) {
       brake_active_ = true;
       RCLCPP_WARN(
           this->get_logger(),
           "A2 brake gate activated: force_x=%.4f threshold=%.4f "
-          "cmd_vx=%.3f cmd_yaw=%.3f hold_count=%d/%d. Current tick will "
-          "publish zero LowCmd and skip policy joint command.",
-          force_x, brake_force_x_threshold_, cmd_vx_, cmd_yaw_,
-          brake_hold_count_, brake_hold_steps_);
-      publish_brake_zero_command(force_x);
-      return true;
+          "requested_cmd_vx=%.3f requested_cmd_yaw=%.3f hold_count=%d/%d. "
+          "Current tick keeps the already-computed action on the normal "
+          "publish_joint_commands() path; next observation will override "
+          "policy command to [0, 0, 0].",
+          force_x, brake_force_x_threshold_, requested_cmd_vx_,
+          requested_cmd_yaw_, brake_hold_count_, brake_hold_steps_);
     }
   } else if (brake_hold_count_ > 0) {
     RCLCPP_INFO_THROTTLE(
@@ -1519,8 +1568,6 @@ bool A2PolicyDeployNode::apply_brake_gate(const SimpleTensor &aux) {
         brake_hold_steps_);
     brake_hold_count_ = 0;
   }
-
-  return false;
 }
 
 void A2PolicyDeployNode::reset_brake_gate_state() {
@@ -1529,6 +1576,9 @@ void A2PolicyDeployNode::reset_brake_gate_state() {
 }
 
 void A2PolicyDeployNode::set_zero_command() {
+  requested_cmd_vx_ = 0.0;
+  requested_cmd_vy_ = 0.0;
+  requested_cmd_yaw_ = 0.0;
   cmd_vx_ = 0.0;
   cmd_vy_ = 0.0;
   cmd_yaw_ = 0.0;
@@ -1538,14 +1588,14 @@ bool A2PolicyDeployNode::is_history_warm() const {
   return warm_frames_ >= kHistoryLength;
 }
 
-bool A2PolicyDeployNode::is_standing_command() const {
-  return std::abs(cmd_vx_) < kStandingCmdVxThreshold &&
-         std::abs(cmd_vy_) < kStandingCmdVyThreshold &&
-         std::abs(cmd_yaw_) < kStandingCmdYawThreshold;
+bool A2PolicyDeployNode::is_requested_standing_command() const {
+  return std::abs(requested_cmd_vx_) < kStandingCmdVxThreshold &&
+         std::abs(requested_cmd_vy_) < kStandingCmdVyThreshold &&
+         std::abs(requested_cmd_yaw_) < kStandingCmdYawThreshold;
 }
 
 void A2PolicyDeployNode::advance_gait_clock() {
-  if (is_standing_command()) {
+  if (is_requested_standing_command()) {
     gait_phase_ = 0.0;
     return;
   }

@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-08 21:51 HKT"
+last_updated: "2026-06-08 22:20 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -36,7 +36,7 @@ read_when:
 - 2026-06-08 20:08 HKT 已新增 `policy-aux-live`：`enable_motion=false command_source=remote monitor_policy_aux=true`，同时启动 `no-lowcmd` observer；history warm 后只做 policy inference / aux output monitor，不发布 LowCmd。默认 aux expected dim 是 `6`，按 Aliengo convention 打印 `pred_base_lin_vel[0..2]` 和 `pred_base_force_local[0..2]`。
 - 2026-06-08 20:31 HKT 已新增 active policy aux debug topic：`a2_policy_deploy` 支持 `publish_aux_debug` / `aux_debug_topic`，每次 policy inference 后把 `policys[kPolicyId].get_last_aux_output()` 发布为 `std_msgs/msg/Float32MultiArray`，默认 wrapper config 为 `/a2/policy_aux`。
 - 2026-06-08 20:31 HKT 已新增 `policy-aux-monitor`：只订阅 active `/a2/policy_aux` topic，不启动 policy node、不启动 no-lowcmd observer、不发布 LowCmd；用于另一个 Docker terminal 在 `policy-enable-remote` 期间实时打印 force estimator。
-- 2026-06-08 21:51 HKT 已重新实现 A2 brake gate：默认裸 node `brake_gate_enabled=false`，wrapper run config 默认 `A2_POLICY_BRAKE_GATE_ENABLED=true`；active motion path 在 `computeAction()` 后读取 aux dim 6 layout `pred_base_force_local[0]`，默认用 unitless threshold `<= -0.6` 连续 `2` steps 且 `cmd_vx>=0.2`、`abs(cmd_yaw)<=0.10`、非 standing command 时 latch，当前 tick `publish_zero()` 并跳过 policy joint command；listen-only / `enable_motion=false` / `policy-aux-live` 不发布 LowCmd。
+- 2026-06-08 22:20 HKT 已将 A2 brake gate 从 zero LowCmd stop path 改为 command override only：默认裸 node `brake_gate_enabled=false`，wrapper run config 默认 `A2_POLICY_BRAKE_GATE_ENABLED=true`；active motion path 在 `computeAction()` 后读取 aux dim 6 layout `pred_base_force_local[0]`，默认用 unitless threshold `<= -0.6` 连续 `2` steps 且 raw requested `cmd_vx>=0.2`、`abs(cmd_yaw)<=0.10`、非 standing command 时 latch。触发当前 tick 不 `publish_zero()`、不切 LowCmd stop mode、不清 PD/last action/gait phase、不跳过 policy joint command；下一轮 observation 前仅把 policy observation command override 为 `[0,0,0]`，后续仍走 `computeAction()`、action validation 和 `publish_joint_commands()`。listen-only / `enable_motion=false` / `policy-aux-live` 仍不发布 LowCmd。
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
@@ -119,7 +119,7 @@ read_when:
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
 - 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` primary local stop、`L2+B` 附加 stop path 和 `enable_motion` 分流。
 - 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
-- brake gate 已实现并在 wrapper config 默认启用；仍需部署机/实机用 `policy-aux-monitor` 对照 active `/a2/policy_aux` 验证 `pred_base_force_local[0] <= -0.6` 的符号、unitless threshold 裕量、2-step latch、stick 回中/standing release 和稳定性。
+- brake gate 已改为 command override only 并在 wrapper config 默认启用；仍需部署机/实机用 `policy-aux-monitor` 对照 active `/a2/policy_aux` 验证 `pred_base_force_local[0] <= -0.6` 的符号、unitless threshold 裕量、2-step latch、no zero-LowCmd stop、normal PD command continues、command override/release 稳定性。
 
 ## DONE Summary
 
@@ -149,7 +149,8 @@ read_when:
 - 2026-06-08 20:08 HKT 已新增 A2 policy remote run config 和 aux output monitor：policy wrapper 只在 policy subcommands 加载 config，`policy-aux-live` 在 `enable_motion=false` 下执行 inference-only aux monitor 并由 `no-lowcmd` observer 覆盖；当时 brake gate 暂不启用，该状态已被 2026-06-08 21:51 HKT active brake gate 实现 supersede。
 - 2026-06-08 20:31 HKT 已实现 active aux debug topic：`a2_policy_deploy` 发布 `/a2/policy_aux`，wrapper 默认透传 `publish_aux_debug=true`，并新增 topic-only `policy-aux-monitor` 用于第二个 Docker terminal 实时查看 force estimator。
 - 2026-06-08 21:08 HKT 已完成 MotionSwitcher alias hardening：restore/select helper 按 Unitree SDK2 sample 把 `form='0', name='ai'` normalize 为 `ai_sport`，operator docs 已更新 expected restore output。
-- 2026-06-08 21:51 HKT 已实现 A2 active brake gate：新增 node params、wrapper/config active defaults、README / validation guide / runbook docs；threshold 使用 A2 observed unitless aux scale `pred_base_force_local[0] <= -0.6`，不是 Newton。
+- 2026-06-08 21:51 HKT 已实现 A2 active brake gate 初版：新增 node params、wrapper/config active defaults、README / validation guide / runbook docs；threshold 使用 A2 observed unitless aux scale `pred_base_force_local[0] <= -0.6`，不是 Newton。该初版 zero LowCmd stop path 已被 2026-06-08 22:20 HKT command override only 行为 supersede。
+- 2026-06-08 22:20 HKT 已将 A2 brake gate 改为 command override only：brake latch 后下一轮 observation command override 为 `[0,0,0]`，不再 `publish_zero()`、不切 stop mode、不清 PD/last action/gait phase、不跳过 `publish_joint_commands()`；新增 raw requested command 作为 eligibility/release 来源，并同步更新 README、validation guide、runbook 和 memory。
 
 ## Recommended Next Files To Read
 
