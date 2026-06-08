@@ -228,3 +228,11 @@
 - [x] Brake active command override 后，gait clock 改为跟随进入 policy observation 的 active command 判断 standing；因此 brake override `[0,0,0]` 会把 gait phase freeze/reset 到 `0`，gait clock 固定为 standing phase `[0,1]`。
 - [x] 保留 raw requested command 仅用于 brake eligibility/release；不新增 ramp/phase 过渡，不改变 `publish_joint_commands()` path。
 - [x] 更新 README、real robot validation guide、real deployment runbook 和 A2 memory，要求实机验证 command override + gait-clock freeze / release 稳定性。
+
+## 2026-06-08 22:35 HKT
+
+- [x] 实现 A2 standing/walking gate v1 hysteresis：新增 `Standing` / `ForceWalking` / `CommandWalking` gate state，gait clock standing 判定不再只看 observation command zero。
+- [x] `a2_policy_deploy` 新增 `standing_walking_gate_enabled`、`standing_walking_enter_force_xy_threshold`、`standing_walking_exit_force_xy_threshold` params，默认 true / `0.2` / `0.05`；threshold 必须 finite nonnegative 且 enter >= exit，否则拒绝 policy publish/monitor。
+- [x] raw requested command 非 standing 时直接 `command_walking` 并推进 gait phase；raw requested command standing 时按 aux dim 6 `fx=aux[3]`、`fy=aux[4]` 的 `force_xy=hypot(fx, fy)` hysteresis 进入/退出 `force_walking`，aux invalid fallback 到 `standing`。
+- [x] gate 只影响 gait clock，不改 command/action/LowCmd，不绕过 `publish_joint_commands()`；force-derived mode 在 `computeAction()` 后更新，影响下一轮 observation；brake active 优先强制 gait clock freeze standing。
+- [x] 更新 `a2_policy_remote.env`、`a2_real_robot_test.sh`、README、real robot validation guide、real deployment runbook 和 A2 memory，记录 env/ROS params、default enter/exit threshold 和待实机验证项。

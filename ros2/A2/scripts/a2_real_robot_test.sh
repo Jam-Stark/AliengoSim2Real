@@ -120,6 +120,9 @@ load_policy_run_config() {
     A2_POLICY_AUX_DEBUG_TOPIC
     A2_POLICY_AUX_EXPECTED_DIM
     A2_POLICY_AUX_PRINT_PERIOD
+    A2_POLICY_STANDING_WALKING_GATE_ENABLED
+    A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD
+    A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD
     A2_POLICY_BRAKE_GATE_ENABLED
     A2_POLICY_BRAKE_FORCE_X_THRESHOLD
     A2_POLICY_BRAKE_MIN_CMD_VX
@@ -159,6 +162,9 @@ load_policy_run_config() {
   A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
   A2_POLICY_AUX_EXPECTED_DIM=6
   A2_POLICY_AUX_PRINT_PERIOD=0.2
+  A2_POLICY_STANDING_WALKING_GATE_ENABLED=true
+  A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD=0.2
+  A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD=0.05
   A2_POLICY_BRAKE_GATE_ENABLED=true
   A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
   A2_POLICY_BRAKE_MIN_CMD_VX=0.2
@@ -198,6 +204,8 @@ print_policy_run_config() {
   echo "[a2-real-test] require_standup_before_policy=${A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY}"
   echo "[a2-real-test] publish_aux_debug=${A2_POLICY_PUBLISH_AUX_DEBUG} aux_debug_topic=${A2_POLICY_AUX_DEBUG_TOPIC}"
   echo "[a2-real-test] aux_expected_dim=${A2_POLICY_AUX_EXPECTED_DIM} aux_print_period=${A2_POLICY_AUX_PRINT_PERIOD}"
+  echo "[a2-real-test] standing_walking_gate_enabled=${A2_POLICY_STANDING_WALKING_GATE_ENABLED} enter_force_xy=${A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD} exit_force_xy=${A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD}"
+  echo "[a2-real-test] standing/walking gate only affects policy gait clock; force_xy uses hypot(aux[3], aux[4])"
   echo "[a2-real-test] brake_gate_enabled=${A2_POLICY_BRAKE_GATE_ENABLED} force_x_threshold=${A2_POLICY_BRAKE_FORCE_X_THRESHOLD} min_cmd_vx=${A2_POLICY_BRAKE_MIN_CMD_VX} max_abs_yaw=${A2_POLICY_BRAKE_MAX_ABS_YAW} hold_steps=${A2_POLICY_BRAKE_HOLD_STEPS}"
   echo "[a2-real-test] brake threshold is A2 observed unitless aux scale; negative threshold means force_x <= threshold"
   echo "[a2-real-test] A2_ALLOW_ENABLE_MOTION is an operator env guard, not a config-file setting"
@@ -856,6 +864,9 @@ PY
       -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
       -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
       -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+      -p standing_walking_gate_enabled:="$A2_POLICY_STANDING_WALKING_GATE_ENABLED" \
+      -p standing_walking_enter_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD" \
+      -p standing_walking_exit_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD" \
       -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
       -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
       -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
@@ -897,6 +908,9 @@ policy_enable_remote() {
       -p require_standup_before_policy:="$A2_POLICY_REQUIRE_STANDUP_BEFORE_POLICY" \
       -p publish_aux_debug:="$A2_POLICY_PUBLISH_AUX_DEBUG" \
       -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
+      -p standing_walking_gate_enabled:="$A2_POLICY_STANDING_WALKING_GATE_ENABLED" \
+      -p standing_walking_enter_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD" \
+      -p standing_walking_exit_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD" \
       -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
       -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
       -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
@@ -1015,6 +1029,9 @@ PY
         -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
         -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
         -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD" \
+        -p standing_walking_gate_enabled:="$A2_POLICY_STANDING_WALKING_GATE_ENABLED" \
+        -p standing_walking_enter_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD" \
+        -p standing_walking_exit_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD" \
         -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
         -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
         -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \
@@ -1036,6 +1053,9 @@ PY
         -p aux_debug_topic:="$A2_POLICY_AUX_DEBUG_TOPIC" \
         -p policy_aux_expected_dim:="$A2_POLICY_AUX_EXPECTED_DIM" \
         -p policy_aux_print_period_sec:="$A2_POLICY_AUX_PRINT_PERIOD" \
+        -p standing_walking_gate_enabled:="$A2_POLICY_STANDING_WALKING_GATE_ENABLED" \
+        -p standing_walking_enter_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD" \
+        -p standing_walking_exit_force_xy_threshold:="$A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD" \
         -p brake_gate_enabled:="$A2_POLICY_BRAKE_GATE_ENABLED" \
         -p brake_force_x_threshold:="$A2_POLICY_BRAKE_FORCE_X_THRESHOLD" \
         -p brake_min_cmd_vx:="$A2_POLICY_BRAKE_MIN_CMD_VX" \

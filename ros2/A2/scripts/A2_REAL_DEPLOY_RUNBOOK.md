@@ -253,6 +253,9 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_STANDING_WALKING_GATE_ENABLED=true
+A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD=0.2
+A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD=0.05
 A2_POLICY_BRAKE_GATE_ENABLED=true
 A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
 A2_POLICY_BRAKE_MIN_CMD_VX=0.2
@@ -262,6 +265,16 @@ A2_POLICY_BRAKE_HOLD_STEPS=2
 
 不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 run config；它必须只在执行真运动命令的
 operator shell 里显式设置。
+Standing/walking gate is active by default and only controls the policy gait clock.
+It does not modify the raw requested command, policy action, LowCmd, or
+`publish_joint_commands()` path. When raw requested command is not standing, gait
+mode is `command_walking`. When raw requested command is standing, it uses aux dim 6
+`pred_base_force_local[0:2]`: `force_xy=hypot(aux[3], aux[4])`, with hysteresis
+enter `0.2` and exit `0.05`. Values between `0.05` and `0.2` keep the current
+standing/force_walking mode. Aux dim < 6 or NaN/Inf does not enter `force_walking`;
+if already `force_walking`, it returns to standing. Aux is only available after
+policy inference, so force-derived mode changes affect the next observation.
+
 Brake gate is active in the real motion path. It uses A2 observed unitless aux
 scale, not Newton: default trigger is `pred_base_force_local[0] <= -0.6` for 2
 consecutive control steps while `cmd_vx >= 0.2`, `abs(cmd_yaw) <= 0.10`, and the
@@ -272,6 +285,8 @@ From the next observation, brake active overrides only the policy observation
 command to `[0, 0, 0]` and freezes gait clock at the standing phase. Centering
 the stick / command standing, losing eligibility, local stop, or runtime reset
 releases the latch.
+Brake active has priority over standing/walking gate and always forces gait clock
+standing freeze.
 
 Use two Docker terminals if you want live force-estimator aux while the active policy runs.
 
@@ -334,6 +349,9 @@ remote_deadzone=0.08
 require_standup_before_policy=true
 publish_aux_debug=true
 aux_debug_topic=/a2/policy_aux
+standing_walking_gate_enabled=true
+standing_walking_enter_force_xy_threshold=0.2
+standing_walking_exit_force_xy_threshold=0.05
 brake_gate_enabled=true
 brake_force_x_threshold=-0.6
 brake_min_cmd_vx=0.2

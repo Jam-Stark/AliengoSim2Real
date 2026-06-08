@@ -271,6 +271,14 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<int>("policy_aux_expected_dim", 6);
   policy_aux_print_period_sec_ =
       this->declare_parameter<double>("policy_aux_print_period_sec", 0.2);
+  standing_walking_gate_enabled_ =
+      this->declare_parameter<bool>("standing_walking_gate_enabled", true);
+  standing_walking_enter_force_xy_threshold_ =
+      this->declare_parameter<double>(
+          "standing_walking_enter_force_xy_threshold", 0.2);
+  standing_walking_exit_force_xy_threshold_ =
+      this->declare_parameter<double>(
+          "standing_walking_exit_force_xy_threshold", 0.05);
   brake_gate_enabled_ =
       this->declare_parameter<bool>("brake_gate_enabled", false);
   brake_force_x_threshold_ =
@@ -316,7 +324,10 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
   RCLCPP_INFO(this->get_logger(),
               "A2 policy deploy ready: policy=%s, json=%s, control_hz=%.1f, "
               "enable_motion=%s, command_source=%s, publish_aux_debug=%s, "
-              "aux_debug_topic=%s, brake_gate_enabled=%s, "
+              "aux_debug_topic=%s, standing_walking_gate_enabled=%s, "
+              "standing_walking_enter_force_xy_threshold=%.3f, "
+              "standing_walking_exit_force_xy_threshold=%.3f, "
+              "brake_gate_enabled=%s, "
               "brake_force_x_threshold=%.3f, brake_min_cmd_vx=%.3f, "
               "brake_max_abs_yaw=%.3f, brake_hold_steps=%d",
               canonical_or_absolute(policy_path_).string().c_str(),
@@ -325,6 +336,9 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
               command_source_param_.c_str(),
               publish_aux_debug_ ? "true" : "false",
               aux_debug_topic_.c_str(),
+              standing_walking_gate_enabled_ ? "true" : "false",
+              standing_walking_enter_force_xy_threshold_,
+              standing_walking_exit_force_xy_threshold_,
               brake_gate_enabled_ ? "true" : "false",
               brake_force_x_threshold_, brake_min_cmd_vx_,
               brake_max_abs_yaw_, brake_hold_steps_);
@@ -662,7 +676,8 @@ void A2PolicyDeployNode::control_loop() {
   }
 
   update_policy_observation_command();
-  if (is_policy_observation_standing_command()) {
+  update_standing_walking_gate_before_observation();
+  if (is_policy_gait_standing()) {
     gait_phase_ = 0.0;
   }
 
@@ -715,6 +730,7 @@ void A2PolicyDeployNode::control_loop() {
   const bool aux_values_finite =
       log_policy_aux_output(action, aux, false);
   apply_brake_gate(aux);
+  update_standing_walking_gate(aux);
 
   if (raw_action.size() != kTrainingJointCount ||
       !vector_is_finite(raw_action)) {
@@ -791,6 +807,12 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("policy_aux_expected_dim", policy_aux_expected_dim_);
   this->get_parameter("policy_aux_print_period_sec",
                       policy_aux_print_period_sec_);
+  this->get_parameter("standing_walking_gate_enabled",
+                      standing_walking_gate_enabled_);
+  this->get_parameter("standing_walking_enter_force_xy_threshold",
+                      standing_walking_enter_force_xy_threshold_);
+  this->get_parameter("standing_walking_exit_force_xy_threshold",
+                      standing_walking_exit_force_xy_threshold_);
   this->get_parameter("brake_gate_enabled", brake_gate_enabled_);
   this->get_parameter("brake_force_x_threshold",
                       brake_force_x_threshold_);
@@ -814,6 +836,20 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
         "A2 policy aux monitor params invalid: policy_aux_expected_dim must "
         "be >=0 and policy_aux_print_period_sec must be finite positive. "
         "Refusing policy publish/monitor.");
+    return false;
+  }
+
+  if (!is_finite_nonnegative(standing_walking_enter_force_xy_threshold_) ||
+      !is_finite_nonnegative(standing_walking_exit_force_xy_threshold_) ||
+      standing_walking_enter_force_xy_threshold_ <
+          standing_walking_exit_force_xy_threshold_) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 standing/walking gate params invalid: "
+        "standing_walking_enter_force_xy_threshold and "
+        "standing_walking_exit_force_xy_threshold must be finite "
+        "nonnegative, and enter must be >= exit. Refusing policy "
+        "publish/monitor.");
     return false;
   }
 
@@ -1575,6 +1611,143 @@ void A2PolicyDeployNode::reset_brake_gate_state() {
   brake_active_ = false;
 }
 
+void A2PolicyDeployNode::update_standing_walking_gate_before_observation() {
+  if (brake_active_) {
+    return;
+  }
+
+  if (!is_requested_standing_command()) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kCommandWalking,
+        "raw requested command is non-standing", 0.0, false);
+    return;
+  }
+
+  if (!standing_walking_gate_enabled_) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kStanding,
+        "standing/walking force gate disabled for standing command", 0.0,
+        false);
+    return;
+  }
+
+  if (standing_walking_gate_mode_ ==
+      StandingWalkingGateMode::kCommandWalking) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kStanding,
+        "raw requested command returned to standing; waiting for aux "
+        "hysteresis",
+        0.0, false);
+  }
+}
+
+void A2PolicyDeployNode::update_standing_walking_gate(
+    const SimpleTensor &aux) {
+  if (brake_active_) {
+    return;
+  }
+
+  if (!is_requested_standing_command()) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kCommandWalking,
+        "raw requested command is non-standing", 0.0, false);
+    return;
+  }
+
+  if (!standing_walking_gate_enabled_) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kStanding,
+        "standing/walking force gate disabled for standing command", 0.0,
+        false);
+    return;
+  }
+
+  double force_xy = 0.0;
+  if (!aux_force_xy(aux, force_xy)) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kStanding,
+        "aux invalid or dim < 6 for standing-command force gate", 0.0,
+        false);
+    return;
+  }
+
+  if (standing_walking_gate_mode_ ==
+      StandingWalkingGateMode::kForceWalking) {
+    if (force_xy <= standing_walking_exit_force_xy_threshold_) {
+      set_standing_walking_gate_mode(
+          StandingWalkingGateMode::kStanding,
+          "force_xy reached hysteresis exit threshold", force_xy, true);
+    }
+    return;
+  }
+
+  if (force_xy >= standing_walking_enter_force_xy_threshold_) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kForceWalking,
+        "force_xy reached hysteresis enter threshold", force_xy, true);
+    return;
+  }
+
+  if (standing_walking_gate_mode_ ==
+      StandingWalkingGateMode::kCommandWalking) {
+    set_standing_walking_gate_mode(
+        StandingWalkingGateMode::kStanding,
+        "standing command force_xy below hysteresis enter threshold",
+        force_xy, true);
+  }
+}
+
+void A2PolicyDeployNode::set_standing_walking_gate_mode(
+    StandingWalkingGateMode mode, const char *reason, double force_xy,
+    bool aux_valid) {
+  if (standing_walking_gate_mode_ == mode) {
+    return;
+  }
+
+  const StandingWalkingGateMode previous = standing_walking_gate_mode_;
+  standing_walking_gate_mode_ = mode;
+  if (aux_valid) {
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 standing/walking gate mode changed: %s -> %s reason='%s' "
+        "force_xy=%.4f enter=%.4f exit=%.4f requested_cmd=[%.3f, %.3f, "
+        "%.3f]. Aux-derived force mode is updated after policy inference, "
+        "so it affects the next observation.",
+        standing_walking_gate_mode_name(previous),
+        standing_walking_gate_mode_name(mode), reason, force_xy,
+        standing_walking_enter_force_xy_threshold_,
+        standing_walking_exit_force_xy_threshold_, requested_cmd_vx_,
+        requested_cmd_vy_, requested_cmd_yaw_);
+  } else {
+    RCLCPP_INFO(
+        this->get_logger(),
+        "A2 standing/walking gate mode changed: %s -> %s reason='%s' "
+        "force_xy=invalid enter=%.4f exit=%.4f requested_cmd=[%.3f, "
+        "%.3f, %.3f].",
+        standing_walking_gate_mode_name(previous),
+        standing_walking_gate_mode_name(mode), reason,
+        standing_walking_enter_force_xy_threshold_,
+        standing_walking_exit_force_xy_threshold_, requested_cmd_vx_,
+        requested_cmd_vy_, requested_cmd_yaw_);
+  }
+}
+
+void A2PolicyDeployNode::reset_standing_walking_gate_state() {
+  standing_walking_gate_mode_ = StandingWalkingGateMode::kStanding;
+}
+
+bool A2PolicyDeployNode::aux_force_xy(const SimpleTensor &aux,
+                                      double &force_xy) const {
+  if (aux.numel() < 6 || !vector_is_finite(aux.data_)) {
+    return false;
+  }
+
+  const double force_x = static_cast<double>(aux.data_[3]);
+  const double force_y = static_cast<double>(aux.data_[4]);
+  force_xy = std::hypot(force_x, force_y);
+  return std::isfinite(force_xy);
+}
+
 void A2PolicyDeployNode::set_zero_command() {
   requested_cmd_vx_ = 0.0;
   requested_cmd_vy_ = 0.0;
@@ -1582,16 +1755,18 @@ void A2PolicyDeployNode::set_zero_command() {
   cmd_vx_ = 0.0;
   cmd_vy_ = 0.0;
   cmd_yaw_ = 0.0;
+  reset_standing_walking_gate_state();
 }
 
 bool A2PolicyDeployNode::is_history_warm() const {
   return warm_frames_ >= kHistoryLength;
 }
 
-bool A2PolicyDeployNode::is_policy_observation_standing_command() const {
-  return std::abs(cmd_vx_) < kStandingCmdVxThreshold &&
-         std::abs(cmd_vy_) < kStandingCmdVyThreshold &&
-         std::abs(cmd_yaw_) < kStandingCmdYawThreshold;
+bool A2PolicyDeployNode::is_policy_gait_standing() const {
+  if (brake_active_) {
+    return true;
+  }
+  return standing_walking_gate_mode_ == StandingWalkingGateMode::kStanding;
 }
 
 bool A2PolicyDeployNode::is_requested_standing_command() const {
@@ -1601,7 +1776,7 @@ bool A2PolicyDeployNode::is_requested_standing_command() const {
 }
 
 void A2PolicyDeployNode::advance_gait_clock() {
-  if (is_policy_observation_standing_command()) {
+  if (is_policy_gait_standing()) {
     gait_phase_ = 0.0;
     return;
   }
@@ -1618,6 +1793,7 @@ void A2PolicyDeployNode::reset_runtime_state() {
   history_warm_logged_ = false;
   have_policy_aux_log_time_ = false;
   reset_brake_gate_state();
+  reset_standing_walking_gate_state();
   gait_phase_ = 0.0;
   last_raw_action_.fill(0.0f);
   if (!obs_terms.empty()) {
@@ -1687,6 +1863,19 @@ const char *A2PolicyDeployNode::standup_phase_name(StandupPhase phase) const {
       return "PolicyActive";
   }
   return "Unknown";
+}
+
+const char *A2PolicyDeployNode::standing_walking_gate_mode_name(
+    StandingWalkingGateMode mode) const {
+  switch (mode) {
+    case StandingWalkingGateMode::kStanding:
+      return "standing";
+    case StandingWalkingGateMode::kForceWalking:
+      return "force_walking";
+    case StandingWalkingGateMode::kCommandWalking:
+      return "command_walking";
+  }
+  return "unknown";
 }
 
 bool A2PolicyDeployNode::vector_is_finite(

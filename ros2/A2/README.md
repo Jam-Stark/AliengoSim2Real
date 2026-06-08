@@ -442,7 +442,7 @@ real robot validation/reference 流程见 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md
 
 History length 是 `32`，通过 `ManagerBasedEnv` observation terms 展平。`a2_policy_deploy` 不让 policy 直接写 `unitree_hg::msg::LowCmd`；policy output 先映射成 `std::array<A2JointCommand, 12>`，再交给 `A2LowLevelInterface` 处理 fresh-state guard、mode routing 和 CRC。
 
-Command provider 可选 `static` 或 `remote`，最终进入 observation 的 command 仍按 `[2, 2, 0.25]` scale。gait clock 使用进入 policy observation 的 active command 判断 standing：`abs(cmd_vx) < 0.1`、`abs(cmd_vy) < 0.1`、`abs(cmd_yaw) < 0.2` 时 gait phase reset/保持为 `0`，gait clock 为 `[0, 1]`；非 standing command 才按 `gait_frequency_hz / control_hz` 前进。brake active 时 observation command 被 override 为 `[0,0,0]`，因此 gait clock 也 freeze 在 standing phase。
+Command provider 可选 `static` 或 `remote`，最终进入 observation 的 command 仍按 `[2, 2, 0.25]` scale。gait clock 不再只看 observation command 是否为 zero，而是由 A2 standing/walking gate 控制：raw requested command 非 standing 时进入 `command_walking` 并推进 gait phase；raw requested command 是 standing 时，aux `pred_base_force_local[0:2]` 的 `force_xy=hypot(aux[3], aux[4])` 通过 hysteresis 才进入或退出 `force_walking`。`standing` 会 reset/freeze gait phase 为 `0`，gait clock 为 `[0,1]`；`command_walking` / `force_walking` 按 `gait_frequency_hz / control_hz` 前进。brake active 优先级更高，会强制 gait clock freeze 到 standing phase。
 
 ## A2 Remote Decode Contract
 
@@ -580,12 +580,34 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_STANDING_WALKING_GATE_ENABLED=true
+A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD=0.2
+A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD=0.05
 A2_POLICY_BRAKE_GATE_ENABLED=true
 A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
 A2_POLICY_BRAKE_MIN_CMD_VX=0.2
 A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
 A2_POLICY_BRAKE_HOLD_STEPS=2
 ```
+
+Standing/walking gate 已在 wrapper 默认配置中启用。它只影响 policy observation 的
+gait clock，不修改 raw requested command、不修改 action、不修改 LowCmd，也不绕过
+`publish_joint_commands()`。raw requested command 非 standing 时直接 `command_walking`；
+raw requested command standing 时使用 aux dim 6 layout 的
+`pred_base_force_local[0:2]`，即 `fx=aux[3]`、`fy=aux[4]`，并按
+`force_xy=sqrt(fx*fx + fy*fy)` 做 hysteresis：
+
+- `standing -> force_walking`：`force_xy >= 0.2`
+- `force_walking -> standing`：`force_xy <= 0.05`
+
+`0.05 < force_xy < 0.2` 会保持当前 mode；aux dim < 6 或 aux 含 NaN/Inf 时不进入
+`force_walking`，如果当前是 `force_walking` 则回到 `standing`。aux 只有 policy
+inference 后才可用，因此 force-derived mode change 在 `computeAction()` 后更新，影响下一轮
+observation。`A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD` 和
+`A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD` 可调；对应 ROS params 是
+`standing_walking_enter_force_xy_threshold` / `standing_walking_exit_force_xy_threshold`。
+两个 threshold 必须 finite nonnegative 且 enter >= exit，否则 node 拒绝 policy
+publish/monitor。
 
 Brake gate 已在 wrapper 默认配置中启用，但只在 `enable_motion=true` 的 real motion
 publish path 生效。它使用 active aux layout `pred_base_lin_vel[0..2]` +
@@ -678,6 +700,13 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   non-negative。
 - `policy_aux_print_period_sec`：默认 `0.2`。仅用于 aux monitor log cadence；必须为
   finite positive。
+- `standing_walking_gate_enabled`：默认 `true`。只控制 standing command 下是否允许
+  aux force 触发 `force_walking`；raw requested command 非 standing 时仍直接
+  `command_walking`。
+- `standing_walking_enter_force_xy_threshold` /
+  `standing_walking_exit_force_xy_threshold`：默认 `0.2` / `0.05`。使用 aux
+  `pred_base_force_local[0:2]` 的 xy magnitude，不区分方向/符号；两个值必须 finite
+  nonnegative 且 enter >= exit，否则拒绝 policy publish/monitor。
 - `brake_gate_enabled`：默认 `false`。裸 node 默认关闭；wrapper run config 默认传入
   `true`。只在 `enable_motion=true` 的 publish path 生效。
 - `brake_force_x_threshold`：默认 `-0.6`。使用 aux `pred_base_force_local[0]`；
@@ -770,6 +799,8 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 refusal 条件：它只把下一轮 policy observation command override 为 zero，并 freeze gait
 clock 到 standing phase，同时继续通过 `publish_joint_commands()` 发布正常 policy joint
 command；如果 aux dim < 6 或包含 NaN/Inf，不会新触发 brake，只 throttled warning。
+standing/walking gate 也不是 publish refusal 条件；它只决定 gait clock freeze/advance。
+但 standing/walking hysteresis threshold 配置非法时，node 会拒绝 policy publish/monitor。
 
 Remote safety handling：
 

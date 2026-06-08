@@ -535,7 +535,8 @@ Ideal aux monitor result：
 - policy log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_*.log`。
 - no-lowcmd observer log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_no_lowcmd_*.log`。
 - wrapper 会读取 `A2/config/a2_policy_remote.env`，并打印 effective remote caps、deadzone、
-  `require_standup_before_policy`、`policy_aux_expected_dim` 和 print period。
+  `require_standup_before_policy`、`policy_aux_expected_dim`、print period 和
+  standing/walking hysteresis thresholds。
 - policy 输出 `enable_motion=false`、`command_source=remote`、`monitor_policy_aux=true`。
 - history warm 后 policy 会执行 inference 只用于监测，不发布 LowCmd。
 - aux 输出默认按 Aliengo convention 解释 dim 6：
@@ -544,6 +545,10 @@ Ideal aux monitor result：
   最多 8 个值。
 - aux monitor 的 history / gait 是由当前 lowstate、remote command 和 policy action obs
   独立滚动估计；它不是 robot base velocity/force 的外部传感器测量。
+- standing/walking gate 在 listen-only monitor 中也只影响 policy gait clock：raw requested
+  command 非 standing 时 `command_walking`；raw requested command standing 时按 aux
+  `force_xy=hypot(aux[3], aux[4])` hysteresis，enter `0.2`、exit `0.05`。aux 只有
+  inference 后才有，因此 force-derived gate mode 影响下一轮 observation。
 - no-lowcmd observer 必须输出 `PASS: no /lowcmd messages observed`，或显示 operator
   配置的 `A2_LOWCMD_TOPIC` 并 pass。
 
@@ -600,6 +605,13 @@ Ideal active-topic monitor result：
   不发布 zero LowCmd、不切 stop mode、不清 PD，也不跳过 policy joint command；该 tick
   继续正常 `publish_joint_commands()`，下一轮 observation command 才 override 为 zero，
   gait clock 同时 freeze 到 standing phase。
+- Standing/walking gate 是 real policy observation behavior，但不是 stop path：它只控制
+  gait clock freeze/advance，不改 raw requested command、不改 action、不改 LowCmd，也不绕过
+  `publish_joint_commands()`。默认 hysteresis 是 `standing -> force_walking` when
+  `force_xy >= 0.2`，`force_walking -> standing` when `force_xy <= 0.05`，其中
+  `force_xy=sqrt(aux[3]^2 + aux[4]^2)`，不区分方向/符号。aux dim < 6 或 NaN/Inf 时不进入
+  `force_walking`；当前若是 `force_walking` 则回 standing。brake active 优先级更高，
+  会强制 command override zero + gait clock freeze standing，不允许 standing/walking gate 推进 gait phase。
 - `Select` 是 primary local stop，会触发 local stop、runtime reset，并调用 `publish_zero()`
   发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
   rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
@@ -631,6 +643,9 @@ publish_aux_debug:=true
 aux_debug_topic:=/a2/policy_aux
 policy_aux_expected_dim:=6
 policy_aux_print_period_sec:=0.2
+standing_walking_gate_enabled:=true
+standing_walking_enter_force_xy_threshold:=0.2
+standing_walking_exit_force_xy_threshold:=0.05
 brake_gate_enabled:=true
 brake_force_x_threshold:=-0.6
 brake_min_cmd_vx:=0.2

@@ -58,6 +58,12 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
     kPolicyActive,
   };
 
+  enum class StandingWalkingGateMode {
+    kStanding,
+    kForceWalking,
+    kCommandWalking,
+  };
+
   struct RemoteButtonEdges {
     bool a_rising = false;
     bool b_rising = false;
@@ -98,14 +104,23 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   void reset_brake_gate_state();
   bool brake_force_triggered(double force_x) const;
   bool brake_gate_eligible() const;
+  void update_standing_walking_gate_before_observation();
+  void update_standing_walking_gate(const SimpleTensor &aux);
+  void set_standing_walking_gate_mode(StandingWalkingGateMode mode,
+                                      const char *reason, double force_xy,
+                                      bool aux_valid);
+  void reset_standing_walking_gate_state();
+  bool aux_force_xy(const SimpleTensor &aux, double &force_xy) const;
   void set_zero_command();
   bool is_history_warm() const;
-  bool is_policy_observation_standing_command() const;
+  bool is_policy_gait_standing() const;
   bool is_requested_standing_command() const;
   void advance_gait_clock();
   void log_enable_state_if_changed();
   void log_command_source_if_changed();
   const char *standup_phase_name(StandupPhase phase) const;
+  const char *standing_walking_gate_mode_name(
+      StandingWalkingGateMode mode) const;
 
   SimpleTensor get_projected_gravity_xy();
   SimpleTensor get_base_ang_vel();
@@ -160,6 +175,11 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
       aux_debug_pub_;
   int policy_aux_expected_dim_ = 6;
   double policy_aux_print_period_sec_ = 0.2;
+  bool standing_walking_gate_enabled_ = true;
+  double standing_walking_enter_force_xy_threshold_ = 0.2;
+  double standing_walking_exit_force_xy_threshold_ = 0.05;
+  StandingWalkingGateMode standing_walking_gate_mode_ =
+      StandingWalkingGateMode::kStanding;
   bool brake_gate_enabled_ = false;
   double brake_force_x_threshold_ = -0.6;
   double brake_min_cmd_vx_ = 0.2;

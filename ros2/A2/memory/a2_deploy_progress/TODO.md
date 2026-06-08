@@ -58,3 +58,14 @@
   - 验证默认 unitless threshold `pred_base_force_local[0] <= -0.6` 符号正确、2-step latch 后不出现 zero LowCmd stop、不切 stop mode、不清 PD，normal policy joint command 仍通过 `publish_joint_commands()` 持续发布。
   - 验证 brake active 后下一轮 policy observation command override 为 `[0,0,0]`，gait clock freeze/reset 为 standing phase `[0,1]`，且 release 判断基于 raw requested command；stick 回中 / command standing / not eligible / local stop 能 release。
   - 根据部署机/实机日志判断是否需要调整 `A2_POLICY_BRAKE_FORCE_X_THRESHOLD`、`A2_POLICY_BRAKE_HOLD_STEPS` 或 forward/yaw eligibility；不要把该 threshold 当 Newton。
+
+## 2026-06-08 22:35 HKT
+
+- [ ] A2 standing/walking gate v1 已实现，仍需部署机/实机验证 hysteresis 和 gait clock 行为：
+
+  - 用 `A2/scripts/a2_real_robot_test.sh policy-aux-live` 和 active `policy-aux-monitor 0` 对照 `/a2/policy_aux` dim 6 layout，确认 `fx=aux[3]`、`fy=aux[4]`，并按 `force_xy=hypot(fx, fy)` 判断，不区分方向/符号。
+  - raw requested command 非 standing 时应直接 `command_walking`，gait clock advance；该路径不依赖 aux force。
+  - raw requested command standing 时，默认 `force_xy >= 0.2` 进入 `force_walking`，`force_xy <= 0.05` 回 `standing`，`0.05 < force_xy < 0.2` 保持当前 mode。
+  - aux dim < 6 或 NaN/Inf 时不得进入 `force_walking`；如果当前为 `force_walking`，应回 `standing`。
+  - 确认 standing/walking gate 只影响 gait clock，不改 command/action/LowCmd，不绕过 `publish_joint_commands()`；force-derived mode 在 `computeAction()` 后更新，影响下一轮 observation。
+  - 确认 brake active 优先级更高：brake command override zero 时 gait clock 仍 freeze standing，不允许 standing/walking gate 推进 gait phase。
