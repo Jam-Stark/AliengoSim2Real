@@ -276,7 +276,8 @@ SDK2 include/lib dirs, includes nested DDS headers such as `install/include/ddsc
 `thirdparty/include/ddscxx`, adds DDS lib dirs such as `install/lib` or
 `thirdparty/lib/$(uname -m)`, links `-lddscxx -lddsc`, and runs through a wrapper that prefixes
 `LD_LIBRARY_PATH` with SDK2 lib dirs so ROS2/CycloneDDS libraries do not shadow SDK2 DDS libs.
-`motion-check` prints helper stages and still does not publish LowCmd. `motion-release` still
+`motion-check` prints helper stages plus raw `CheckMode form/name` and normalized `service`
+name, and still does not publish LowCmd. `motion-release` still
 requires `A2_ALLOW_RELEASE_MODE=1`. After low-level/policy testing, stop every policy/LowCmd
 publisher, run `A2/scripts/a2_real_robot_test.sh no-lowcmd 5` until pass, then use guarded
 `A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0` to restore
@@ -723,7 +724,7 @@ A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0
 A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 ```
 
-理想输出包括 `SelectMode('ai_sport') ret=0`，after `CheckMode name='ai_sport'`。如果 `SelectMode` 失败或 after `CheckMode` 不匹配，使用 Unitree App fallback 恢复，并再次 `motion-check` 确认。
+理想输出包括 `SelectMode('ai_sport') ret=0`，after `CheckMode ret=0 form='0' name='ai' service='ai_sport'`。这里 raw `name='ai'` / normalized `service='ai_sport'` 是 Unitree SDK2 expected alias；如果 raw `name` 直接显示 `ai_sport` 也可接受。如果 `SelectMode` 失败，或 after `CheckMode` 的 raw `name` / normalized `service` 都不匹配目标 mode，使用 Unitree App fallback 恢复，并再次 `motion-check` 确认。
 
 `stand_test` 只是接口 smoke，不包含起身流程、姿态保护、limit check 或 emergency stop；首次运行应离地、限功率、有人值守，并准备硬件急停。
 

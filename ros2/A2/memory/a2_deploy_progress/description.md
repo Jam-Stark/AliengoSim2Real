@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-08 20:31 HKT"
+last_updated: "2026-06-08 21:08 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -57,7 +57,8 @@ read_when:
 - 同一 preflight result 显示 `/lf/lowstate` type 为 `['unitree_go/msg/LowState', 'unitree_hg/msg/LowState']`，存在 type ambiguity；它只作为 diagnostic info，不作为默认 A2 policy / lowlevel backend topic，默认继续使用 `/lowstate`。
 - real robot validation script/docs 已 harden：`connected-preflight` 额外校验 configured lowstate / lowcmd topic type；新增 standalone `no-lowcmd` observe-only step，进入任何 configured LowCmd publish path 前必须确认无 active LowCmd traffic。
 - `a2_real_robot_test.sh` MotionSwitcher helper compile/runtime 已适配部署机 SDK2 DDS nested include/lib layout：自动加入 `install/include/ddscxx`、`thirdparty/include/ddscxx`、`install/lib`、`thirdparty/lib/$(uname -m)` 等候选，显式链接 `-lddscxx -lddsc`，并通过 wrapper 将 SDK2 lib dirs 放到 `LD_LIBRARY_PATH` 前面以避免 ROS2/CycloneDDS libs shadow；`motion-check` 仍只调用 `CheckMode`，`motion-release` 仍需 `A2_ALLOW_RELEASE_MODE=1`。
-- 已新增 guarded MotionSwitcher restore/select：`motion-select IFACE MODE` 和 `motion-restore IFACE` 都要求 `A2_ALLOW_SELECT_MODE=1`，默认 restore mode 为 `A2_MOTION_RESTORE_MODE:-ai_sport`；helper action `select` 会在 `SelectMode` 前后 `CheckMode`，要求 `SelectMode ret==0` 且 after `CheckMode name==mode`。恢复前必须先停止 policy/LowCmd publisher，并运行 `no-lowcmd` pass。
+- 已新增 guarded MotionSwitcher restore/select：`motion-select IFACE MODE` 和 `motion-restore IFACE` 都要求 `A2_ALLOW_SELECT_MODE=1`，默认 restore mode 为 `A2_MOTION_RESTORE_MODE:-ai_sport`；helper action `select` 会在 `SelectMode` 前后 `CheckMode`，要求 `SelectMode ret==0` 且 after raw `CheckMode name` 等于 target mode 或 normalized `service` 等于 target mode。恢复前必须先停止 policy/LowCmd publisher，并运行 `no-lowcmd` pass。
+- 2026-06-08 21:08 HKT 已加固 MotionSwitcher restore/select alias 判定：helper 保留 raw `CheckMode form/name` 输出并额外打印 normalized `service`；`form='0', name='ai'` 归一化为 `ai_sport`，select 成功条件为 `SelectMode ret==0` 且 after raw `name` 等于 target mode 或 normalized `service` 等于 target mode。
 - 已新增正式 operator-facing real deployment runbook `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`：它不是 validation guide，而是 day-to-day command sequence，覆盖 host cold start、Docker image/container、A2 `192.168.123.x` network、container env、workspace build/source、connected readiness、MotionSwitcher guarded release/restore、policy listen-only gate、guarded `enable_motion=true` two-A handover、runtime stop、disconnect 和 failure log collection。
 
 当前 blocker：
@@ -111,7 +112,7 @@ read_when:
 ## TODO Summary
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
-- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / `CheckMode`、guarded release、测试结束后的 guarded restore/select、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / raw `CheckMode form/name` + normalized `service`、guarded release、测试结束后的 guarded restore/select（`form='0', name='ai', service='ai_sport'` 是 `ai_sport` expected alias）、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
 - 日常部署已有正式 `A2_REAL_DEPLOY_RUNBOOK.md` 可执行；operator 仍必须按 runbook 逐次执行 `no-lowcmd`、MotionSwitcher release/restore、hardware emergency stop、one LowCmd publisher 和 real safety checks，不要把 runbook 存在视为 broad real validation complete。
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
@@ -147,6 +148,7 @@ read_when:
 - 2026-06-06 00:12 HKT 已将 A2 remote command 上限从 conservative `0.10/0.06/0.15` wrapper caps 和旧 `0.4/0.25/0.6` node defaults 统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
 - 2026-06-08 20:08 HKT 已新增 A2 policy remote run config 和 aux output monitor：policy wrapper 只在 policy subcommands 加载 config，`policy-aux-live` 在 `enable_motion=false` 下执行 inference-only aux monitor 并由 `no-lowcmd` observer 覆盖，文档已记录 brake gate 暂不启用。
 - 2026-06-08 20:31 HKT 已实现 active aux debug topic：`a2_policy_deploy` 发布 `/a2/policy_aux`，wrapper 默认透传 `publish_aux_debug=true`，并新增 topic-only `policy-aux-monitor` 用于第二个 Docker terminal 实时查看 force estimator。
+- 2026-06-08 21:08 HKT 已完成 MotionSwitcher alias hardening：restore/select helper 按 Unitree SDK2 sample 把 `form='0', name='ai'` normalize 为 `ai_sport`，operator docs 已更新 expected restore output。
 
 ## Recommended Next Files To Read
 

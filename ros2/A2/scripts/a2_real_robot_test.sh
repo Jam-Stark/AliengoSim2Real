@@ -554,15 +554,43 @@ struct ModeResult {
   int32_t ret = -1;
   std::string form;
   std::string name;
+  std::string service_name;
 };
+
+std::string normalize_service_name(const std::string &form, const std::string &name) {
+  if (name.empty()) {
+    return "";
+  }
+  if (form == "0") {
+    if (name == "normal") {
+      return "sport_mode";
+    }
+    if (name == "ai") {
+      return "ai_sport";
+    }
+    if (name == "advanced") {
+      return "advanced_sport";
+    }
+  } else {
+    if (name == "ai-w") {
+      return "wheeled_sport(go2W)";
+    }
+    if (name == "normal-w") {
+      return "wheeled_sport(b2W)";
+    }
+  }
+  return name;
+}
 
 ModeResult check_mode(unitree::robot::b2::MotionSwitcherClient &client) {
   ModeResult result;
   std::cerr << "[a2-motion-helper] CheckMode()" << std::endl;
   result.ret = client.CheckMode(result.form, result.name);
+  result.service_name = normalize_service_name(result.form, result.name);
   std::cout << "CheckMode ret=" << result.ret
             << " form='" << result.form << "'"
-            << " name='" << result.name << "'" << std::endl;
+            << " name='" << result.name << "'"
+            << " service='" << result.service_name << "'" << std::endl;
   return result;
 }
 
@@ -637,14 +665,17 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
     const ModeResult after = check_mode(client);
-    if (select_ret == 0 && after.ret == 0 && after.name == mode) {
-      std::cout << "Motion mode selected: '" << after.name << "'" << std::endl;
+    if (select_ret == 0 && after.ret == 0 &&
+        (after.name == mode || after.service_name == mode)) {
+      std::cout << "Motion mode selected: raw name='" << after.name
+                << "' service='" << after.service_name << "'" << std::endl;
       return 0;
     }
 
-    std::cerr << "SelectMode did not produce expected CheckMode name='"
+    std::cerr << "SelectMode did not produce expected target mode='"
               << mode << "'; after ret=" << after.ret
-              << " name='" << after.name << "'" << std::endl;
+              << " raw name='" << after.name << "'"
+              << " service='" << after.service_name << "'" << std::endl;
     return 4;
   }
 

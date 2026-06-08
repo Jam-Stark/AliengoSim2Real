@@ -360,17 +360,16 @@ Ideal result:
 
 - `no-lowcmd 5` pass.
 - `motion-restore` prints `SelectMode('ai_sport') ret=0`.
-- following `motion-check` confirms `name='ai_sport'`.
+- following `motion-check` confirms raw `name='ai'` with normalized `service='ai_sport'`
+  for `form='0'`, or raw `name='ai_sport'`. The raw `name='ai'` / `service='ai_sport'`
+  pair is the expected Unitree SDK2 alias for `ai_sport`.
 
 If restore fails:
 
-```bash
-A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-select enp131s0 ai_sports
-A2/scripts/a2_real_robot_test.sh motion-check enp131s0
-```
-
-If `ai_sports` also fails or MotionSwitcher is unavailable, use Unitree App fallback and then run
-`motion-check enp131s0` again.
+Use Unitree App fallback and then run `motion-check enp131s0` again. If the operator explicitly
+needs to probe a site-specific `ai_sports` MotionSwitcher string from the basic-service guide, run it
+as a manual diagnostic only and keep the full log; the helper does not treat `ai_sports` as an
+automatic alias for canonical `ai_sport`.
 
 After restore is confirmed:
 

@@ -378,7 +378,8 @@ Ideal result：
   `install/include/ddscxx`、`install/include/ddsc`、`thirdparty/include/ddscxx`、
   `thirdparty/include/ddsc` 等 nested DDS header dirs，并追加 `install/lib`、
   `thirdparty/lib/$(uname -m)` 等 DDS lib dirs，链接 `-lddscxx -lddsc`。
-- 输出 `CheckMode ret=0 form='...' name='...'`。
+- 输出 `CheckMode ret=0 form='...' name='...' service='...'`，其中 `service` 是按 Unitree SDK2
+  sample 归一化后的 service name。
 - 如果 `name` 非空，表示仍有内置 motion mode active。
 - 此步骤不调用 `ReleaseMode`。
 
@@ -427,7 +428,7 @@ A2_ALLOW_RELEASE_MODE=1 A2/scripts/a2_real_robot_test.sh motion-release enp131s0
 Ideal result：
 
 - 输出每次 `Release attempt`。
-- 每次都打印 `CheckMode ret=... form='...' name='...'` 和 `ReleaseMode ret=...`。
+- 每次都打印 `CheckMode ret=... form='...' name='...' service='...'` 和 `ReleaseMode ret=...`。
 - 最终 `CheckMode` 的 `name=''`，并输出 `Motion mode released.` 或 `Motion mode already released.`。
 
 如果 MotionSwitcher RPC 不可用，按官方文档可用 Unitree App 关闭内置运动服务；关闭后重新运行 `motion-check`，确认 `name=''`。
@@ -450,12 +451,14 @@ Ideal restore result：
 
 - `no-lowcmd` 输出 `PASS: no /lowcmd messages observed`，或显示 operator 配置的 `A2_LOWCMD_TOPIC` 并 pass。
 - `motion-restore` 输出 `SelectMode('ai_sport') ret=0`。
-- `motion-restore` 的 after `CheckMode ret=0 form='...' name='ai_sport'`。
-- 随后的 `motion-check` 也显示 `name='ai_sport'`。
+- `motion-restore` 的 after `CheckMode ret=0 form='0' name='ai' service='ai_sport'` 是 expected alias；
+  如果现场 raw name 直接显示 `ai_sport` 也可接受。
+- 随后的 `motion-check` 也显示 raw `name='ai'` / normalized `service='ai_sport'`，或 raw
+  `name='ai_sport'`。
 
-如果 `SelectMode` ret 非 `0`、after `CheckMode` 不是 `ai_sport`，或 MotionSwitcher RPC 不稳定，
-不要继续脚本恢复；使用 Unitree App fallback 恢复内置 motion service，并再次运行
-`motion-check` 确认当前 mode。
+如果 `SelectMode` ret 非 `0`、after `CheckMode` 的 raw `name` 或 normalized `service` 都不是目标 mode，
+或 MotionSwitcher RPC 不稳定，不要继续脚本恢复；使用 Unitree App fallback 恢复内置 motion service，
+并再次运行 `motion-check` 确认当前 mode。
 
 ## 8. Guarded Zero-LowCmd CRC Validation
 

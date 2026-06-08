@@ -38,7 +38,7 @@
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
   - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` primary local stop、`L2+B` 附加 stop path 和 `B` cancel。
-  - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认。
+  - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认；新版 helper 会打印 raw `CheckMode form/name` 和 normalized `service`，其中 `form='0', name='ai', service='ai_sport'` 是 restore `ai_sport` 的 expected alias。
 
 ## 2026-06-05 20:10 HKT
 

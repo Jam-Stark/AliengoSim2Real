@@ -169,7 +169,7 @@
 ## 2026-06-05 23:38 HKT
 
 - [x] 新增 A2 内置 motion service guarded restore/select：`a2_real_robot_test.sh motion-select IFACE MODE` 要求 `A2_ALLOW_SELECT_MODE=1`，调用 `MotionSwitcherClient::SelectMode(MODE)`，并在 Select 前后 `CheckMode`。
-- [x] 新增 `motion-restore IFACE`，默认恢复 `A2_MOTION_RESTORE_MODE:-ai_sport`；成功条件为 `SelectMode ret==0` 且 after `CheckMode ret==0 name==mode`。
+- [x] 新增 `motion-restore IFACE`，默认恢复 `A2_MOTION_RESTORE_MODE:-ai_sport`；初版成功条件为 `SelectMode ret==0` 且 after `CheckMode ret==0 name==mode`，该 raw-name exact check 已在 2026-06-08 21:08 HKT 被 normalized `service` alias 判定 supersede。
 - [x] 保留 `motion-check` observe-only 和 guarded `motion-release` 行为，未引入 LowCmd publish、policy attach 或 `a2_policy_deploy` 修改。
 - [x] 更新 `A2_REAL_ROBOT_TEST.md` 和 `README.md`，要求恢复前停止 policy/LowCmd publisher、运行 `no-lowcmd` pass，并给出部署机内 restore 命令与 Unitree App fallback。
 - [x] 更新 A2 memory TODO/description：关闭和恢复内置 service 已有 guarded script，但实机流程仍需 operator 执行和验证。
@@ -201,3 +201,9 @@
 - [x] `enable_motion=false` early return 已扩展为仅在 `monitor_policy_aux=false` 且 `publish_aux_debug=false` 时跳过 inference；因此 `policy-listen-remote` 可以在 no-LowCmd 前提下发布 `/a2/policy_aux`。
 - [x] 新增 `a2_real_robot_observer.py policy-aux-topic-live` 和 wrapper `policy-aux-monitor [duration]`，只订阅 `std_msgs/msg/Float32MultiArray`，打印 sample count、age、dim、first8 values 和 dim 6 force-estimator layout warning。
 - [x] 更新 `a2_policy_remote.env`、`a2_real_robot_test.sh`、`A2_REAL_DEPLOY_RUNBOOK.md`、`A2_REAL_ROBOT_TEST.md` 和 `README.md`，记录 `policy-aux-live` 是 independent listen-only smoke，`policy-aux-monitor` 是 active policy aux topic subscriber。
+
+## 2026-06-08 21:08 HKT
+
+- [x] 加固 `a2_real_robot_test.sh` 生成的 MotionSwitcher helper：按 Unitree SDK2 sample 对 `CheckMode form/name` 做 normalized `service` 输出，至少覆盖 `form='0'` 下 `normal->sport_mode`、`ai->ai_sport`、`advanced->advanced_sport`，并保留 wheel aliases / unknown fallback。
+- [x] `motion-select` / `motion-restore` 成功条件改为 `SelectMode ret==0` 且 after `CheckMode` raw `name` 等于 target mode 或 normalized `service` 等于 target mode；仍不接受任意非空 mode，错误信息同时打印 after raw `name` 和 normalized `service`。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md` 和 `README.md` restore expected output，记录 `form='0', name='ai', service='ai_sport'` 是恢复 `ai_sport` 的 expected alias。
