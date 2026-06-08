@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-08 21:38 HKT"
+last_updated: "2026-06-08 21:08 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -36,7 +36,7 @@ read_when:
 - 2026-06-08 20:08 HKT 已新增 `policy-aux-live`：`enable_motion=false command_source=remote monitor_policy_aux=true`，同时启动 `no-lowcmd` observer；history warm 后只做 policy inference / aux output monitor，不发布 LowCmd。默认 aux expected dim 是 `6`，按 Aliengo convention 打印 `pred_base_lin_vel[0..2]` 和 `pred_base_force_local[0..2]`。
 - 2026-06-08 20:31 HKT 已新增 active policy aux debug topic：`a2_policy_deploy` 支持 `publish_aux_debug` / `aux_debug_topic`，每次 policy inference 后把 `policys[kPolicyId].get_last_aux_output()` 发布为 `std_msgs/msg/Float32MultiArray`，默认 wrapper config 为 `/a2/policy_aux`。
 - 2026-06-08 20:31 HKT 已新增 `policy-aux-monitor`：只订阅 active `/a2/policy_aux` topic，不启动 policy node、不启动 no-lowcmd observer、不发布 LowCmd；用于另一个 Docker terminal 在 `policy-enable-remote` 期间实时打印 force estimator。
-- 2026-06-08 21:38 HKT 已实现 A2 active brake gate：裸 `a2_policy_deploy` 默认 `brake_gate_enabled=false`，wrapper config 默认 `A2_POLICY_BRAKE_GATE_ENABLED=true`，读取 active aux dim 6 layout `pred_base_lin_vel[0..2] + pred_base_force_local[0..2]`，用 unitless `pred_base_force_local[0] <= -0.6` 连续 `2` steps 且 `cmd_vx>=0.2`、`abs(cmd_yaw)<=0.10`、非 standing command 触发；触发 tick 发布 zero LowCmd、跳过 policy joint command，并 latch 到 command standing / eligibility lost / local stop / runtime reset。
+- brake gate config fields 当前只作为 comment-only placeholder 保留，wrapper 不传给 active behavior；后续启用前必须先通过 `policy-aux-live` 的 independent listen-only smoke 和 `policy-aux-monitor` 的 active topic flow 确认 aux layout / force-estimator semantics。
 - `a2_lowlevel_smoke` 支持 `log_remote` listen-only decode logging，打印 sticks 和 button names。
 - 实现部署机信息采集脚本 `ros2/A2/scripts/collect_deploy_machine_info.sh`，用于生成 `DeployMachineINFO.md`。
 - 当前 code machine 的 Unitree reference repos 已移动到 `/Users/caobaoquan/Downloads/python/projects/third_party/unitree`，即 `AliengoSim2Real` 同级 parent `projects` 下的 `third_party/unitree`；部署机也计划使用同样的 parent-projects layout。
@@ -59,7 +59,6 @@ read_when:
 - `a2_real_robot_test.sh` MotionSwitcher helper compile/runtime 已适配部署机 SDK2 DDS nested include/lib layout：自动加入 `install/include/ddscxx`、`thirdparty/include/ddscxx`、`install/lib`、`thirdparty/lib/$(uname -m)` 等候选，显式链接 `-lddscxx -lddsc`，并通过 wrapper 将 SDK2 lib dirs 放到 `LD_LIBRARY_PATH` 前面以避免 ROS2/CycloneDDS libs shadow；`motion-check` 仍只调用 `CheckMode`，`motion-release` 仍需 `A2_ALLOW_RELEASE_MODE=1`。
 - 已新增 guarded MotionSwitcher restore/select：`motion-select IFACE MODE` 和 `motion-restore IFACE` 都要求 `A2_ALLOW_SELECT_MODE=1`，默认 restore mode 为 `A2_MOTION_RESTORE_MODE:-ai_sport`；helper action `select` 会在 `SelectMode` 前后 `CheckMode`，要求 `SelectMode ret==0` 且 after raw `CheckMode name` 等于 target mode 或 normalized `service` 等于 target mode。恢复前必须先停止 policy/LowCmd publisher，并运行 `no-lowcmd` pass。
 - 2026-06-08 21:08 HKT 已加固 MotionSwitcher restore/select alias 判定：helper 保留 raw `CheckMode form/name` 输出并额外打印 normalized `service`；`form='0', name='ai'` 归一化为 `ai_sport`，select 成功条件为 `SelectMode ret==0` 且 after raw `name` 等于 target mode 或 normalized `service` 等于 target mode。
-- 2026-06-08 21:27 HKT 已新增 explicit controlled stop-pose hold：`a2_lowlevel_smoke` 支持 `custom_pose` / `custom_pose_q` / low gains / smooth interpolation，wrapper 新增 guarded `pose-hold`，要求 `A2_ALLOW_POSE_LOWCMD=1` 且 explicit 12-value `A2_POLICY_STOP_POSE_Q`。它只用于 policy 已停止、official motion service 仍 released、恢复 `ai_sport` 前的 optional pose hold；`Select` local stop semantics 不变，仍只做 runtime reset 和 zero LowCmd 分流。
 - 已新增正式 operator-facing real deployment runbook `ros2/A2/scripts/A2_REAL_DEPLOY_RUNBOOK.md`：它不是 validation guide，而是 day-to-day command sequence，覆盖 host cold start、Docker image/container、A2 `192.168.123.x` network、container env、workspace build/source、connected readiness、MotionSwitcher guarded release/restore、policy listen-only gate、guarded `enable_motion=true` two-A handover、runtime stop、disconnect 和 failure log collection。
 
 当前 blocker：
@@ -113,14 +112,14 @@ read_when:
 ## TODO Summary
 
 - 部署机已观测到 `enp131s0` 使用 `192.168.123.222/24` 且可 ping A2 `192.168.123.161`；如 host network reset，重新恢复 `192.168.123.x` low-level subnet，不要把 `192.168.124.x` 当作 SDK2 low-level subnet。
-- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / raw `CheckMode form/name` + normalized `service`、guarded release、测试结束后的 guarded restore/select（`form='0', name='ai', service='ai_sport'` 是 `ai_sport` expected alias）、optional guarded `pose-hold` stop-pose path、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
+- 用更新后的 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md` 继续 connected real A2 tests，并回传 `/tmp/a2_real_robot_tests` logs：新版 `connected-preflight enp131s0` PASS、`no-lowcmd 5` observe-only、configured `/lowstate` lowstate rate/tick/freshness、`joints-live` order/sign observe-only、`remote-live` raw/decode live observe、MotionSwitcher `motion-check` helper compile / `ldd` / stage log / raw `CheckMode form/name` + normalized `service`、guarded release、测试结束后的 guarded restore/select（`form='0', name='ai', service='ai_sport'` 是 `ai_sport` expected alias）、zero `LowCmd` CRC、policy listen-only 和 guarded `enable_motion=true`；旧 `joints` / `remote` 可作为 summary/CSV validation。
 - 日常部署已有正式 `A2_REAL_DEPLOY_RUNBOOK.md` 可执行；operator 仍必须按 runbook 逐次执行 `no-lowcmd`、MotionSwitcher release/restore、hardware emergency stop、one LowCmd publisher 和 real safety checks，不要把 runbook 存在视为 broad real validation complete。
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
 - 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` primary local stop、`L2+B` 附加 stop path 和 `enable_motion` 分流。
 - 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
-- A2 brake gate 已实现并由 wrapper config 默认启用；仍需部署机/实机验证 `pred_base_force_local[0]` 的 `-0.6` unitless threshold、符号、连续 hold 稳定性、当前 tick zero LowCmd 和 stick 回中/standing release 行为。
+- brake gate 后续启用前必须先用 `policy-aux-live` 做 independent listen-only / no-lowcmd smoke，并用 active `policy-aux-monitor` 在 `policy-enable-remote` 期间确认 aux dim=6 layout、`pred_base_force_local[0]` 符号/单位和 no-lowcmd/motion safety；未确认前不要把 `A2_POLICY_BRAKE_*` 传入 node active behavior。
 
 ## DONE Summary
 
@@ -147,11 +146,9 @@ read_when:
 - 2026-06-05 23:38 HKT 已新增 A2 内置 motion service guarded restore/select：`motion-select IFACE MODE` 调用 `MotionSwitcherClient::SelectMode(MODE)` 并前后 `CheckMode`，`motion-restore IFACE` 默认恢复 `ai_sport`；恢复前要求停止 policy/LowCmd 并通过 `no-lowcmd`。
 - 2026-06-06 00:03 HKT 已新增正式 operator-facing `A2_REAL_DEPLOY_RUNBOOK.md`，区分 day-to-day real deployment operation 与 `A2_REAL_ROBOT_TEST.md` validation/reference，并在 README 增加入口。
 - 2026-06-06 00:12 HKT 已将 A2 remote command 上限从 conservative `0.10/0.06/0.15` wrapper caps 和旧 `0.4/0.25/0.6` node defaults 统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
-- 2026-06-08 20:08 HKT 已新增 A2 policy remote run config 和 aux output monitor：policy wrapper 只在 policy subcommands 加载 config，`policy-aux-live` 在 `enable_motion=false` 下执行 inference-only aux monitor 并由 `no-lowcmd` observer 覆盖；当时文档记录 brake gate 暂不启用，该状态已由 2026-06-08 21:38 HKT active brake gate 实现 supersede。
+- 2026-06-08 20:08 HKT 已新增 A2 policy remote run config 和 aux output monitor：policy wrapper 只在 policy subcommands 加载 config，`policy-aux-live` 在 `enable_motion=false` 下执行 inference-only aux monitor 并由 `no-lowcmd` observer 覆盖，文档已记录 brake gate 暂不启用。
 - 2026-06-08 20:31 HKT 已实现 active aux debug topic：`a2_policy_deploy` 发布 `/a2/policy_aux`，wrapper 默认透传 `publish_aux_debug=true`，并新增 topic-only `policy-aux-monitor` 用于第二个 Docker terminal 实时查看 force estimator。
 - 2026-06-08 21:08 HKT 已完成 MotionSwitcher alias hardening：restore/select helper 按 Unitree SDK2 sample 把 `form='0', name='ai'` normalize 为 `ai_sport`，operator docs 已更新 expected restore output。
-- 2026-06-08 21:27 HKT 已完成 guarded `pose-hold` custom stop-pose path：custom pose target explicit-only、A2 low-level order、低刚度 smooth interpolation、双 `no-lowcmd` restore sequence 已写入 wrapper/config/docs/memory。
-- 2026-06-08 21:38 HKT 已实现 A2 brake gate active behavior、wrapper/config defaults 和 docs：默认 real motion path 在 `pred_base_force_local[0] <= -0.6` 连续 2 steps 且 forward/yaw gate 满足时当前 tick zero LowCmd，不发布 policy joint command。
 
 ## Recommended Next Files To Read
 

@@ -93,12 +93,6 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   bool should_log_policy_aux(bool force);
   void ensure_aux_debug_publisher();
   void publish_policy_aux_debug(const SimpleTensor &aux);
-  bool handle_brake_gate_after_inference(const SimpleTensor &aux);
-  bool brake_gate_eligible() const;
-  bool brake_force_triggered(double force_x) const;
-  void reset_brake_gate_state();
-  void release_brake_gate(const char *reason);
-  void publish_brake_zero_tick(double force_x, bool have_force_x);
   void set_zero_command();
   bool is_history_warm() const;
   bool is_standing_command() const;
@@ -155,13 +149,6 @@ class A2PolicyDeployNode : public A2LowLevelInterface,
   std::string aux_debug_topic_ = "/a2/policy_aux";
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr
       aux_debug_pub_;
-  bool brake_gate_enabled_ = false;
-  double brake_force_x_threshold_ = -0.6;
-  double brake_min_cmd_vx_ = 0.2;
-  double brake_max_abs_yaw_ = 0.10;
-  int brake_hold_steps_ = 2;
-  int brake_hold_count_ = 0;
-  bool brake_gate_active_ = false;
   int policy_aux_expected_dim_ = 6;
   double policy_aux_print_period_sec_ = 0.2;
   int standup_stage1_steps_ = 150;

@@ -535,8 +535,7 @@ Ideal aux monitor result：
 - policy log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_*.log`。
 - no-lowcmd observer log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_no_lowcmd_*.log`。
 - wrapper 会读取 `A2/config/a2_policy_remote.env`，并打印 effective remote caps、deadzone、
-  `require_standup_before_policy`、`policy_aux_expected_dim`、print period 和 active
-  brake gate config。
+  `require_standup_before_policy`、`policy_aux_expected_dim` 和 print period。
 - policy 输出 `enable_motion=false`、`command_source=remote`、`monitor_policy_aux=true`。
 - history warm 后 policy 会执行 inference 只用于监测，不发布 LowCmd。
 - aux 输出默认按 Aliengo convention 解释 dim 6：
@@ -549,8 +548,7 @@ Ideal aux monitor result：
   配置的 `A2_LOWCMD_TOPIC` 并 pass。
 
 如果 aux 中出现 NaN/Inf、dim/layout 不符合预期，或者 no-lowcmd observer 失败，不要继续
-real policy motion；先保存 logs 并确认 policy aux layout。`policy-aux-live` 中
-`enable_motion=false`，即使 wrapper 传入 `brake_gate_enabled=true` 也不会发布 LowCmd。
+启用 brake gate 或 real policy motion；先保存 logs 并确认 policy aux layout。
 
 `policy-aux-monitor` 是 active policy aux topic subscriber。它只订阅
 `std_msgs/msg/Float32MultiArray` topic，不启动 policy node、不启动 no-lowcmd observer、
@@ -625,11 +623,6 @@ publish_aux_debug:=true
 aux_debug_topic:=/a2/policy_aux
 policy_aux_expected_dim:=6
 policy_aux_print_period_sec:=0.2
-brake_gate_enabled:=true
-brake_force_x_threshold:=-0.6
-brake_min_cmd_vx:=0.2
-brake_max_abs_yaw:=0.10
-brake_hold_steps:=2
 ```
 
 Ideal result：
@@ -640,60 +633,11 @@ Ideal result：
 - history warm 后 node 先做一次 policy action dim/finite validation；下一 valid cycle 才进入 `PolicyActive` 并发布 policy action。
 - PolicyActive 中 centered sticks 对应 zero locomotion command；moving sticks 不要求
   `L2` held。
-- Brake gate 是 real motion behavior：active `/a2/policy_aux` dim 6 中
-  `pred_base_force_local[0] <= -0.6` 连续 2 steps，且 `cmd_vx >= 0.2`、
-  `abs(cmd_yaw) <= 0.10`、command 非 standing 时触发。该 threshold 是 A2 observed
-  unitless aux scale，不是 Newton。触发当前 tick 发布 zero LowCmd，不发布 policy joint
-  command；stick 回中/command standing、eligibility 失效、local stop 或 runtime reset 后释放。
 - 遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
 
 任何异常立即松开 sticks、按 primary local stop `Select` 或 e-stop，并保存 logs；`L2+B`
 只作为附加 stop path。
-
-## 10.1 Optional Controlled Stop-Pose Hold Before Restore
-
-如果 operator 想在停止 policy 后、恢复 Unitree built-in motion service 前，把机器人收敛到指定
-joint pose，可以使用 guarded `pose-hold`。这是一个新的 explicit LowCmd publish path，不是
-emergency stop，也不会由 `Select` 自动触发。
-
-先停止 policy process / LowCmd publisher，并确认没有 active LowCmd traffic：
-
-```bash
-A2/scripts/a2_real_robot_test.sh no-lowcmd 5
-```
-
-然后显式提供 12 个 absolute joint q（单位 radians，A2 low-level order）：
-
-```bash
-A2_POLICY_STOP_POSE_Q='[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]' \
-  A2_ALLOW_POSE_LOWCMD=1 A2/scripts/a2_real_robot_test.sh pose-hold 4
-```
-
-上面的 pose 只是 policy default mapped to A2 low-level order 的 example。实际 target 必须由
-operator 根据现场选择，order 是：
-
-```text
-[FR_BODY, FR_THIGH, FR_CALF,
- FL_BODY, FL_THIGH, FL_CALF,
- RR_BODY, RR_THIGH, RR_CALF,
- RL_BODY, RL_THIGH, RL_CALF]
-```
-
-注意事项：
-
-- `A2_POLICY_STOP_POSE_Q` 没有 repo default；缺失、长度不是 12 或包含 NaN/Inf 时 wrapper/node 会 fail fast，不发布 LowCmd。
-- 这是 absolute joint q，不是 degrees、不是 action，也不是相对 offset；当前仍假设 A2 joint order/sign 已通过 `joints-live` 验证。
-- `pose-hold` 默认低刚度 `kp=20.0`、`kd=2.0`，并用 `custom_pose_interpolate_sec=2.0` 从当前 q smooth interpolation 到 target。
-- `pose-hold` 运行时 Unitree built-in motion service 必须保持 released；不要同时运行 `motion-restore` / `motion-select`。
-
-`pose-hold` 结束后再次确认没有 active LowCmd traffic，再恢复 Unitree mode：
-
-```bash
-A2/scripts/a2_real_robot_test.sh no-lowcmd 5
-A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0
-A2/scripts/a2_real_robot_test.sh motion-check enp131s0
-```
 
 ## 11. Acceptance Checklist
 
@@ -712,15 +656,11 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 - `zero-lowcmd` CRC、zero shape、`mode_machine` follow state 全部 pass。
 - `policy-listen-remote` 在 `enable_motion=false` 下没有 configured LowCmd topic message。
 - `policy-aux-live` 在 `enable_motion=false` 下没有 configured LowCmd topic message，并已确认
-  aux dim/layout；active brake gate 使用 dim 6 的 `pred_base_force_local[0]`。
+  aux dim/layout；brake gate 后续启用前必须先确认 dim 6 的 force-estimator layout。
 - `policy-aux-monitor` 可在 active `policy-enable-remote` 期间订阅 `/a2/policy_aux`，
   并实时显示 dim/value/warning；该 monitor 不启动 policy node，也不发布 LowCmd。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`
-  stand-up、holder default pose、second `A` warmup/handover、brake gate zero tick、
-  local stop 和 `B` cancel。
-- optional `pose-hold` 如被使用，必须在 policy/LowCmd publisher 已停止、`no-lowcmd` pass、
-  Unitree built-in motion service 仍 released 的前提下运行；结束后重新 `no-lowcmd` pass 再
-  `motion-restore`。
+  stand-up、holder default pose、second `A` warmup/handover、local stop 和 `B` cancel。
 - 测试结束恢复内置 motion service 前，已停止 policy/LowCmd publisher、`no-lowcmd` 重新 pass，
   并通过 guarded `motion-restore` / `motion-select` 或 Unitree App 恢复。
 

@@ -536,34 +536,10 @@ ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p publish_zero:=true
 ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args -p stand_test:=true
 ```
 
-发布 operator 显式指定的 custom pose target：
-
-```bash
-ros2 run a2_lowlevel a2_lowlevel_smoke --ros-args \
-  -p custom_pose:=true \
-  -p custom_pose_q:="[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]" \
-  -p custom_pose_kp:=20.0 \
-  -p custom_pose_kd:=2.0 \
-  -p custom_pose_interpolate_sec:=2.0
-```
-
-该 example 是 policy default mapped to A2 low-level order 的参考值；`custom_pose=true`
-时 `custom_pose_q` 没有默认目标，必须显式提供 exact 12 finite values，否则 node
-fail fast，不发布 LowCmd。
-
 参数：
 
 - `publish_zero`：默认 `false`。为 `true` 时按 `command_hz` 发布 zero/stop command。
 - `stand_test`：默认 `false`。为 `true` 时只在 fresh state 下发布固定低刚度站立目标；若同时设置 `publish_zero`，`stand_test` 优先。
-- `custom_pose`：默认 `false`。为 `true` 时优先于 `stand_test` / `publish_zero`，
-  首次 fresh LowState 后从当前 joint q smooth interpolation 到 `custom_pose_q`，
-  然后持续 hold target；每个 command 都走 `publish_joint_commands()` 和 fresh-state
-  guard。
-- `custom_pose_q`：无默认 target。`custom_pose=true` 时必须是 A2 low-level order
-  `[FR_BODY,FR_THIGH,FR_CALF,FL_BODY,FL_THIGH,FL_CALF,RR_BODY,RR_THIGH,RR_CALF,RL_BODY,RL_THIGH,RL_CALF]`
-  的 exact 12 finite values。
-- `custom_pose_kp` / `custom_pose_kd`：默认 `20.0` / `2.0`。
-- `custom_pose_interpolate_sec`：默认 `2.0`，必须为 finite non-negative。
 - `state_timeout_ms`：默认 `200`。用于 fresh state 判断。
 - `lowstate_topic`：默认 `lowstate`，ROS2 graph 通常显示为 `/lowstate`。
 - `lowcmd_topic`：默认 `lowcmd`，ROS2 graph 通常显示为 `/lowcmd`。
@@ -604,31 +580,12 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
-A2_POLICY_BRAKE_GATE_ENABLED=true
-A2_POLICY_BRAKE_FORCE_X_THRESHOLD=-0.6
-A2_POLICY_BRAKE_MIN_CMD_VX=0.2
-A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
-A2_POLICY_BRAKE_HOLD_STEPS=2
-A2_POLICY_STOP_POSE_KP=20.0
-A2_POLICY_STOP_POSE_KD=2.0
-A2_POLICY_STOP_POSE_INTERPOLATE_SEC=2.0
-# A2_POLICY_STOP_POSE_Q='[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]'
 ```
 
-`A2_POLICY_STOP_POSE_Q` 在 repo config 中只保留 commented example，不设置默认值。
-使用 `pose-hold` 时必须由 operator shell 或现场显式 config 提供 exact 12 finite values；
-忘填会 fail fast，不发布 LowCmd。
-
-Brake gate 已在 wrapper config 中默认启用，并传给 `a2_policy_deploy`。它只在
-`enable_motion=true` 的 real motion publish path 生效；listen-only /
-inference-only path 不发布 LowCmd。当前 active `/a2/policy_aux` layout 已确认为 dim
-`6`：`pred_base_lin_vel[0..2]` + `pred_base_force_local[0..2]`。默认 brake 条件是
-`pred_base_force_local[0] <= -0.6` 连续 `2` control steps，同时满足
-`cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10` 且不是 standing command。该 threshold 是
-A2 observed unitless aux scale，不是 Newton；负 threshold 表示 `fx <= threshold`。
-触发后的当前 tick 不发布 policy joint command，而是调用 `publish_zero()` 并清零 command /
-last action / gait phase。latch 会持续 brake，直到 stick 回中导致 command standing、
-eligibility 失效、local stop 或 runtime reset。
+Brake gate 字段当前只在 config 里作为 comment-only placeholder 保留；wrapper 不会把
+`A2_POLICY_BRAKE_*` 传给 `a2_policy_deploy` active behavior。后续如要启用 brake gate，
+必须先用 `policy-aux-live` 做 independent listen-only smoke，并用 active
+`policy-aux-monitor` 确认 aux dim/layout 和 force-estimator semantics。
 
 `policy-aux-live` 是 independent listen-only smoke：
 
@@ -708,16 +665,6 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   non-negative。
 - `policy_aux_print_period_sec`：默认 `0.2`。仅用于 aux monitor log cadence；必须为
   finite positive。
-- `brake_gate_enabled`：裸 node 默认 `false`；wrapper config 默认 `true`。只在
-  `enable_motion=true` publish path 使用。
-- `brake_force_x_threshold`：默认 `-0.6`。读取 aux dim 6 的
-  `pred_base_force_local[0]`（即 aux[3]）作为 unitless force-estimator scale；
-  threshold >= 0 时使用 `force_x >= threshold`，threshold < 0 时使用
-  `force_x <= threshold`。
-- `brake_min_cmd_vx` / `brake_max_abs_yaw`：默认 `0.2` / `0.10`。brake gate
-  eligibility 只看 forward command 和 yaw；不 gate `vy`。
-- `brake_hold_steps`：默认 `2`，必须 >= 1。force trigger 连续满足该步数后 latch
-  active。active tick 发布 zero LowCmd，不发布 policy joint command。
 - `standup_stage1_steps` / `standup_stage2_steps`：默认 `150` / `150`，合计
   `300` 个 50 Hz control steps。
 - `standup_rear_alpha_lead` / `standup_front_alpha_lag`：默认 `0.10` / `0.04`，
@@ -760,34 +707,12 @@ safety input；不会直接写 `LowCmd`，policy output 仍然只经过
 `Select` 是 primary local stop，在任意 phase 触发 local stop。`L2+B` 保留为附加 local
 stop path，但由于 A2 R3 `L2` decode 曾出现不可靠，现场应优先使用 `Select`。local stop 在
 `enable_motion=true` 时发布 zero LowCmd，`enable_motion=false` 时只 reset runtime。
-`Select` 不会进入 custom pose recovery；它仍是 immediate local stop，只负责 policy
-runtime reset 和按 `enable_motion` 分流 zero LowCmd。
 stand-up / hold / warmup 阶段额外支持 `B` rising edge cancel，cancel 后回到
 `IdleBlocked`。
 
 ## Safety
 
 真实硬件上使用 low-level command 前，必须确认 Unitree 内置运动控制服务 `ai_sports` / `ai_sport` 已关闭，否则底层服务可能不响应或发生控制冲突。`a2_policy_deploy` 现在只在 remote two-A handover 下执行 stand-up，不会自动关闭 `ai_sport` / `ai_sports`。
-
-停止 policy 后、恢复 Unitree 内置 motion service 前，可以显式执行一次 guarded
-stop-pose hold。标准 sequence 是：
-
-```bash
-# 1. stop policy first: press Select, then stop the policy process / LowCmd publisher.
-# 2. confirm no active LowCmd publisher before the optional pose hold.
-A2/scripts/a2_real_robot_test.sh no-lowcmd 5
-# 3. optional guarded pose hold; A2_POLICY_STOP_POSE_Q must be explicit exact 12 finite values.
-A2_POLICY_STOP_POSE_Q='[0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0,0.0,0.5,-1.0]' \
-  A2_ALLOW_POSE_LOWCMD=1 A2/scripts/a2_real_robot_test.sh pose-hold 4
-# 4. no-lowcmd, then restore.
-A2/scripts/a2_real_robot_test.sh no-lowcmd 5
-A2_ALLOW_SELECT_MODE=1 A2/scripts/a2_real_robot_test.sh motion-restore enp131s0
-```
-
-`pose-hold` 会调用 `a2_lowlevel_smoke custom_pose=true`，发布 LowCmd 到 operator
-指定 target；它要求 official motion service 仍保持 released，不要和 `motion-restore`
-或 `motion-select` 同时运行。`A2_POLICY_STOP_POSE_Q` 缺失、长度不是 12 或包含
-NaN/Inf 时 wrapper/node 都会 fail fast，不发布 LowCmd。
 
 测试结束需要恢复 Unitree 内置 motion service 时，先停止 `a2_policy_deploy`、`a2_lowlevel_smoke publish_zero` 或任何其他 LowCmd publisher，并重新运行 observe-only `no-lowcmd` 直到 pass。随后使用 guarded MotionSwitcher restore：
 
@@ -815,8 +740,6 @@ A2/scripts/a2_real_robot_test.sh motion-check enp131s0
 - `command_source=remote` 时 remote stick decode invalid
 - observation/action dimension 不符合 contract
 - history 尚未 warm 到 `32` fresh frames
-- brake gate active tick：当前 control cycle 发布 zero LowCmd，并跳过 policy joint
-  command publish
 
 这些条件下 node 不发布 motion command。
 
