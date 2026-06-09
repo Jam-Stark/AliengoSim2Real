@@ -20,8 +20,10 @@
   - 不按 `L2` 时方向仍符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
   - `policy-enable-remote` 默认 `require_standup_before_policy=true`：first `A` 触发 stand-up interpolation，holder 持续发布 policy default pose，second `A` 在 `lx/rx/ly` deadzone 后为 zero 时进入 warmup/handover。
   - `PolicyWarmupHold` 持续发布 default stand pose，同时 history warm 到 `32` fresh frames；first policy action validation 通过后，下一 cycle 才进入 `PolicyActive` publish。
-  - `Select` 是 primary local stop，`L2+B` 是附加 local stop path；local stop 能要求重新 two-A handover；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd。
-  - stand-up / holder / warmup 阶段 `B` rising edge 能 cancel handover 并回到 `IdleBlocked`；`enable_motion=true` 下发布 zero LowCmd。
+  - `Select` 是 immediate zero `LowCmd` software stop；`enable_motion=false` 下只 reset runtime，不发布 zero LowCmd，`enable_motion=true` 下发布 zero LowCmd 并要求重新 two-A handover。
+  - `L2+B` 在 remote valid 且 `enable_motion=true` 下进入 controlled down normal stop，约 5s smoothstep 到 prone 后持续 `HoldProne`，不调用 `publish_zero()`，只走 `publish_joint_commands()`；`enable_motion=false` 下只 reset/log，不发布 LowCmd。
+  - `HoldProne` 下 `A` 不允许重新 handover；operator exit 流程是 `L2+B` 趴地 hold -> Ctrl-C policy -> `no-lowcmd 5` -> guarded `motion-restore`。
+  - stand-up / holder / warmup 阶段单独 `B` rising edge 能 cancel handover 并回到 `IdleBlocked`；`enable_motion=true` 下发布 zero LowCmd。`L2+B` 优先进入 controlled down，不走 `B` cancel。
 
 ## 2026-06-05 19:49 HKT
 
@@ -37,7 +39,7 @@
   - guarded `motion-release enp131s0`
   - guarded `zero-lowcmd`
   - `policy-listen-remote`
-  - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` primary local stop、`L2+B` 附加 stop path 和 `B` cancel。
+  - last-stage guarded `policy-enable-remote`，验证 first `A` stand-up、holder default pose、second `A` 在 sticks centered 后 warmup/handover、`Select` immediate zero `LowCmd` software stop、`L2+B` controlled down / `HoldProne` normal stop 和单独 `B` cancel。
   - 测试结束停止 policy/LowCmd publisher，重新运行 `no-lowcmd 5` pass 后，用 guarded `motion-restore enp131s0` 或 Unitree App 恢复内置 motion service，并用 `motion-check enp131s0` 确认；新版 helper 会打印 raw `CheckMode form/name` 和 normalized `service`，其中 `form='0', name='ai', service='ai_sport'` 是 restore `ai_sport` 的 expected alias。
 
 ## 2026-06-05 20:10 HKT

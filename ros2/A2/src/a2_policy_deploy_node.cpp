@@ -30,6 +30,7 @@ constexpr double kStandingCmdVyThreshold = 0.1;
 constexpr double kStandingCmdYawThreshold = 0.2;
 constexpr double kRemoteZeroEpsilon = 1e-5;
 constexpr int kStandupLogStepInterval = 50;
+constexpr int kControlledDownLogStepInterval = 50;
 constexpr std::array<float, kTrainingJointCountLocal> kExpectedDefaultJointPos =
     {0.0f, 0.0f,  0.0f,  0.0f, 0.5f, 0.5f,
      0.5f, 0.5f, -1.0f, -1.0f, -1.0f, -1.0f};
@@ -303,6 +304,16 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("standup_kd_start", 0.5);
   standup_final_gain_scale_ =
       this->declare_parameter<double>("standup_final_gain_scale", 1.0);
+  controlled_down_steps_ =
+      this->declare_parameter<int>("controlled_down_steps", 250);
+  controlled_down_hip_q_ =
+      this->declare_parameter<double>("controlled_down_hip_q", 0.0);
+  controlled_down_thigh_q_ =
+      this->declare_parameter<double>("controlled_down_thigh_q", 1.5);
+  controlled_down_calf_q_ =
+      this->declare_parameter<double>("controlled_down_calf_q", -2.77);
+  controlled_down_gain_scale_ =
+      this->declare_parameter<double>("controlled_down_gain_scale", 1.0);
   int state_timeout_ms = 200;
   this->get_parameter("state_timeout_ms", state_timeout_ms);
   state_timeout_ =
@@ -329,7 +340,9 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
               "standing_walking_exit_force_xy_threshold=%.3f, "
               "brake_gate_enabled=%s, "
               "brake_force_x_threshold=%.3f, brake_min_cmd_vx=%.3f, "
-              "brake_max_abs_yaw=%.3f, brake_hold_steps=%d",
+              "brake_max_abs_yaw=%.3f, brake_hold_steps=%d, "
+              "controlled_down_steps=%d, controlled_down_target=[hip=%.3f, "
+              "thigh=%.3f, calf=%.3f], controlled_down_gain_scale=%.3f",
               canonical_or_absolute(policy_path_).string().c_str(),
               canonical_or_absolute(policy_json_path_).string().c_str(),
               kDeployControlHz, enable_motion_ ? "true" : "false",
@@ -341,7 +354,10 @@ A2PolicyDeployNode::A2PolicyDeployNode(const rclcpp::NodeOptions &options)
               standing_walking_exit_force_xy_threshold_,
               brake_gate_enabled_ ? "true" : "false",
               brake_force_x_threshold_, brake_min_cmd_vx_,
-              brake_max_abs_yaw_, brake_hold_steps_);
+              brake_max_abs_yaw_, brake_hold_steps_,
+              controlled_down_steps_, controlled_down_hip_q_,
+              controlled_down_thigh_q_, controlled_down_calf_q_,
+              controlled_down_gain_scale_);
 }
 
 void A2PolicyDeployNode::load_and_validate_policy_contract(
@@ -611,19 +627,69 @@ A2PolicyDeployNode::build_standup_commands(double front_alpha,
   return commands;
 }
 
+std::array<float, A2PolicyDeployNode::kTrainingJointCount>
+A2PolicyDeployNode::controlled_down_target_training() const {
+  return {static_cast<float>(controlled_down_hip_q_),
+          static_cast<float>(controlled_down_hip_q_),
+          static_cast<float>(controlled_down_hip_q_),
+          static_cast<float>(controlled_down_hip_q_),
+          static_cast<float>(controlled_down_thigh_q_),
+          static_cast<float>(controlled_down_thigh_q_),
+          static_cast<float>(controlled_down_thigh_q_),
+          static_cast<float>(controlled_down_thigh_q_),
+          static_cast<float>(controlled_down_calf_q_),
+          static_cast<float>(controlled_down_calf_q_),
+          static_cast<float>(controlled_down_calf_q_),
+          static_cast<float>(controlled_down_calf_q_)};
+}
+
+std::array<A2JointCommand, kA2JointCount>
+A2PolicyDeployNode::build_controlled_down_commands(double alpha) const {
+  const double safe_alpha = std::clamp(alpha, 0.0, 1.0);
+  const auto target = controlled_down_target_training();
+  std::array<A2JointCommand, kA2JointCount> commands{};
+
+  for (std::size_t training_idx = 0; training_idx < kTrainingJointCount;
+       ++training_idx) {
+    const double q =
+        static_cast<double>(controlled_down_start_pos_[training_idx]) +
+        (static_cast<double>(target[training_idx]) -
+         static_cast<double>(controlled_down_start_pos_[training_idx])) *
+            safe_alpha;
+    const double kp =
+        (training_idx < 8 ? 140.0 : 220.0) * controlled_down_gain_scale_;
+    const double kd =
+        (training_idx < 8 ? 5.0 : 9.0) * controlled_down_gain_scale_;
+
+    const std::size_t a2_idx = kTrainingToA2Index[training_idx];
+    auto &command = commands[a2_idx];
+    command.q = static_cast<float>(q);
+    command.dq = 0.0f;
+    command.tau = 0.0f;
+    command.kp = static_cast<float>(kp);
+    command.kd = static_cast<float>(kd);
+  }
+
+  return commands;
+}
+
 void A2PolicyDeployNode::control_loop() {
   if (!refresh_runtime_params()) {
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
     return;
   }
 
   log_enable_state_if_changed();
   log_command_source_if_changed();
 
-  if (!enable_motion_ && standup_phase_ != StandupPhase::kIdleBlocked) {
+  if (!enable_motion_ &&
+      (standup_phase_ != StandupPhase::kIdleBlocked ||
+       controlled_down_phase_ != ControlledDownPhase::kInactive)) {
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
   }
 
   if (!ensure_motion_preconditions()) {
@@ -639,12 +705,20 @@ void A2PolicyDeployNode::control_loop() {
         state.wireless_remote, static_cast<float>(remote_deadzone_));
     remote_for_command = &remote;
 
-    if (remote_requests_local_stop(remote)) {
-      handle_remote_local_stop(remote);
+    if (remote_requests_immediate_stop(remote)) {
+      handle_remote_immediate_stop(remote);
+      return;
+    }
+    if (controlled_down_phase_ != ControlledDownPhase::kInactive) {
+      publish_controlled_down();
       return;
     }
     if (!remote.valid) {
       handle_invalid_remote_packet();
+      return;
+    }
+    if (remote_requests_controlled_down(remote)) {
+      handle_remote_controlled_down_request(state, remote);
       return;
     }
 
@@ -656,6 +730,7 @@ void A2PolicyDeployNode::control_loop() {
     set_zero_command();
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 3000,
         "A2 policy motion refused: require_standup_before_policy=true blocks "
@@ -827,6 +902,12 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
   this->get_parameter("standup_kd_start", standup_kd_start_);
   this->get_parameter("standup_final_gain_scale",
                       standup_final_gain_scale_);
+  this->get_parameter("controlled_down_steps", controlled_down_steps_);
+  this->get_parameter("controlled_down_hip_q", controlled_down_hip_q_);
+  this->get_parameter("controlled_down_thigh_q", controlled_down_thigh_q_);
+  this->get_parameter("controlled_down_calf_q", controlled_down_calf_q_);
+  this->get_parameter("controlled_down_gain_scale",
+                      controlled_down_gain_scale_);
   if (monitor_policy_aux_ &&
       (policy_aux_expected_dim_ < 0 ||
        !std::isfinite(policy_aux_print_period_sec_) ||
@@ -876,6 +957,20 @@ bool A2PolicyDeployNode::refresh_runtime_params() {
         this->get_logger(), *this->get_clock(), 3000,
         "A2 stand-up params invalid: steps must be >=1, lead/lag finite, "
         "and gains/final scale finite nonnegative. Refusing policy publish.");
+    return false;
+  }
+
+  if (controlled_down_steps_ < 1 || !std::isfinite(controlled_down_hip_q_) ||
+      !std::isfinite(controlled_down_thigh_q_) ||
+      !std::isfinite(controlled_down_calf_q_) ||
+      !std::isfinite(controlled_down_gain_scale_) ||
+      controlled_down_gain_scale_ <= 0.0) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "A2 controlled down params invalid: controlled_down_steps must be "
+        ">=1, prone target q values must be finite, and "
+        "controlled_down_gain_scale must be finite >0. Refusing policy "
+        "publish.");
     return false;
   }
 
@@ -935,6 +1030,7 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
         lowstate_topic().c_str());
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
     return false;
   }
 
@@ -946,6 +1042,7 @@ bool A2PolicyDeployNode::ensure_motion_preconditions() {
         "A2 policy publish refused because LowState contains NaN/Inf.");
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
     return false;
   }
 
@@ -971,8 +1068,8 @@ bool A2PolicyDeployNode::update_command_from_remote(
     const A2RemoteState &remote) {
   const std::string button_names = format_remote_button_names(remote);
 
-  if (remote_requests_local_stop(remote)) {
-    return handle_remote_local_stop(remote);
+  if (remote_requests_immediate_stop(remote)) {
+    return handle_remote_immediate_stop(remote);
   }
 
   if (!remote.valid) {
@@ -994,9 +1091,14 @@ bool A2PolicyDeployNode::update_command_from_remote(
   return true;
 }
 
-bool A2PolicyDeployNode::remote_requests_local_stop(
+bool A2PolicyDeployNode::remote_requests_immediate_stop(
     const A2RemoteState &remote) const {
-  return remote.buttons.select || (remote.buttons.l2 && remote.buttons.b);
+  return remote.buttons.select;
+}
+
+bool A2PolicyDeployNode::remote_requests_controlled_down(
+    const A2RemoteState &remote) const {
+  return remote.buttons.l2 && remote.buttons.b;
 }
 
 A2PolicyDeployNode::RemoteButtonEdges
@@ -1023,26 +1125,140 @@ void A2PolicyDeployNode::reset_remote_button_tracking() {
   previous_remote_b_pressed_ = false;
 }
 
-bool A2PolicyDeployNode::handle_remote_local_stop(
+bool A2PolicyDeployNode::handle_remote_immediate_stop(
     const A2RemoteState &remote) {
   const std::string button_names = format_remote_button_names(remote);
   set_zero_command();
   reset_runtime_state();
   reset_standup_state();
+  reset_controlled_down_state();
   if (enable_motion_) {
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 1000,
-        "A2 remote local stop requested by buttons=%s. Resetting policy/"
+        "A2 remote immediate stop requested by buttons=%s. Resetting policy/"
         "stand-up runtime and publishing zero LowCmd.",
         button_names.c_str());
     publish_zero();
   } else {
     RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 1000,
-        "A2 remote local stop requested by buttons=%s. Runtime reset; zero "
+        "A2 remote immediate stop requested by buttons=%s. Runtime reset; zero "
         "LowCmd not published because enable_motion=false.",
         button_names.c_str());
   }
+  return false;
+}
+
+bool A2PolicyDeployNode::handle_remote_controlled_down_request(
+    const A2LowStateSnapshot &state, const A2RemoteState &remote) {
+  const std::string button_names = format_remote_button_names(remote);
+  set_zero_command();
+  reset_runtime_state();
+  reset_standup_state();
+
+  if (!enable_motion_) {
+    reset_controlled_down_state();
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 controlled down requested by buttons=%s, but enable_motion=false. "
+        "Runtime reset only; no LowCmd published.",
+        button_names.c_str());
+    return true;
+  }
+
+  controlled_down_start_pos_ = map_a2_to_training(state.joint_q);
+  controlled_down_step_ = 0;
+  controlled_down_phase_ = ControlledDownPhase::kInterpolating;
+  gait_phase_ = 0.0;
+  RCLCPP_WARN(
+      this->get_logger(),
+      "A2 controlled down started by buttons=%s: interpolating current joint "
+      "q to prone target over %d steps. This path does not publish zero "
+      "LowCmd; it only publishes PD joint commands through "
+      "publish_joint_commands().",
+      button_names.c_str(), controlled_down_steps_);
+  return publish_controlled_down();
+}
+
+bool A2PolicyDeployNode::publish_controlled_down() {
+  if (!enable_motion_) {
+    reset_runtime_state();
+    reset_standup_state();
+    reset_controlled_down_state();
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "A2 controlled down stopped because enable_motion=false. No LowCmd "
+        "published from controlled down path.");
+    return true;
+  }
+
+  gait_phase_ = 0.0;
+  if (controlled_down_phase_ == ControlledDownPhase::kInterpolating) {
+    const int current_step =
+        std::min(controlled_down_step_ + 1, controlled_down_steps_);
+    const double linear_alpha = std::clamp(
+        static_cast<double>(current_step) /
+            static_cast<double>(controlled_down_steps_),
+        0.0, 1.0);
+    const double alpha = smoothstep01(linear_alpha);
+    const auto commands = build_controlled_down_commands(alpha);
+    if (!publish_joint_commands(commands)) {
+      RCLCPP_ERROR_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "A2 controlled down publish_joint_commands() failed in %s. Resetting "
+          "to idle-blocked without publishing zero LowCmd.",
+          controlled_down_phase_name(controlled_down_phase_));
+      reset_runtime_state();
+      reset_standup_state();
+      reset_controlled_down_state();
+      return true;
+    }
+
+    if (current_step == 1 ||
+        current_step % kControlledDownLogStepInterval == 0 ||
+        current_step == controlled_down_steps_) {
+      RCLCPP_INFO(
+          this->get_logger(),
+          "A2 controlled down phase=%s step=%d/%d alpha=%.3f target=[hip=%.3f, "
+          "thigh=%.3f, calf=%.3f] gain_scale=%.3f",
+          controlled_down_phase_name(controlled_down_phase_), current_step,
+          controlled_down_steps_, alpha, controlled_down_hip_q_,
+          controlled_down_thigh_q_, controlled_down_calf_q_,
+          controlled_down_gain_scale_);
+    }
+
+    controlled_down_step_ = current_step;
+    if (controlled_down_step_ >= controlled_down_steps_) {
+      controlled_down_phase_ = ControlledDownPhase::kHoldProne;
+      RCLCPP_WARN(
+          this->get_logger(),
+          "A2 controlled down interpolation complete: entering HoldProne. "
+          "A handover is blocked in this state; stop the policy node with "
+          "Ctrl-C, run no-lowcmd, then guarded motion-restore.");
+    }
+    return true;
+  }
+
+  if (controlled_down_phase_ == ControlledDownPhase::kHoldProne) {
+    const auto commands = build_controlled_down_commands(1.0);
+    if (!publish_joint_commands(commands)) {
+      RCLCPP_ERROR_THROTTLE(
+          this->get_logger(), *this->get_clock(), 1000,
+          "A2 HoldProne publish_joint_commands() failed. Resetting to "
+          "idle-blocked without publishing zero LowCmd.");
+      reset_runtime_state();
+      reset_standup_state();
+      reset_controlled_down_state();
+      return true;
+    }
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "A2 controlled down HoldProne active: holding prone PD target. A "
+        "handover remains blocked; use Ctrl-C, no-lowcmd, then "
+        "motion-restore to exit.");
+    return true;
+  }
+
   return false;
 }
 
@@ -1050,6 +1266,7 @@ bool A2PolicyDeployNode::handle_invalid_remote_packet() {
   set_zero_command();
   reset_runtime_state();
   reset_standup_state();
+  reset_controlled_down_state();
   reset_remote_button_tracking();
   RCLCPP_ERROR_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
@@ -1812,6 +2029,12 @@ void A2PolicyDeployNode::reset_standup_state() {
   standup_start_pos_.fill(0.0f);
 }
 
+void A2PolicyDeployNode::reset_controlled_down_state() {
+  controlled_down_phase_ = ControlledDownPhase::kInactive;
+  controlled_down_step_ = 0;
+  controlled_down_start_pos_.fill(0.0f);
+}
+
 void A2PolicyDeployNode::log_enable_state_if_changed() {
   if (has_logged_enable_motion_ &&
       enable_motion_ == last_logged_enable_motion_) {
@@ -1822,6 +2045,7 @@ void A2PolicyDeployNode::log_enable_state_if_changed() {
   if (has_logged_enable_motion_ && !enable_motion_) {
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
   }
   has_logged_enable_motion_ = true;
   last_logged_enable_motion_ = enable_motion_;
@@ -1843,6 +2067,7 @@ void A2PolicyDeployNode::log_command_source_if_changed() {
   if (has_logged_command_source_) {
     reset_runtime_state();
     reset_standup_state();
+    reset_controlled_down_state();
   }
   reset_remote_button_tracking();
   has_logged_command_source_ = true;
@@ -1861,6 +2086,19 @@ const char *A2PolicyDeployNode::standup_phase_name(StandupPhase phase) const {
       return "PolicyWarmupHold";
     case StandupPhase::kPolicyActive:
       return "PolicyActive";
+  }
+  return "Unknown";
+}
+
+const char *A2PolicyDeployNode::controlled_down_phase_name(
+    ControlledDownPhase phase) const {
+  switch (phase) {
+    case ControlledDownPhase::kInactive:
+      return "Inactive";
+    case ControlledDownPhase::kInterpolating:
+      return "Interpolating";
+    case ControlledDownPhase::kHoldProne:
+      return "HoldProne";
   }
   return "Unknown";
 }

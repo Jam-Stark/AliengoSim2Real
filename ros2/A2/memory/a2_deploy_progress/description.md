@@ -2,7 +2,7 @@
 name: a2_deploy_progress
 scope: ros2/A2
 status: active
-last_updated: "2026-06-08 22:35 HKT"
+last_updated: "2026-06-09 16:44 HKT"
 owned_paths:
   - ros2/A2/
   - ros2/A2_Guide/
@@ -31,8 +31,9 @@ read_when:
 - A2 remote command 上限已调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`；`policy-enable-remote` wrapper 和 `a2_policy_deploy` 默认参数保持一致。
 - `a2_policy_deploy` 已实现 A2 Stand-Up + Policy Handover gate：默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下 first `A` 触发 stand-up interpolation，holder 持续发布 policy `default_joint_pos`，second `A` 在 `lx/rx/ly` deadzone 后为 zero 时进入 `PolicyWarmupHold`，history warm 和 first action validation 后下一 cycle 进入 `PolicyActive`。
 - stand-up / holder / warmup command 仍只调用 `A2LowLevelInterface::publish_joint_commands()`，不直接写 `unitree_hg::msg::LowCmd`，不绕过 fresh-state、mode routing 或 CRC；`command_source=static` 在默认 stand-up gate 下会拒绝 `enable_motion=true` motion publish，除非显式设置 `require_standup_before_policy=false`。
-- remote safety 已扩展：`Select` 是 primary local stop，`L2+B` 仅保留为附加 local stop path；任意 phase local stop 会 `set_zero_command()`、reset policy/stand-up runtime，且只有 `enable_motion=true` 时才额外 `publish_zero()`。stand-up / holder / warmup 阶段 `B` rising edge cancel 保持不变。
+- remote safety 已扩展：`Select` 是 immediate zero `LowCmd` software stop，任意 phase 会 reset policy/stand-up/controlled-down runtime，且只有 `enable_motion=true` 时才额外 `publish_zero()`；`L2+B` 已从旧 zero local stop path 改为 controlled down normal stop，remote valid 且 `enable_motion=true` 时记录当前 12 joint q、映射到 training order、reset policy/brake/standing-walking/runtime、freeze gait clock、不调用 `publish_zero()`，只通过 `A2LowLevelInterface::publish_joint_commands()` 发布 PD joint commands，smoothstep 插值到 prone pose 后进入 `HoldProne` 持续 PD hold。stand-up / holder / warmup 阶段单独 `B` rising edge cancel 保持不变，`L2+B` 优先进入 controlled down。
 - 2026-06-08 20:08 HKT 已新增 A2 policy run config：`ros2/A2/config/a2_policy_remote.env`，由 `a2_real_robot_test.sh` 的 policy subcommands 加载；优先级是 script defaults < config file < operator `A2_POLICY_*` env，且 `A2_ALLOW_ENABLE_MOTION=1` 不允许通过 config 取得。
+- 2026-06-09 16:44 HKT 已新增 A2 controlled down run config/params：`controlled_down_steps=250`、`controlled_down_hip_q=0.0`、`controlled_down_thigh_q=1.5`、`controlled_down_calf_q=-2.77`、`controlled_down_gain_scale=1.0`，wrapper env 对应 `A2_POLICY_CONTROLLED_DOWN_*` 并由 policy subcommands 透传；`A2_ALLOW_ENABLE_MOTION=1` 仍不写入 config。
 - 2026-06-08 20:08 HKT 已新增 `policy-aux-live`：`enable_motion=false command_source=remote monitor_policy_aux=true`，同时启动 `no-lowcmd` observer；history warm 后只做 policy inference / aux output monitor，不发布 LowCmd。默认 aux expected dim 是 `6`，按 Aliengo convention 打印 `pred_base_lin_vel[0..2]` 和 `pred_base_force_local[0..2]`。
 - 2026-06-08 20:31 HKT 已新增 active policy aux debug topic：`a2_policy_deploy` 支持 `publish_aux_debug` / `aux_debug_topic`，每次 policy inference 后把 `policys[kPolicyId].get_last_aux_output()` 发布为 `std_msgs/msg/Float32MultiArray`，默认 wrapper config 为 `/a2/policy_aux`。
 - 2026-06-08 20:31 HKT 已新增 `policy-aux-monitor`：只订阅 active `/a2/policy_aux` topic，不启动 policy node、不启动 no-lowcmd observer、不发布 LowCmd；用于另一个 Docker terminal 在 `policy-enable-remote` 期间实时打印 force estimator。
@@ -68,7 +69,7 @@ read_when:
 - code machine 是 macOS，但本 thread 明确不跑 Docker Desktop offline validation；真实 DDS/network/control 仍需在 Linux deploy machine + A2 网络上验证。
 - 部署机 host 是 Ubuntu 24.04.3，因此 A2 deploy 采用 Ubuntu 22.04 + ROS2 Humble Docker container；不要要求 host 原生安装 Humble。
 - A2 CRC 仍需和部署机 `unitree_hg` generated messages、Unitree SDK2 sample 或实机 low-level command 行为对照验证。
-- A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 configured lowstate（默认 `/lowstate`）的 `wireless_remote[40]` 验证 stick/button 方向、无 `L2` locomotion gate 的 command mapping、`Select` primary local stop 和 `L2+B` 附加 stop path。
+- A2 R3 remote layout 已按 Unitree SDK2 sample 实现，但仍需在部署机/实机用真实 configured lowstate（默认 `/lowstate`）的 `wireless_remote[40]` 验证 stick/button 方向、无 `L2` locomotion gate 的 command mapping、`Select` immediate zero `LowCmd` software stop 和 `L2+B` controlled down / `HoldProne` normal stop。
 - 低层实机控制前必须确认 Unitree 内置运动服务 `ai_sport` / `ai_sports` 已关闭；测试结束恢复内置服务前必须先停止 policy/LowCmd publisher 并 `no-lowcmd` pass。A2 runtime node 不自动调用 `MotionSwitcherClient`；real robot validation script 已提供 guarded `motion-check` / `motion-release` / `motion-select` / `motion-restore` helper，但仍需部署机实机验证。
 - 进入任何 real configured LowCmd topic publish path 前，必须先运行 `A2/scripts/a2_real_robot_test.sh no-lowcmd 5`；如果观察到 LowCmd message，说明现场已有 active LowCmd traffic，必须停止该 publisher 后再继续。
 
@@ -118,8 +119,8 @@ read_when:
 - 在部署机/实机按 `A2_REAL_ROBOT_TEST.md` 先用 `joints-live` 逐关节验证 joint order/direction，并记录是否需要 per-joint sign inversion；未完成前不要进入 control path。
 - 用实机 zero `LowCmd` 和官方 raw layout/CRC 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。
 - 首次实机前确认 `ai_sport` / `ai_sports` 关闭、离地或限功率 smoke、hardware emergency stop；关闭和恢复内置 service 都已有 guarded MotionSwitcher script，但仍需 operator 按文档执行并在实机验证。
-- 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` primary local stop、`L2+B` 附加 stop path 和 `enable_motion` 分流。
-- 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` / `L2+B` local stop 和 stand-up / holder / warmup 阶段 `B` cancel。
+- 在部署机/实机先用 `remote-live` 验证 A2 R3 remote raw/display sticks 和 pressed buttons，再用旧 `remote` / `a2_lowlevel_smoke log_remote` 做 summary/smoke 对照；随后验证 `a2_policy_deploy command_source=remote` 的无 `L2` locomotion gate mapping 方向、`Select` immediate zero `LowCmd` software stop、`L2+B` controlled down / `HoldProne` normal stop 和 `enable_motion` 分流。
+- 在部署机/实机验证 guarded `policy-enable-remote` 的 two-A handover：first `A` stand-up interpolation、default pose holder、second `A` 仅在 `lx/rx/ly` centered 后 warmup/handover、下一 cycle `PolicyActive`、`Select` immediate zero stop、`L2+B` controlled down / `HoldProne`（`A` 不重新 handover）和 stand-up / holder / warmup 阶段单独 `B` cancel。
 - brake gate 已改为 command override only 并在 wrapper config 默认启用；仍需部署机/实机用 `policy-aux-monitor` 对照 active `/a2/policy_aux` 验证 `pred_base_force_local[0] <= -0.6` 的符号、unitless threshold 裕量、2-step latch、no zero-LowCmd stop、normal PD command continues、command override + gait-clock freeze / release 稳定性。
 - standing/walking gate v1 已实现；仍需部署机/实机用 `/a2/policy_aux` 对照 raw requested standing command 验证 aux `force_xy=hypot(aux[3], aux[4])` hysteresis enter `0.2` / exit `0.05`、aux invalid fallback、brake active priority，以及 force-derived mode 只影响下一轮 observation 的 gait clock。
 
@@ -139,12 +140,12 @@ read_when:
 - A2 joint state mapping/direction observe-only validation 已新增：`joints` observer/wrapper/docs 订阅 configured lowstate（默认 `/lowstate`），不发布 LowCmd，用于实机控制前确认 first-12 joint order 和 sign direction。
 - 2026-06-05 21:21 HKT 已记录真机 connected-preflight topic mismatch：ROS2 graph 可见 `/lowstate` / `/lowcmd` 而不是 `/rt/lowstate`；A2 ROS2 backend、observer、wrapper 和文档默认 topic 已改为 `/lowstate` / `/lowcmd`，保留参数/env override。
 - 2026-06-05 21:43 HKT 已根据 `connected_preflight_result.md` harden real robot preflight：记录 configured `/lowstate` / `/lowcmd` visibility/type pass、`/lf/lowstate` type ambiguity，并新增 `no-lowcmd` observe-only traffic check 作为任何 publish path 前的安全检查。
-- 2026-06-05 21:52 HKT 已修复 A2 policy listen-only safety P1：remote `Select` / `L2+B` local stop 在 `enable_motion=false` 下只 reset runtime、不发布 zero LowCmd；`enable_motion=true` 下保持 zero LowCmd stop。
+- 2026-06-05 21:52 HKT 已修复 A2 policy listen-only safety P1：remote `Select` / 当时的 `L2+B` local stop 在 `enable_motion=false` 下只 reset runtime、不发布 zero LowCmd；当时 `enable_motion=true` 下保持 zero LowCmd stop。该 `L2+B` zero path 已被 2026-06-09 16:44 HKT controlled down normal stop supersede。
 - 2026-06-05 22:03 HKT 已新增 `joints-live` / `remote-live` observe-only tools、wrapper env 和 docs，用于实时人工确认 joint mapping 及 remote raw/decode；当前 TODO 已调整为先用 live tools 验证。
 - 2026-06-05 22:20 HKT 已修复 MotionSwitcher helper 手写 `g++` compile path：自动去重打印 SDK2 include/lib dirs，加入 nested DDS `ddscxx` / `ddsc` headers 和 DDS lib dirs，并链接 `ddscxx` / `ddsc`，避免 `dds/topic/TopicTraits.hpp` header 修复后继续出现 DDS unresolved symbols。
 - 2026-06-05 22:32 HKT 已针对部署机 `motion-check` helper runtime `free(): invalid pointer` 加固：helper 通过 wrapper 前置 SDK2 `LD_LIBRARY_PATH`，打印 `ldd` 结果和 `ChannelFactory::Init` / `MotionSwitcherClient::Init` / `CheckMode` / `ChannelFactory::Release` 阶段日志，并在成功路径显式 release SDK2 channel factory。
 - 2026-06-05 22:54 HKT 已实现 A2 Stand-Up + Policy Handover gate：默认 remote two-A handover，stand-up/holder/warmup command 只走 `publish_joint_commands()`，static motion 默认 blocked unless `require_standup_before_policy=false`，并更新 real robot script/docs/README/memory。
-- 2026-06-05 23:18 HKT 已取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，PolicyActive 中 valid sticks 在 deadzone 后直接映射 command；`Select` 是 primary local stop，`L2+B` 仅为附加 stop path；two-A handover 的 second `A` 仍要求 `lx/rx/ly` centered。
+- 2026-06-05 23:18 HKT 已取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，PolicyActive 中 valid sticks 在 deadzone 后直接映射 command；当时 `Select` 是 primary local stop、`L2+B` 仅为附加 stop path；two-A handover 的 second `A` 仍要求 `lx/rx/ly` centered。该 `L2+B` stop behavior 已被 2026-06-09 16:44 HKT controlled down normal stop supersede。
 - 2026-06-05 23:38 HKT 已新增 A2 内置 motion service guarded restore/select：`motion-select IFACE MODE` 调用 `MotionSwitcherClient::SelectMode(MODE)` 并前后 `CheckMode`，`motion-restore IFACE` 默认恢复 `ai_sport`；恢复前要求停止 policy/LowCmd 并通过 `no-lowcmd`。
 - 2026-06-06 00:03 HKT 已新增正式 operator-facing `A2_REAL_DEPLOY_RUNBOOK.md`，区分 day-to-day real deployment operation 与 `A2_REAL_ROBOT_TEST.md` validation/reference，并在 README 增加入口。
 - 2026-06-06 00:12 HKT 已将 A2 remote command 上限从 conservative `0.10/0.06/0.15` wrapper caps 和旧 `0.4/0.25/0.6` node defaults 统一调整为 `max_remote_vx=0.8`、`max_remote_vy=0.5`、`max_remote_yaw=0.6`。
@@ -154,6 +155,7 @@ read_when:
 - 2026-06-08 21:51 HKT 已实现 A2 active brake gate 初版：新增 node params、wrapper/config active defaults、README / validation guide / runbook docs；threshold 使用 A2 observed unitless aux scale `pred_base_force_local[0] <= -0.6`，不是 Newton。该初版 zero LowCmd stop path 已被 2026-06-08 22:20 HKT command override only 行为 supersede。
 - 2026-06-08 22:21 HKT 已将 A2 brake gate 改为 command override only 并补齐 gait clock freeze：brake latch 后下一轮 observation command override 为 `[0,0,0]`，gait clock freeze/reset 到 standing phase `[0,1]`，不再 `publish_zero()`、不切 stop mode、不清 PD/last action、不跳过 `publish_joint_commands()`；新增 raw requested command 作为 eligibility/release 来源，并同步更新 README、validation guide、runbook 和 memory。
 - 2026-06-08 22:35 HKT 已实现 A2 standing/walking gate v1 hysteresis：新增 node params、wrapper env 透传、README / validation guide / runbook docs 和 memory；gate 只控制 gait clock，默认 enter `0.2` / exit `0.05`，使用 aux `pred_base_force_local[0:2]` xy magnitude，不改 command/action/LowCmd，brake active 优先 freeze。
+- 2026-06-09 16:44 HKT 已实现 A2 `L2+B` controlled down normal stop：拆分 `Select` immediate zero `LowCmd` software stop 和 `L2+B` controlled down，新增 `Inactive` / `Interpolating` / `HoldProne` state machine、prone target params、wrapper env/config 透传、README / validation guide / runbook docs；controlled down 不调用 `publish_zero()`，只走 `publish_joint_commands()`，完成后持续 prone hold 且 `A` 不允许重新 handover。
 
 ## Recommended Next Files To Read
 

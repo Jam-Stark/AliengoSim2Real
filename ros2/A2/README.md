@@ -580,6 +580,11 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_CONTROLLED_DOWN_STEPS=250
+A2_POLICY_CONTROLLED_DOWN_HIP_Q=0.0
+A2_POLICY_CONTROLLED_DOWN_THIGH_Q=1.5
+A2_POLICY_CONTROLLED_DOWN_CALF_Q=-2.77
+A2_POLICY_CONTROLLED_DOWN_GAIN_SCALE=1.0
 A2_POLICY_STANDING_WALKING_GATE_ENABLED=true
 A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD=0.2
 A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD=0.05
@@ -589,6 +594,16 @@ A2_POLICY_BRAKE_MIN_CMD_VX=0.2
 A2_POLICY_BRAKE_MAX_ABS_YAW=0.10
 A2_POLICY_BRAKE_HOLD_STEPS=2
 ```
+
+Controlled down 已在 wrapper 默认配置中启用。它是 `L2+B` 的 normal stop path，不是
+zero LowCmd local stop：remote packet valid 且 `enable_motion=true` 时，node 记录当前
+12 joint q 并映射到 training order，reset policy/brake/standing-walking runtime，freeze
+gait clock，然后用 smoothstep 插值到 prone pose。默认 training order target 是
+`[0,0,0,0, 1.5,1.5,1.5,1.5, -2.77,-2.77,-2.77,-2.77]`，再映射回 A2 low-level order；
+默认 `250` steps，在 50 Hz 下约 5s。该路径不调用 `publish_zero()`，只通过
+`publish_joint_commands()` 发布带非零 kp/kd 的 PD joint command。插值完成后进入
+`HoldProne` 并持续 PD hold prone pose；`HoldProne` 下 `A` 不允许重新 handover。退出流程是
+`L2+B` 趴地 hold -> Ctrl-C policy -> `no-lowcmd 5` -> guarded `motion-restore`。
 
 Standing/walking gate 已在 wrapper 默认配置中启用。它只影响 policy observation 的
 gait clock，不修改 raw requested command、不修改 action、不修改 LowCmd，也不绕过
@@ -700,6 +715,13 @@ ros2 run a2_lowlevel a2_policy_deploy --ros-args \
   non-negative。
 - `policy_aux_print_period_sec`：默认 `0.2`。仅用于 aux monitor log cadence；必须为
   finite positive。
+- `controlled_down_steps`：默认 `250`。`L2+B` controlled down smoothstep 插值步数，必须
+  `>=1`。
+- `controlled_down_hip_q` / `controlled_down_thigh_q` / `controlled_down_calf_q`：默认
+  `0.0` / `1.5` / `-2.77`。组成 training order prone target
+  `[hip*4, thigh*4, calf*4]`；必须 finite。
+- `controlled_down_gain_scale`：默认 `1.0`。对 policy PD gains 做比例缩放，必须 finite
+  `>0`；controlled down 不会清 PD。
 - `standing_walking_gate_enabled`：默认 `true`。只控制 standing command 下是否允许
   aux force 触发 `force_walking`；raw requested command 非 standing 时仍直接
   `command_walking`。
@@ -758,9 +780,12 @@ safety input；不会直接写 `LowCmd`，policy output 仍然只经过
    history warm 后先做一次 action dim/finite validation，本 cycle 不发布 policy action。
 5. `PolicyActive`：下一 cycle 才允许 normal policy action publish。
 
-`Select` 是 primary local stop，在任意 phase 触发 local stop。`L2+B` 保留为附加 local
-stop path，但由于 A2 R3 `L2` decode 曾出现不可靠，现场应优先使用 `Select`。local stop 在
+`Select` 是 immediate zero `LowCmd` software stop，在任意 phase 触发 runtime reset；
 `enable_motion=true` 时发布 zero LowCmd，`enable_motion=false` 时只 reset runtime。
+`L2+B` 是 controlled down normal stop，优先级高于 stand-up/policy：remote valid 且
+`enable_motion=true` 时进入 `Interpolating`，完成后进入 `HoldProne` 并持续 PD hold prone；
+`enable_motion=false` 时只 reset/log，不发布 LowCmd。由于 A2 R3 `L2` decode 曾出现不可靠，
+现场不能把 `L2+B` 当作 emergency stop。
 stand-up / hold / warmup 阶段额外支持 `B` rising edge cancel，cancel 后回到
 `IdleBlocked`。
 
@@ -806,11 +831,15 @@ Remote safety handling：
 
 - PolicyActive 中不再使用 `L2` 作为 locomotion command gate；valid remote sticks 在
   deadzone 后直接映射到 `cmd_vx/cmd_vy/cmd_yaw`。
-- `Select` 是 primary local stop：清空 policy/history/action runtime，并要求重新
-  two-A handover / fresh-state + history warmup。`L2+B` 保留为附加 local stop path，但
-  不应作为现场主要 stop 手段。`enable_motion=false` 时只 reset runtime，不发布任何
-  LowCmd；`enable_motion=true` 时才调用 `publish_zero()` 发布显式 zero/stop LowCmd，
-  不发布 policy motion command。
+- `Select` 是 immediate zero `LowCmd` software stop：清空 policy/history/action runtime，
+  要求重新 two-A handover / fresh-state + history warmup；`enable_motion=false` 时只 reset
+  runtime，不发布任何 LowCmd，`enable_motion=true` 时调用 `publish_zero()` 发布显式
+  zero/stop LowCmd。
+- `L2+B` 是 controlled down normal stop：remote valid 且 `enable_motion=true` 时记录当前
+  joint q，reset policy/brake/standing-walking runtime，freeze gait clock，不调用
+  `publish_zero()`，只用 `publish_joint_commands()` 发布 PD command；完成后 `HoldProne`
+  持续 prone hold，`A` 不重新 handover。退出必须 Ctrl-C policy、`no-lowcmd 5`、guarded
+  `motion-restore`。
 - stand-up / hold / warmup 阶段 `B` rising edge 可 cancel，清空 handover runtime；`enable_motion=true` 时发布 zero LowCmd。
 
 ## CRC
@@ -835,7 +864,8 @@ policy output 只映射成 `std::array<A2JointCommand, 12>` 并调用 `publish_j
 - sticks mapping 符合预期方向：`ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
 - `policy-enable-remote` 使用 two-A sequence：first `A` stand-up、holder default pose、
   second `A` 需要 `lx/rx/ly` centered 后才进入 warmup/handover，下一 cycle policy active。
-- `Select` 是 primary local stop；`L2+B` 只是附加 local stop path。local stop 会要求重新
-  two-A handover；stand-up / hold / warmup 阶段 `B` 可 cancel；只有 `enable_motion=true`
-  的 motion path 会发布 zero LowCmd。
+- `Select` 是 immediate zero LowCmd software stop；`L2+B` 是 controlled down normal stop，
+  验证时应看到 smoothstep prone interpolation 和 `HoldProne`，且 `A` 不能从 `HoldProne`
+  重新 handover。stand-up / hold / warmup 阶段单独 `B` 可 cancel；只有 `Select` 和 `B`
+  cancel 的 motion path 会发布 zero LowCmd。
 - 验证过程中继续保持离地或限功率、关闭 `ai_sport` / `ai_sports`、准备 hardware emergency stop；结束后恢复内置 service 前先停止 policy/LowCmd、运行 `no-lowcmd` pass，再用 guarded `motion-restore` / Unitree App 恢复。

@@ -43,8 +43,11 @@
 PolicyActive 中 valid sticks 会在 deadzone 后直接映射 locomotion command。`enable_motion=true`
 下 first `A` 后 stand-up/holder 会持续发布 standing joint targets，second `A` handover 后
 policy 也可能继续发布 standing joint targets。因此 `enable_motion=true` 始终属于 motion
-path。`Select` 是 primary local stop；`L2+B` 只保留为附加 stop path，因为 A2 R3 `L2`
-decode 曾出现不可靠。
+path。`Select` 是 immediate zero `LowCmd` software stop：`enable_motion=true` 时会 reset
+runtime 并调用 `publish_zero()`。`L2+B` 不是 zero local stop；remote packet valid 且
+`enable_motion=true` 时会进入 controlled down normal stop，使用 PD joint command
+smoothstep 插值到 prone pose，完成后持续 `HoldProne`。由于 A2 R3 `L2` decode 曾出现不可靠，
+现场仍应保留 hardware emergency stop 并优先使用 `Select` 做 software emergency stop。
 
 ## 1. Host Network and Docker Entry
 
@@ -491,8 +494,8 @@ Ideal result：
 command source，但 `enable_motion=false`，同时 observer 确认没有任何 configured
 LowCmd topic message（默认 `/lowcmd`）。publish path 仍有 `enable_motion`、fresh-state、
 history warmup、NaN/Inf、CRC/mode routing 等 guards。
-即使 operator 在此阶段按 primary local stop `Select`，或按附加 stop path `L2+B` 请求
-local stop，policy node 也只 reset runtime，不发布 zero LowCmd；no-lowcmd observer 会验证
+即使 operator 在此阶段按 `Select`，或按 `L2+B` 请求 controlled down，policy node 也只
+reset/log，不发布 zero LowCmd，也不发布 PD controlled down command；no-lowcmd observer 会验证
 这个 listen-only boundary。
 
 ```bash
@@ -507,8 +510,8 @@ Ideal result：
 - policy 输出 `enable_motion=false` 和 `command_source=remote`。
 - 默认 run config 会传入 `publish_aux_debug=true`，因此 policy history warmup 后会执行
   inference-only 并发布 `/a2/policy_aux`，但仍然不会发布 configured LowCmd topic。
-- 按 `Select` 时 policy 只记录 local stop / runtime reset，不发布 zero LowCmd；`L2+B`
-  仍可作为附加 stop path，但现场 primary stop 是 `Select`。
+- 按 `Select` 时 policy 只记录 immediate stop / runtime reset，不发布 zero LowCmd；
+  `L2+B` 在 `enable_motion=false` 下只 reset/log，不进入 LowCmd publish path。
 - no-lowcmd observer 会以 `policy duration + 2s` 运行，覆盖完整 policy runtime 和收尾窗口。
 - no-lowcmd observer 输出 `PASS: no /lowcmd messages observed`，或显示 operator 配置的
   `A2_LOWCMD_TOPIC`。
@@ -536,7 +539,7 @@ Ideal aux monitor result：
 - no-lowcmd observer log 写入 `/tmp/a2_real_robot_tests/policy_aux_live_no_lowcmd_*.log`。
 - wrapper 会读取 `A2/config/a2_policy_remote.env`，并打印 effective remote caps、deadzone、
   `require_standup_before_policy`、`policy_aux_expected_dim`、print period 和
-  standing/walking hysteresis thresholds。
+  controlled down / standing-walking hysteresis thresholds。
 - policy 输出 `enable_motion=false`、`command_source=remote`、`monitor_policy_aux=true`。
 - history warm 后 policy 会执行 inference 只用于监测，不发布 LowCmd。
 - aux 输出默认按 Aliengo convention 解释 dim 6：
@@ -612,9 +615,14 @@ Ideal active-topic monitor result：
   `force_xy=sqrt(aux[3]^2 + aux[4]^2)`，不区分方向/符号。aux dim < 6 或 NaN/Inf 时不进入
   `force_walking`；当前若是 `force_walking` 则回 standing。brake active 优先级更高，
   会强制 command override zero + gait clock freeze standing，不允许 standing/walking gate 推进 gait phase。
-- `Select` 是 primary local stop，会触发 local stop、runtime reset，并调用 `publish_zero()`
-  发布 zero LowCmd。`L2+B` 只保留为附加 stop path；stand-up / hold / warmup 阶段 `B`
-  rising edge 也会 cancel 并发布 zero LowCmd。该 zero stop 只属于 `enable_motion=true` 阶段。
+- `Select` 是 immediate zero `LowCmd` software stop，会触发 runtime reset，并调用
+  `publish_zero()` 发布 zero LowCmd。`L2+B` 在 remote packet valid 时优先于
+  stand-up/policy 进入 controlled down normal stop：记录当前 12 joint q，reset
+  policy/brake/standing-walking runtime，freeze gait clock，不调用 `publish_zero()`，
+  只通过 `publish_joint_commands()` 发布非零 PD command。插值完成后进入 `HoldProne`，
+  持续 PD hold prone pose；`HoldProne` 下按 `A` 不会重新 handover。
+- stand-up / hold / warmup 阶段单独 `B` rising edge 仍会 cancel 并发布 zero LowCmd。
+  `L2+B` 优先进入 controlled down，不走 `B` cancel。
 
 按 run config 中的 remote speed caps 运行 remote policy，并在第二个 terminal 订阅 active aux topic：
 
@@ -643,6 +651,11 @@ publish_aux_debug:=true
 aux_debug_topic:=/a2/policy_aux
 policy_aux_expected_dim:=6
 policy_aux_print_period_sec:=0.2
+controlled_down_steps:=250
+controlled_down_hip_q:=0.0
+controlled_down_thigh_q:=1.5
+controlled_down_calf_q:=-2.77
+controlled_down_gain_scale:=1.0
 standing_walking_gate_enabled:=true
 standing_walking_enter_force_xy_threshold:=0.2
 standing_walking_exit_force_xy_threshold:=0.05
@@ -662,6 +675,10 @@ Ideal result：
 - PolicyActive 中 centered sticks 对应 zero locomotion command；moving sticks 不要求
   `L2` held。
 - 遥控方向应符合 `ly -> vx`、`-lx -> vy`、`-rx -> yaw`。
+- `L2+B` 在 valid remote 下进入 controlled down：约 5s 插值到 training order prone
+  pose `[0,0,0,0, 1.5,1.5,1.5,1.5, -2.77,-2.77,-2.77,-2.77]` 后保持
+  `HoldProne`；退出流程是 `L2+B` 趴地 hold -> Ctrl-C policy -> `no-lowcmd 5` ->
+  guarded `motion-restore`。
 - brake gate 只在 raw requested `cmd_vx >= 0.2`、`abs(cmd_yaw) <= 0.10`、非
   standing command 时 eligible；忽略 `vy`。触发后 latch，下一轮 policy observation
   command 为 `[0, 0, 0]`，gait clock freeze 到 standing phase，但 action validation 和
@@ -671,8 +688,8 @@ Ideal result：
   `pred_base_force_local[0]` 符号、阈值裕量和稳定性；monitor 不控制 gate。
 - 无 stale state、NaN/Inf、action dim mismatch、CRC failure、robot abnormal behavior。
 
-任何异常立即松开 sticks、按 primary local stop `Select` 或 e-stop，并保存 logs；`L2+B`
-只作为附加 stop path。
+任何异常立即松开 sticks、按 `Select` 触发 immediate zero LowCmd software stop，或使用
+hardware e-stop，并保存 logs。`L2+B` 是 controlled down normal stop，不替代 emergency stop。
 
 ## 11. Acceptance Checklist
 
@@ -697,7 +714,8 @@ Ideal result：
 - `policy-aux-monitor` 可在 active `policy-enable-remote` 期间订阅 `/a2/policy_aux`，
   并实时显示 dim/value/warning；该 monitor 不启动 policy node，也不发布 LowCmd。
 - `policy-enable-remote` 只在最后 stage、明确 guard、可控环境下运行，并验证 first `A`
-  stand-up、holder default pose、second `A` warmup/handover、local stop 和 `B` cancel。
+  stand-up、holder default pose、second `A` warmup/handover、`Select` immediate zero stop、
+  `L2+B` controlled down/HoldProne 和单独 `B` cancel。
 - 测试结束恢复内置 motion service 前，已停止 policy/LowCmd publisher、`no-lowcmd` 重新 pass，
   并通过 guarded `motion-restore` / `motion-select` 或 Unitree App 恢复。
 

@@ -127,7 +127,7 @@
 ## 2026-06-05 21:52 HKT
 
 - [x] 修复 A2 policy listen-only safety P1：`A2PolicyDeployNode` remote local stop 仍执行 `set_zero_command()` 和 `reset_runtime_state()`，但只有 `enable_motion=true` 时才 `publish_zero()`；`enable_motion=false` 下明确 log runtime reset 且不发布 zero LowCmd。
-- [x] 更新 `ros2/A2/README.md` 和 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`：`policy-listen-remote` 继续是 no-lowcmd observe/listen-only，按 `Select` / `L2+B` 也不发布；`enable_motion=true` 阶段 local stop 才发布 zero LowCmd。
+- [x] 更新 `ros2/A2/README.md` 和 `ros2/A2/scripts/A2_REAL_ROBOT_TEST.md`：`policy-listen-remote` 继续是 no-lowcmd observe/listen-only，按 `Select` / 当时的 `L2+B` 也不发布；当时 `enable_motion=true` 阶段 local stop 才发布 zero LowCmd。`L2+B` zero behavior 已被 2026-06-09 16:44 HKT controlled down normal stop supersede。
 
 ## 2026-06-05 22:03 HKT
 
@@ -156,14 +156,14 @@
 - [x] 实现 A2 Stand-Up + Policy Handover gate：`a2_policy_deploy` 默认 `require_standup_before_policy=true`，`enable_motion=true` / `command_source=remote` 下按 `IdleBlocked -> StandUpInterpolating -> StandHoldWaitingForA -> PolicyWarmupHold -> PolicyActive` 执行 two-A handover。
 - [x] stand-up / holder / warmup command 全部只构造 `A2JointCommand` 并调用 `A2LowLevelInterface::publish_joint_commands()`；没有直接写 `unitree_hg::msg::LowCmd`，继续保留 fresh-state、mode routing 和 CRC boundary。
 - [x] 新增 stand-up params：`standup_stage1_steps=150`、`standup_stage2_steps=150`、`standup_rear_alpha_lead=0.10`、`standup_front_alpha_lag=0.04`、`standup_kp_start=3.0`、`standup_kd_start=0.5`、`standup_final_gain_scale=1.0`，并在 runtime refresh 中校验 invalid params。
-- [x] remote safety 更新：`Select` / `L2+B` 在任意 phase local stop；stand-up / holder / warmup 阶段 `B` rising edge cancel；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下才发布 zero LowCmd。
+- [x] remote safety 更新：当时 `Select` / `L2+B` 在任意 phase local stop；stand-up / holder / warmup 阶段 `B` rising edge cancel；`enable_motion=false` 下不发布 zero LowCmd，`enable_motion=true` 下才发布 zero LowCmd。该 `L2+B` local stop behavior 已被 2026-06-09 16:44 HKT controlled down normal stop supersede。
 - [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md` Section 10 / acceptance checklist、`README.md` policy/safety sections 和 A2 memory TODO。
 
 ## 2026-06-05 23:18 HKT
 
 - [x] 取消 A2 policy `L2` locomotion gate：A2 R3 `L2` decode 实机不可靠，`A2PolicyDeployNode::update_command_from_remote()` 不再因 `remote.buttons.l2=false` 强制 command zero，也不再输出 `L2 gate is not held`。
 - [x] stand-up second-`A` handover 不再要求 `L2` release；仍要求 `lx/rx/ly` sticks 在 deadzone 后为 zero，才进入 `PolicyWarmupHold`。
-- [x] 保留 local stop safety：`Select` 是 primary local stop；`L2+B` 仅保留为附加 stop path；stand-up / hold / warmup 阶段 `B` rising edge cancel 不变。
+- [x] 保留 local stop safety：当时 `Select` 是 primary local stop；`L2+B` 仅保留为附加 stop path；stand-up / hold / warmup 阶段 `B` rising edge cancel 不变。该 `L2+B` behavior 已被 2026-06-09 16:44 HKT controlled down normal stop supersede。
 - [x] 更新 `a2_real_robot_test.sh` `policy-enable-remote` warning、`A2_REAL_ROBOT_TEST.md`、`README.md` 和 A2 memory TODO/DONE/description，移除旧 `L2` gate 文案。
 
 ## 2026-06-05 23:38 HKT
@@ -236,3 +236,10 @@
 - [x] raw requested command 非 standing 时直接 `command_walking` 并推进 gait phase；raw requested command standing 时按 aux dim 6 `fx=aux[3]`、`fy=aux[4]` 的 `force_xy=hypot(fx, fy)` hysteresis 进入/退出 `force_walking`，aux invalid fallback 到 `standing`。
 - [x] gate 只影响 gait clock，不改 command/action/LowCmd，不绕过 `publish_joint_commands()`；force-derived mode 在 `computeAction()` 后更新，影响下一轮 observation；brake active 优先强制 gait clock freeze standing。
 - [x] 更新 `a2_policy_remote.env`、`a2_real_robot_test.sh`、README、real robot validation guide、real deployment runbook 和 A2 memory，记录 env/ROS params、default enter/exit threshold 和待实机验证项。
+
+## 2026-06-09 16:44 HKT
+
+- [x] 将 A2 remote stop 拆分为 `Select` immediate zero `LowCmd` software stop 和 `L2+B` controlled down normal stop；`Select` 保持 `enable_motion=true` 下 reset runtime 并 `publish_zero()` 的 behavior。
+- [x] `a2_policy_deploy` 新增 `ControlledDownPhase::{Inactive, Interpolating, HoldProne}`，`L2+B` 在 remote valid 且 `enable_motion=true` 时记录当前 12 joint q、映射到 training order、reset policy/brake/standing-walking/runtime、freeze gait clock，并以 smoothstep 通过 `publish_joint_commands()` 插值到 prone pose；完成后持续 `HoldProne` PD hold，`A` 不允许重新 handover。
+- [x] 新增 controlled down ROS params / wrapper env / config：默认 `controlled_down_steps=250`、`controlled_down_hip_q=0.0`、`controlled_down_thigh_q=1.5`、`controlled_down_calf_q=-2.77`、`controlled_down_gain_scale=1.0`，并由 policy subcommands 透传；`A2_ALLOW_ENABLE_MOTION=1` 仍不写入 config。
+- [x] 更新 `A2_REAL_ROBOT_TEST.md`、`A2_REAL_DEPLOY_RUNBOOK.md`、`README.md` 和 A2 memory，明确 `L2+B` 趴地 hold -> Ctrl-C policy -> `no-lowcmd 5` -> guarded `motion-restore` 的退出流程，以及 `L2+B` 不替代 `Select` / hardware emergency stop。

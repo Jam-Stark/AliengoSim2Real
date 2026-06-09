@@ -25,7 +25,8 @@ second `A` handover 后会进入 policy warmup / active path。不要把该流�
 - 进入任何 publish path 前必须先运行 `no-lowcmd 5` 并确认 pass。
 - low-level control 前关闭 Unitree built-in motion service；结束后恢复前也必须先停止
   policy/LowCmd publisher 并重新 `no-lowcmd 5` pass。
-- `Select` 是 primary local stop。`L2+B` 只作为 additional stop path；只有 `L2` decode 正常时才可靠。
+- `Select` 是 immediate zero `LowCmd` software stop。`L2+B` 是 controlled down normal
+  stop：只有 remote valid 且 `enable_motion=true` 时才进入 PD interpolation + `HoldProne`。
 - `B` 只用于 stand-up / hold / warmup phase 的 cancel。
 - `stand_test` 不用于 real deployment runbook。
 
@@ -253,6 +254,11 @@ A2_POLICY_PUBLISH_AUX_DEBUG=true
 A2_POLICY_AUX_DEBUG_TOPIC=/a2/policy_aux
 A2_POLICY_AUX_EXPECTED_DIM=6
 A2_POLICY_AUX_PRINT_PERIOD=0.2
+A2_POLICY_CONTROLLED_DOWN_STEPS=250
+A2_POLICY_CONTROLLED_DOWN_HIP_Q=0.0
+A2_POLICY_CONTROLLED_DOWN_THIGH_Q=1.5
+A2_POLICY_CONTROLLED_DOWN_CALF_Q=-2.77
+A2_POLICY_CONTROLLED_DOWN_GAIN_SCALE=1.0
 A2_POLICY_STANDING_WALKING_GATE_ENABLED=true
 A2_POLICY_STANDING_WALKING_ENTER_FORCE_XY_THRESHOLD=0.2
 A2_POLICY_STANDING_WALKING_EXIT_FORCE_XY_THRESHOLD=0.05
@@ -265,6 +271,17 @@ A2_POLICY_BRAKE_HOLD_STEPS=2
 
 不要把 `A2_ALLOW_ENABLE_MOTION=1` 写进 run config；它必须只在执行真运动命令的
 operator shell 里显式设置。
+
+`L2+B` controlled down is active in the real motion path. It records current
+12-joint `q`, maps it into training order, resets policy/brake/standing-walking
+runtime, freezes gait clock, and interpolates with smoothstep over
+`A2_POLICY_CONTROLLED_DOWN_STEPS` steps. Default target in training order is
+`[0,0,0,0, 1.5,1.5,1.5,1.5, -2.77,-2.77,-2.77,-2.77]`, then mapped back to
+A2 low-level order. This path does not call `publish_zero()`; it only publishes
+PD joint commands through `publish_joint_commands()`. After interpolation it
+enters `HoldProne` and continues holding the prone pose. `A` does not re-handover
+from `HoldProne`.
+
 Standing/walking gate is active by default and only controls the policy gait clock.
 It does not modify the raw requested command, policy action, LowCmd, or
 `publish_joint_commands()` path. When raw requested command is not standing, gait
@@ -349,6 +366,11 @@ remote_deadzone=0.08
 require_standup_before_policy=true
 publish_aux_debug=true
 aux_debug_topic=/a2/policy_aux
+controlled_down_steps=250
+controlled_down_hip_q=0.0
+controlled_down_thigh_q=1.5
+controlled_down_calf_q=-2.77
+controlled_down_gain_scale=1.0
 standing_walking_gate_enabled=true
 standing_walking_enter_force_xy_threshold=0.2
 standing_walking_exit_force_xy_threshold=0.05
@@ -360,7 +382,7 @@ brake_hold_steps=2
 ```
 
 Any abnormal behavior: release sticks, press `Select`, then use hardware emergency stop if the robot
-does not immediately become safe.
+does not immediately become safe. `L2+B` is a normal controlled down stop, not an emergency stop.
 
 ## 9. Runtime Stop
 
@@ -370,10 +392,16 @@ Primary local stop:
 - Policy node resets runtime and requires a new two-A handover before motion resumes.
 - In `enable_motion=true`, local stop publishes zero LowCmd.
 
-Additional stop/cancel paths:
+Controlled down normal stop:
+
+- Press `L2+B` only when remote decode is valid.
+- Policy node enters controlled down, publishes PD joint commands to prone, then keeps `HoldProne`.
+- `A` is blocked in `HoldProne`; do not try to handover again from this state.
+- Exit sequence: `L2+B` prone hold -> Ctrl-C policy -> `no-lowcmd 5` -> guarded `motion-restore`.
+
+Additional cancel paths:
 
 - `B` cancels stand-up / hold / warmup phases.
-- `L2+B` is additional local stop only if `L2` decodes correctly.
 - hardware emergency stop is mandatory for abnormal behavior.
 - Ctrl-C stops the process in terminal, but do not use Ctrl-C as the only safety mechanism.
 
