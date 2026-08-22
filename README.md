@@ -1,6 +1,6 @@
 # AliengoSim2Real
 
-AliengoSim2Real 是一个 general robot policy deployment framework。repo 同时维护 MuJoCo experiment area、shared C++ policy runtime、policy assets、ROS1 Aliengo deployment、ROS2 Go2W deployment，以及 ROS2 A2 low-level adapter 起点。
+AliengoSim2Real 是一个 general robot policy deployment framework。repo 同时维护 MuJoCo experiment area、shared C++ policy runtime、policy assets、ROS1 Aliengo deployment、ROS2 Go2W deployment、ROS2 A2 low-level adapter 起点，以及 A2 PC2 上的 PiPER ROS 2 bridge。
 
 ## Repository Map
 
@@ -11,6 +11,7 @@ AliengoSim2Real 是一个 general robot policy deployment framework。repo 同�
 - `ros1/`: Aliengo ROS1 `aliengo_deploy` package，包含 TX2 relay、direct UDP、stand-up/gate/brake logic。
 - `ros2/src/`: Go2W ROS2 `go2w_vtm` package，包含 `go2w_real_deploy`、`go2w_stand_example`、`deep_camera`。
 - `ros2/A2/`: A2 ROS2 `a2_lowlevel` package，当前是 low-level adapter/smoke 起点，不接 policy。
+- `ros2/Piper/`: A2 PC2 独占 PiPER USB-CAN 的 ROS 2 semantic bridge、remote manipulation adapter 与 deployment/validation tooling。
 - `ros2/A2_Guide/`: A2 SDK/reference docs，memory 中只引用该目录。
 
 ## Memory Routing
@@ -21,6 +22,7 @@ AliengoSim2Real 是一个 general robot policy deployment framework。repo 同�
 - ROS1 Aliengo: `ros1/memory/MEMORY.md`
 - ROS2 Go2W: `ros2/src/memory/MEMORY.md`
 - ROS2 A2: `ros2/A2/MEMORY.md`
+- ROS2 PiPER bridge: `ros2/Piper/MEMORY.md`
 
 ## Main Deployment Entrypoints
 
@@ -58,6 +60,18 @@ ros2 run a2_lowlevel a2_lowlevel_smoke
 ```
 
 A2 route 当前只提供 low-level adapter/smoke，不包含起身流程、limit check、emergency stop 或 policy deployment。
+
+### ROS2 A2 PC2 → PiPER
+
+```bash
+cd ros2
+source /opt/ros/humble/setup.bash
+colcon build --packages-select piper_bridge
+source install/setup.bash
+ros2 run piper_bridge piper_smoke_test
+```
+
+PiPER route 由 A2 PC2 本地独占 USB-CAN，并通过 `/piper/*` ROS 2 interface 与笔记本交换 6 关节状态和目标。PC2 Docker、SocketCAN、watchdog 和现有 manipulation task 的 remote runner 见 `ros2/Piper/README.md`。
 
 ## MuJoCo / C++ Dependencies
 
