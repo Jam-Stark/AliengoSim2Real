@@ -1,6 +1,6 @@
 # Project Memory
 
-Updated: 2026-06-04 14:48 HKT
+Updated: 2026-08-22 HKT
 
 本文件是 AliengoSim2Real 的顶层 file-based memory 入口。开始实现、调试、review 或文档更新前，先从这里判断应读取哪个 subsystem memory；不要一次性读取全部 memory。
 
@@ -21,6 +21,9 @@ Updated: 2026-06-04 14:48 HKT
 - `ros2/A2/MEMORY.md`
   - ROS2 A2 low-level deployment memory。
   - 处理 `a2_lowlevel`、`unitree_hg`、`rt/lowstate`、`rt/lowcmd`、A2 deploy machine readiness 时读取。
+- `ros2/Piper/MEMORY.md`
+  - A2 PC2 上的 PiPER USB-CAN hardware owner 与 ROS 2 semantic bridge memory。
+  - 处理 `/piper/*` interface、PC2 container、SocketCAN、PiPER watchdog、remote manipulation adapter 时读取。
 
 ## Read Order
 

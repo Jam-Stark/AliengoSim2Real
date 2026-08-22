@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    can_name: can_piper
+    control_rate_hz: 50.0
+    diagnostic_rate_hz: 10.0
+    speed_percent: 5
+    command_timeout_s: 0.20
+    feedback_timeout_s: 0.50
+    startup_feedback_timeout_s: 3.0
+    enable_timeout_s: 5.0
+    disable_timeout_s: 5.0
+    resume_timeout_s: 3.0
