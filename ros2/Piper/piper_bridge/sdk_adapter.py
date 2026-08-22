@@ -146,8 +146,14 @@ class PiperSdkAdapter:
             time.sleep(0.01)
         return False
 
-    def disable(self) -> bool:
-        return bool(self._require_connected().DisablePiper())
+    def disable(self, timeout_s: float) -> bool:
+        piper = self._require_connected()
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            if not bool(piper.DisablePiper()):
+                return True
+            time.sleep(0.01)
+        return False
 
     def resume(self, timeout_s: float) -> PiperFeedback:
         piper = self._require_connected()

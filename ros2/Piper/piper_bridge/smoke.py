@@ -14,12 +14,18 @@ from .client import PiperBridgeClient
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PiPER PC2 bridge smoke test")
     parser.add_argument("--namespace", default="/piper")
-    parser.add_argument(
+    target_group = parser.add_mutually_exclusive_group()
+    target_group.add_argument(
         "--target-rad",
         type=float,
         nargs=6,
-        default=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        default=None,
         metavar=("J1", "J2", "J3", "J4", "J5", "J6"),
+    )
+    target_group.add_argument(
+        "--hold-current",
+        action="store_true",
+        help="command the measured startup joint position for a no-travel stop-path test",
     )
     parser.add_argument(
         "--move",
@@ -57,12 +63,19 @@ def main(args: list[str] | None = None) -> None:
         )
         print("bridge=", diagnostics.message, diagnostics.values)
         if not parsed.move:
-            if parsed.resume_before_enable:
-                raise ValueError("--resume-before-enable requires --move")
+            if parsed.resume_before_enable or parsed.hold_current:
+                raise ValueError(
+                    "--resume-before-enable and --hold-current require --move"
+                )
             print("read-only smoke passed; no command was sent")
             return
 
-        target = tuple(float(value) for value in parsed.target_rad)
+        if parsed.hold_current:
+            target = state.positions_rad
+        elif parsed.target_rad is not None:
+            target = tuple(float(value) for value in parsed.target_rad)
+        else:
+            target = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         if parsed.resume_before_enable:
             success, message = client.resume()
             if not success:

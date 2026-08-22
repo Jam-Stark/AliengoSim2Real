@@ -19,7 +19,7 @@ class FakeClient:
                 "ctrl_mode": "1",
                 "status_hz": "100.0",
                 "speed_percent": "5",
-                "enabled": "true",
+                "command_gate_open": "true",
             }
         )
         self.published = None

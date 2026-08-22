@@ -11,7 +11,7 @@ from rclpy.qos import (
     HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
-    SensorDataQoS,
+    qos_profile_sensor_data,
 )
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger
@@ -34,6 +34,7 @@ class PiperBridgeNode(Node):
         self.declare_parameter("feedback_timeout_s", 0.50)
         self.declare_parameter("startup_feedback_timeout_s", 3.0)
         self.declare_parameter("enable_timeout_s", 5.0)
+        self.declare_parameter("disable_timeout_s", 5.0)
         self.declare_parameter("resume_timeout_s", 3.0)
 
         self.can_name = str(self.get_parameter("can_name").value)
@@ -54,6 +55,9 @@ class PiperBridgeNode(Node):
         self.enable_timeout_s = float(
             self.get_parameter("enable_timeout_s").value
         )
+        self.disable_timeout_s = float(
+            self.get_parameter("disable_timeout_s").value
+        )
         self.resume_timeout_s = float(
             self.get_parameter("resume_timeout_s").value
         )
@@ -64,6 +68,7 @@ class PiperBridgeNode(Node):
             self.feedback_timeout_s,
             startup_feedback_timeout_s,
             self.enable_timeout_s,
+            self.disable_timeout_s,
             self.resume_timeout_s,
         ) <= 0.0:
             raise ValueError("all timeout parameters must be positive")
@@ -83,7 +88,7 @@ class PiperBridgeNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
         self._state_publisher = self.create_publisher(
-            JointState, "joint_states", SensorDataQoS()
+            JointState, "joint_states", qos_profile_sensor_data
         )
         self._diagnostics_publisher = self.create_publisher(
             DiagnosticArray, "diagnostics", diagnostics_qos
@@ -103,6 +108,7 @@ class PiperBridgeNode(Node):
             speed_percent=self.speed_percent,
         )
         self._motion_enabled = False
+        self._hardware_stop_required = False
         self._latest_command: tuple[float, ...] | None = None
         self._last_command_monotonic: float | None = None
         self._enabled_monotonic: float | None = None
@@ -128,18 +134,20 @@ class PiperBridgeNode(Node):
         self.create_timer(period_s, self._control_tick)
         self.create_timer(1.0 / self.diagnostic_rate_hz, self._publish_diagnostics)
         self.get_logger().info(
-            f"PiPER bridge connected on {self.can_name}; starts disabled, "
+            f"PiPER bridge connected on {self.can_name}; command gate starts closed, "
             f"control_rate={self.control_rate_hz:.1f}Hz"
         )
 
     def shutdown_hardware(self) -> None:
+        self._close_command_gate()
         try:
-            if self._motion_enabled:
-                self._adapter.quick_stop()
-        except Exception as exc:
-            self.get_logger().error(f"shutdown quick stop failed: {exc}")
+            if self._hardware_stop_required:
+                stop_error = self._quick_stop_hardware()
+                if stop_error is not None:
+                    self.get_logger().error(
+                        f"shutdown quick stop failed: {stop_error}"
+                    )
         finally:
-            self._motion_enabled = False
             self._adapter.disconnect()
 
     def _command_callback(self, message: JointTrajectory) -> None:
@@ -166,7 +174,7 @@ class PiperBridgeNode(Node):
             feedback = self._adapter.read_feedback(require_speed_samples=True)
         except Exception as exc:
             self._fault_reason = f"feedback_error: {exc}"
-            if self._motion_enabled:
+            if self._motion_enabled or self._hardware_stop_required:
                 self._trip(self._fault_reason)
             return
 
@@ -179,17 +187,25 @@ class PiperBridgeNode(Node):
         feedback_age = self._feedback_age(now)
         if feedback_age > self.feedback_timeout_s:
             self._fault_reason = "joint_feedback_timeout"
-            if self._motion_enabled:
+            if self._motion_enabled or self._hardware_stop_required:
                 self._trip(self._fault_reason)
             return
         if feedback.joint_hz <= 0.0 or feedback.status_hz <= 0.0:
             self._fault_reason = "feedback_rate_zero"
-            if self._motion_enabled:
+            if self._motion_enabled or self._hardware_stop_required:
                 self._trip(self._fault_reason)
             return
         if feedback.arm_status != 0:
+            if (
+                feedback.arm_status == 1
+                and not self._motion_enabled
+                and not self._hardware_stop_required
+            ):
+                if not self._fault_reason or self._fault_reason == "unhealthy_startup_feedback":
+                    self._fault_reason = "quick_stop_latched"
+                return
             self._fault_reason = f"arm_status_{feedback.arm_status}"
-            if self._motion_enabled:
+            if self._motion_enabled or self._hardware_stop_required:
                 self._trip(self._fault_reason)
             return
 
@@ -232,7 +248,7 @@ class PiperBridgeNode(Node):
     ) -> Trigger.Response:
         if self._motion_enabled:
             response.success = True
-            response.message = "PiPER is already enabled"
+            response.message = "PiPER command gate is already open"
             return response
         now = time.monotonic()
         feedback = self._last_feedback
@@ -249,15 +265,22 @@ class PiperBridgeNode(Node):
                 f"arm_status={feedback.arm_status}"
             )
             return response
+
+        self._hardware_stop_required = True
         try:
             enabled = self._adapter.enable(self.enable_timeout_s)
+            if not enabled:
+                raise PiperSdkError(
+                    "PiPER did not report all motors enabled before timeout"
+                )
         except Exception as exc:
+            self._close_command_gate()
+            stop_error = self._quick_stop_hardware()
             response.success = False
             response.message = f"enable failed: {exc}"
-            return response
-        if not enabled:
-            response.success = False
-            response.message = "PiPER did not report enabled before timeout"
+            if stop_error is not None:
+                response.message += f"; quick_stop_failed: {stop_error}"
+            self._fault_reason = response.message
             return response
 
         self._motion_enabled = True
@@ -267,7 +290,8 @@ class PiperBridgeNode(Node):
         self._fault_reason = ""
         response.success = True
         response.message = (
-            f"enabled; send a fresh joint_command within {self.command_timeout_s:.3f}s"
+            "motor enable confirmed and command gate opened; send a fresh "
+            f"joint_command within {self.command_timeout_s:.3f}s"
         )
         return response
 
@@ -276,7 +300,7 @@ class PiperBridgeNode(Node):
     ) -> Trigger.Response:
         if self._motion_enabled:
             response.success = False
-            response.message = "stop motion before requesting resume"
+            response.message = "close the command gate before requesting resume"
             return response
         try:
             feedback = self._adapter.read_feedback(require_speed_samples=False)
@@ -289,82 +313,95 @@ class PiperBridgeNode(Node):
                     f"arm_status={feedback.arm_status}"
                 )
                 return response
+            self._hardware_stop_required = True
             feedback = self._adapter.resume(self.resume_timeout_s)
         except Exception as exc:
+            self._close_command_gate()
+            stop_error = self._quick_stop_hardware()
             self._fault_reason = f"resume_failed: {exc}"
+            if stop_error is not None:
+                self._fault_reason += f"; quick_stop_failed: {stop_error}"
             response.success = False
-            response.message = str(exc)
+            response.message = self._fault_reason
             return response
 
         now = time.monotonic()
         self._last_feedback = feedback
         self._last_sdk_timestamp_s = feedback.sdk_timestamp_s
         self._last_feedback_change_monotonic = now
-        self._latest_command = None
-        self._last_command_monotonic = None
-        self._enabled_monotonic = None
+        self._close_command_gate()
         self._fault_reason = ""
         response.success = True
-        response.message = "quick-stop state cleared; PiPER remains disabled"
+        response.message = (
+            "quick-stop state cleared; bridge command gate remains closed"
+        )
         return response
 
     def _stop_callback(
         self, _request: Trigger.Request, response: Trigger.Response
     ) -> Trigger.Response:
-        fault_reason = "manual_stop"
-        try:
-            self._adapter.quick_stop()
+        self._close_command_gate()
+        stop_error = self._quick_stop_hardware()
+        if stop_error is None:
+            self._fault_reason = "manual_stop"
             response.success = True
             response.message = "PiPER quick stop sent"
-        except Exception as exc:
+        else:
+            self._fault_reason = f"manual_stop_failed: {stop_error}"
             response.success = False
-            response.message = f"quick stop failed: {exc}"
-            fault_reason = f"manual_stop_failed: {exc}"
-        finally:
-            self._motion_enabled = False
-            self._latest_command = None
-            self._last_command_monotonic = None
-            self._enabled_monotonic = None
-            self._fault_reason = fault_reason
+            response.message = self._fault_reason
         return response
 
     def _disable_callback(
         self, _request: Trigger.Request, response: Trigger.Response
     ) -> Trigger.Response:
-        fault_reason = "manual_disable"
+        self._close_command_gate()
+        self._hardware_stop_required = True
         try:
-            reported_disabled = self._adapter.disable()
-            response.success = True
-            response.message = f"disable command sent; sdk_report={reported_disabled}"
+            disabled = self._adapter.disable(self.disable_timeout_s)
+            if not disabled:
+                raise PiperSdkError("PiPER did not report disabled before timeout")
         except Exception as exc:
+            stop_error = self._quick_stop_hardware()
+            self._fault_reason = f"manual_disable_failed: {exc}"
+            if stop_error is not None:
+                self._fault_reason += f"; quick_stop_failed: {stop_error}"
             response.success = False
-            response.message = f"disable failed: {exc}"
-            fault_reason = f"manual_disable_failed: {exc}"
-        finally:
-            self._motion_enabled = False
-            self._latest_command = None
-            self._last_command_monotonic = None
-            self._enabled_monotonic = None
-            self._fault_reason = fault_reason
+            response.message = self._fault_reason
+            return response
+
+        self._hardware_stop_required = False
+        self._fault_reason = "manual_disable"
+        response.success = True
+        response.message = "PiPER motor disable confirmed"
         return response
 
     def _trip(self, reason: str) -> None:
-        if not self._motion_enabled:
+        if not self._motion_enabled and not self._hardware_stop_required:
             self._fault_reason = reason
             return
         self.get_logger().error(f"motion stopped: {reason}")
-        fault_reason = reason
+        self._close_command_gate()
+        stop_error = self._quick_stop_hardware()
+        self._fault_reason = reason
+        if stop_error is not None:
+            self.get_logger().error(stop_error)
+            self._fault_reason += f"; quick_stop_failed: {stop_error}"
+
+    def _close_command_gate(self) -> None:
+        self._motion_enabled = False
+        self._latest_command = None
+        self._last_command_monotonic = None
+        self._enabled_monotonic = None
+
+    def _quick_stop_hardware(self) -> str | None:
+        self._hardware_stop_required = True
         try:
             self._adapter.quick_stop()
-        except PiperSdkError as exc:
-            self.get_logger().error(str(exc))
-            fault_reason = f"{reason}; quick_stop_failed: {exc}"
-        finally:
-            self._motion_enabled = False
-            self._latest_command = None
-            self._last_command_monotonic = None
-            self._enabled_monotonic = None
-            self._fault_reason = fault_reason
+        except Exception as exc:
+            return str(exc)
+        self._hardware_stop_required = False
+        return None
 
     def _feedback_age(self, now: float | None = None) -> float:
         if self._last_feedback_change_monotonic is None:
@@ -379,7 +416,9 @@ class PiperBridgeNode(Node):
         if feedback is None:
             level = DiagnosticStatus.ERROR
             message_text = "no feedback"
-        elif self._fault_reason in ("manual_stop", "manual_disable"):
+        elif self._fault_reason in (
+            "manual_stop", "manual_disable", "quick_stop_latched"
+        ):
             level = DiagnosticStatus.WARN
             message_text = self._fault_reason
         elif self._fault_reason:
@@ -387,17 +426,18 @@ class PiperBridgeNode(Node):
             message_text = self._fault_reason
         elif not self._motion_enabled:
             level = DiagnosticStatus.WARN
-            message_text = "connected and disabled"
+            message_text = "connected; command gate closed"
         else:
             level = DiagnosticStatus.OK
-            message_text = "enabled"
+            message_text = "command gate open"
 
         command_age = math.inf
         if self._last_command_monotonic is not None:
             command_age = now - self._last_command_monotonic
         values = {
             "can_name": self.can_name,
-            "enabled": str(self._motion_enabled).lower(),
+            "command_gate_open": str(self._motion_enabled).lower(),
+            "hardware_stop_required": str(self._hardware_stop_required).lower(),
             "speed_percent": str(self.speed_percent),
             "feedback_age_s": self._format_age(self._feedback_age(now)),
             "command_age_s": self._format_age(command_age),

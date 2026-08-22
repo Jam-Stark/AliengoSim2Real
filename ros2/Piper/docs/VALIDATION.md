@@ -28,9 +28,9 @@ ros2 run piper_bridge piper_smoke_test
 
 机械臂周围清空后：
 
-1. 调用 `/piper/enable`，随即调用 `/piper/stop`；
-2. diagnostics 应变为 disabled/manual stop，PiPER status 进入 quick-stop；
-3. 调用 `/piper/resume`，确认 status 回到 normal 且 bridge 仍 disabled；
+1. 运行 `ros2 run piper_bridge piper_smoke_test -- --move --hold-current`；该命令只保持测得的启动姿态，并在退出路径调用 `/piper/stop`；
+2. diagnostics 应显示 `manual_stop`、`command_gate_open=false`，PiPER status 进入 quick-stop；
+3. 调用 `/piper/resume`，确认 status 回到 normal、`command_gate_open=false`，并现场确认机械臂没有恢复旧目标运动；
 4. 再次 enable 并开始命令后拔掉笔记本网线，PC2 必须因 command timeout 停止；
 5. 重新接线后不得恢复运动；必须显式 resume，再重新 enable；
 6. 断开 PiPER USB-CAN 或机械臂反馈，PC2 必须因 feedback watchdog 停止。

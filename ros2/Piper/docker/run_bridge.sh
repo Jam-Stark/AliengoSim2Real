@@ -2,7 +2,10 @@
 set -euo pipefail
 
 image="${PIPER_BRIDGE_IMAGE:-doordog-piper-bridge:humble}"
-platform="${PIPER_BRIDGE_PLATFORM:-linux/amd64}"
+platform_args=()
+if [ -n "${PIPER_BRIDGE_PLATFORM:-}" ]; then
+  platform_args=(--platform "$PIPER_BRIDGE_PLATFORM")
+fi
 net_iface="${PIPER_NET_IFACE:-}"
 can_name="${PIPER_CAN_NAME:-can0}"
 namespace="${PIPER_NAMESPACE:-piper}"
@@ -16,7 +19,7 @@ ip link show "$net_iface" >/dev/null
 ip link show "$can_name" >/dev/null
 
 exec docker run --rm -it \
-  --platform "$platform" \
+  "${platform_args[@]}" \
   --network host \
   -e "PIPER_NET_IFACE=$net_iface" \
   -e "PIPER_CAN_NAME=$can_name" \

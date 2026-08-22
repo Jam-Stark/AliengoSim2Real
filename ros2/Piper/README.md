@@ -32,10 +32,10 @@ Laptop GPU 192.168.123.10
 |---|---|---|---|
 | `/piper/joint_states` | `sensor_msgs/JointState` | PC2 → laptop | 6 关节位置、20 ms 平均速度、最新 effort |
 | `/piper/joint_command` | `trajectory_msgs/JointTrajectory` | laptop → PC2 | 恰好一个 point；6 关节绝对位置 |
-| `/piper/diagnostics` | `diagnostic_msgs/DiagnosticArray` | PC2 → laptop | CAN/状态/频率/watchdog/enable 状态 |
-| `/piper/resume` | `std_srvs/Trigger` | laptop → PC2 | 显式发送 quick-stop recovery；成功后仍保持 disabled |
-| `/piper/enable` | `std_srvs/Trigger` | laptop → PC2 | 反馈健康后使能；之后 200 ms 内必须收到命令 |
-| `/piper/stop` | `std_srvs/Trigger` | laptop → PC2 | 重复发送 PiPER quick-stop CAN 指令并锁止远端运动；恢复需显式 resume |
+| `/piper/diagnostics` | `diagnostic_msgs/DiagnosticArray` | PC2 → laptop | CAN/状态/频率/watchdog/command gate 状态 |
+| `/piper/resume` | `std_srvs/Trigger` | laptop → PC2 | 显式发送 quick-stop recovery；成功后 command gate 仍关闭 |
+| `/piper/enable` | `std_srvs/Trigger` | laptop → PC2 | 反馈健康后确认 motor enable 并打开 command gate；之后 200 ms 内必须收到命令 |
+| `/piper/stop` | `std_srvs/Trigger` | laptop → PC2 | 重复发送 PiPER quick-stop CAN 指令、关闭 command gate；恢复需显式 resume |
 | `/piper/disable` | `std_srvs/Trigger` | laptop → PC2 | 失能机械臂 |
 
 关节名固定为 `arm_j1` … `arm_j6`，与 A2+PiPER URDF 一致。命令 topic 使用 depth 1、best-effort、volatile，避免网络抖动后重放积压目标；服务和 diagnostics 使用 reliable。
@@ -61,6 +61,9 @@ ros2 run piper_bridge piper_bridge --ros-args -r __ns:=/piper \
 # Laptop, read-only by default
 ros2 run piper_bridge piper_smoke_test
 
+# Laptop, hold the measured startup pose and verify the stop path
+ros2 run piper_bridge piper_smoke_test -- --move --hold-current
+
 # Laptop, explicit zero-position motion smoke
 ros2 run piper_bridge piper_smoke_test -- --move
 
@@ -76,7 +79,7 @@ ros2 run piper_bridge piper_krushell_manipulation -- \
 # Add --resume_before_enable only when intentionally clearing a prior bridge quick stop.
 ```
 
-`piper_krushell_manipulation` is a narrow test adapter: it supplies a ROS 2 implementation of the subset of `C_PiperInterface_V2` used by the existing task, so policy/checkpoint/observation logic stays in the already tested repository. New DoorDog deployment code should use `PiperBridgeClient` or the ROS 2 interface directly。
+`piper_krushell_manipulation` is a narrow test adapter: it supplies a ROS 2 implementation of the subset of `C_PiperInterface_V2` used by the existing task, so policy/checkpoint/observation logic stays in the already tested repository. New DoorDog deployment code should use `PiperBridgeClient` or the ROS 2 interface directly.
 
 ## Safety boundary
 

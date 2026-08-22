@@ -121,12 +121,14 @@ class PiperSdkRos2Facade:
         arm_status = int(diagnostics.values.get("arm_status", "-1"))
         ctrl_mode = int(diagnostics.values.get("ctrl_mode", "-1"))
         status_hz = float(diagnostics.values.get("status_hz", "0"))
-        bridge_enabled = diagnostics.values.get("enabled", "false") == "true"
+        command_gate_open = (
+            diagnostics.values.get("command_gate_open", "false") == "true"
+        )
         enabled_grace_elapsed = (
             self._enabled_monotonic_s is not None
             and time.monotonic() - self._enabled_monotonic_s > 0.3
         )
-        if self.enabled and enabled_grace_elapsed and not bridge_enabled:
+        if self.enabled and enabled_grace_elapsed and not command_gate_open:
             status_hz = 0.0
         return SimpleNamespace(
             time_stamp=time.time(),

@@ -22,7 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             "piper_bridge = piper_bridge.bridge_node:main",
-            "piper_smoke_test = piper_bridge.smoke_test:main",
+            "piper_smoke_test = piper_bridge.smoke:main",
             "piper_krushell_manipulation = piper_bridge.run_krushell_manipulation:main",
         ],
     },

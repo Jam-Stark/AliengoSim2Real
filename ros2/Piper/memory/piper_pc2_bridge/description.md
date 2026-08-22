@@ -22,7 +22,7 @@ read_when:
 - `/piper/resume`、`/piper/enable`、`/piper/stop`、`/piper/disable`: `std_srvs/srv/Trigger`。
 - control rate 50 Hz，PiPER MOVE J speed 5%，command timeout 0.20 s，feedback timeout 0.50 s。
 - command freshness 使用 PC2 monotonic receive time，不依赖 laptop 与 PC2 clock sync。
-- bridge 启动后保持 disabled；enable 后必须收到新 command；任何 command/feedback fault 由 PC2 本地 quick stop 并 latch。恢复需要显式 resume，成功后仍保持 disabled，网络恢复不会自动恢复运动。
+- bridge 启动后 command gate 关闭；enable 在确认 motor enable 后打开 gate，随后必须收到新 command；任何 command/feedback fault 由 PC2 本地 quick stop 并 latch。恢复需要显式 resume，成功后 gate 仍关闭，网络恢复不会自动恢复运动。bridge gate 不等同于 PiPER motor driver enable bit。
 - PC2 bridge 使用 tested `krushell/piper_sdk` fork 的 `GetArmHighSpdInfoAverage`，在本地生成 20 ms motor-speed average。
 - v1 不包含 gripper、MoveIt、trajectory queue、raw CAN tunnel 或 auto-enable。
 

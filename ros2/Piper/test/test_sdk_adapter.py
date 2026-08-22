@@ -51,3 +51,17 @@ def test_joint_command_uses_tested_move_j_contract() -> None:
 
     assert calls[0] == ("mode", (0x01, 0x01, 5, 0x00))
     assert calls[1] == ("joint", (0, 90000, -90000, 0, 0, 0))
+
+
+def test_disable_repeats_until_all_motors_report_disabled(monkeypatch) -> None:
+    reports = iter((True, True, False))
+    calls = []
+    fake_piper = SimpleNamespace(
+        DisablePiper=lambda: calls.append("disable") or next(reports),
+    )
+    adapter = PiperSdkAdapter("can0", control_period_s=0.02, speed_percent=5)
+    adapter._piper = fake_piper
+    monkeypatch.setattr("piper_bridge.sdk_adapter.time.sleep", lambda _seconds: None)
+
+    assert adapter.disable(0.1)
+    assert calls == ["disable", "disable", "disable"]

@@ -11,7 +11,7 @@ from rclpy.qos import (
     HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
-    SensorDataQoS,
+    qos_profile_sensor_data,
 )
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger
@@ -64,7 +64,7 @@ class PiperBridgeClient(Node):
             JointState,
             self._topic("joint_states"),
             self._joint_state_callback,
-            SensorDataQoS(),
+            qos_profile_sensor_data,
         )
         self.create_subscription(
             DiagnosticArray,
@@ -113,7 +113,7 @@ class PiperBridgeClient(Node):
     def stop(self, timeout_s: float = 2.0) -> tuple[bool, str]:
         return self._call_trigger(self._stop_client, "stop", timeout_s)
 
-    def disable(self, timeout_s: float = 2.0) -> tuple[bool, str]:
+    def disable(self, timeout_s: float = 6.0) -> tuple[bool, str]:
         return self._call_trigger(self._disable_client, "disable", timeout_s)
 
     def publish_joint_positions(self, positions_rad: tuple[float, ...]) -> None:

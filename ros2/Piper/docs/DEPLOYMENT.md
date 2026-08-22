@@ -29,14 +29,14 @@ PC2 不是 Linux 网桥，也不转发原始 CAN 帧。它在本机结束 PiPER 
 
 ## 2. Control lifecycle
 
-bridge 启动后为 `connected + disabled`。标准 lifecycle 是：
+bridge 启动后为 `connected + command gate closed`。这里的 gate 是 bridge 是否接受/转发远端 command，不等同于 PiPER motor driver enable bit。标准 lifecycle 是：
 
 ```text
 read-only → resume（仅需要时）→ enable → fresh command stream
           → stop/watchdog fault → latched quick stop → explicit resume
 ```
 
-`stop` 与 watchdog 都发送 PiPER quick-stop command；`resume` 显式发送 recovery command，确认 `arm_status=0` 后仍保持 disabled；`enable` 只在 feedback fresh/healthy 时开放，并清空任何旧 target。该顺序避免网络恢复或旧 publisher 自动带动机械臂。
+`stop` 与 watchdog 都发送 PiPER quick-stop command 并关闭 command gate；`resume` 显式发送 recovery command，确认 `arm_status=0` 后 gate 仍关闭；`enable` 只在 feedback fresh/healthy 时确认 motor enable、打开 gate，并清空任何旧 target。网络恢复不会恢复 gate，也不会重新使用旧 ROS target。`resume` 后 PiPER 固件层的 motor enable/brake 行为必须在 Gate C 实机观察，不能把 bridge gate 状态误当作硬件失能状态。
 
 ## 3. 已知条件与待补实机信息
 
@@ -49,10 +49,11 @@ read-only → resume（仅需要时）→ enable → fresh command stream
 
 以下信息不猜测，先标记为 `[待验证]`：
 
-- PC2 的 OS、Docker、ROS、磁盘余量和真实网卡名；
+- PC2 的 OS、CPU architecture、Docker、ROS、磁盘余量和真实网卡名；
 - 本台 A2 能否通过端口 `[7]` 的单网线直接 SSH `192.168.123.162`；
 - USB-C `[2]` 的稳定 USB bus address；
 - 当前 A2 部署使用的 `ROS_DOMAIN_ID`；
+- 笔记本上已跑通的 krushell/PyTorch 环境是否与 ROS 2 Humble `rclpy` 共存；若不共存，先补 exact CUDA/driver/Torch report，再决定 native environment 或独立 GPU client container；
 - 宇树导航后台负载是否影响 PC2 的 50 Hz 周期。
 
 安装前先收集只读报告：
@@ -131,9 +132,10 @@ cd <GeneralSim2Real>
 bash ros2/Piper/docker/build_image.sh
 ```
 
-若 PC2 无外网，可在 x86_64 笔记本构建后传输：
+若 PC2 无外网，可在与 PC2 相同 CPU architecture 的联网机器构建后传输。只有环境报告确认 PC2 为 `linux/amd64` 时，才在 x86_64 笔记本使用 `PIPER_BRIDGE_PLATFORM=linux/amd64`：
 
 ```bash
+PIPER_BRIDGE_PLATFORM=linux/amd64 bash ros2/Piper/docker/build_image.sh
 docker save doordog-piper-bridge:humble | gzip > doordog-piper-bridge_humble.tar.gz
 scp doordog-piper-bridge_humble.tar.gz unitree@<pc2-management-ip>:~/
 ```
@@ -159,7 +161,7 @@ ROS_DOMAIN_ID=0 \
 bash ros2/Piper/docker/run_bridge.sh
 ```
 
-container 使用 host network，因此可直接访问 host 的 `can0` 和 `192.168.123.162`。节点启动后只连接、读状态并发布 diagnostics，默认不使能机械臂。
+container 使用 host network，因此可直接访问 host 的 `can0` 和 `192.168.123.162`。节点启动后只连接、读状态并发布 diagnostics，默认 command gate 关闭，不发送运动目标。该状态不声称 motor driver 已硬件失能。
 
 ## 6. 笔记本准备
 
@@ -203,24 +205,26 @@ ros2 run piper_bridge piper_smoke_test
 
 - 能看到 `/piper/piper_bridge`；
 - `/piper/joint_states` 接近 50 Hz，包含 6 个 position 和 6 个 velocity；
-- diagnostics 为 `connected and disabled`，且 `arm_status=0`；
+- diagnostics 为 `connected; command gate closed`，且 `arm_status=0`；
 - smoke 输出 `read-only smoke passed`，不发送任何运动命令。
 
 ## 8. 第一次运动 smoke
 
-先确认机械臂当前位置到目标位置的路径安全。默认目标为全零位，与现有 `piper_learning.py` 测试一致：
+先用当前测得姿态验证 enable→command→stop，不要求机械臂产生可见位移：
 
 ```bash
-ros2 run piper_bridge piper_smoke_test -- --move
+ros2 run piper_bridge piper_smoke_test -- --move --hold-current
 ```
 
-client 会显式调用 enable、以 50 Hz 发布目标、检查 0.5° 误差，并在正常退出、异常或 Ctrl+C 时调用 `/piper/stop`。PiPER quick stop 是 latched state；下一次运动前必须由操作员显式调用 `/piper/resume`，成功后机械臂仍保持 disabled，再调用 enable。
-
-若前一步已经触发 bridge quick stop，可使用显式组合参数：
+该测试结束后 PiPER 处于 quick-stop；显式 resume 后，再确认机械臂当前位置到目标位置的路径安全。默认目标为全零位，与现有 `piper_learning.py` 测试一致：
 
 ```bash
 ros2 run piper_bridge piper_smoke_test -- --move --resume-before-enable
 ```
+
+client 会显式调用 resume（仅该命令需要）、enable、以 50 Hz 发布目标、检查 0.5° 误差，并在正常退出、异常或 Ctrl+C 时调用 `/piper/stop`。PiPER quick stop 是 latched state；下一次运动前必须由操作员显式调用 `/piper/resume`，成功后 bridge command gate 仍关闭，再调用 enable。
+
+也可以用 `--target-rad J1 J2 J3 J4 J5 J6` 指定一个已审核的测试姿态；`--target-rad` 与 `--hold-current` 互斥。
 
 随后单独验证 watchdog：运动命令开始后终止 publisher 或拔掉笔记本网线。PC2 应在约 `command_timeout_s=0.20` 秒内执行 quick stop；网络恢复后不得自动恢复运动。必须先显式 resume，再重新 enable；bridge 不自动清除 quick-stop state。
 
@@ -281,14 +285,14 @@ ros2 service call /piper/resume std_srvs/srv/Trigger '{}'
 ros2 service call /piper/enable std_srvs/srv/Trigger '{}'
 ```
 
-`resume` 只允许在 bridge motion disabled 且 arm status 为 normal/quick-stop 时执行；它不会自动 enable，也不会恢复旧 command。随后停止 bridge container。若 ROS/DDS 已不可用，使用物理急停；任何以太网命令都不能作为最后一级安全手段。
+`resume` 只允许在 bridge command gate 关闭且 arm status 为 normal/quick-stop 时执行；它不会打开 gate，也不会恢复旧 ROS command。随后停止 bridge container。若 ROS/DDS 已不可用，使用物理急停；任何以太网命令都不能作为最后一级安全手段。
 
 ## 12. 实机跑通后再增加的能力
 
 以下内容不进入第一版，以免用未验证复杂度替代可工作的端到端链路：
 
 - 根据实测 USB bus address 固化 `can0`；
-- 将已验证 container 变成 PC2 system service，但仍保持启动后 disabled；
+- 将已验证 container 变成 PC2 system service，但仍保持启动后 command gate closed；
 - 在宇树导航后台运行时记录 PC2 CPU 与 DDS jitter，必要时再做 CPU affinity；
 - policy 真正需要时再增加 gripper 独立接口；
 - 多机日志需要关联时再部署时间同步。控制 watchdog 使用本机 monotonic receipt time，不依赖跨机时钟同步。
