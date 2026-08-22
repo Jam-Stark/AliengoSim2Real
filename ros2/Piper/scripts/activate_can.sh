@@ -2,7 +2,7 @@
 set -euo pipefail
 
 sdk_root="${PIPER_SDK_ROOT:-}"
-can_name="${PIPER_CAN_NAME:-can0}"
+can_name="${PIPER_CAN_NAME:-can_piper}"
 usb_address="${PIPER_USB_ADDRESS:-}"
 
 if [ -z "$sdk_root" ]; then

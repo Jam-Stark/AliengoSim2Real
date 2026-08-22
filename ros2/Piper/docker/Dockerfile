@@ -34,7 +34,7 @@ RUN chmod +x /opt/piper/entrypoint.sh
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
     ROS_DOMAIN_ID=0 \
-    PIPER_CAN_NAME=can0 \
+    PIPER_CAN_NAME=can_piper \
     PIPER_NAMESPACE=piper
 
 ENTRYPOINT ["/opt/piper/entrypoint.sh"]

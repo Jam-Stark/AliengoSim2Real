@@ -7,7 +7,7 @@ if [ -n "${PIPER_BRIDGE_PLATFORM:-}" ]; then
   platform_args=(--platform "$PIPER_BRIDGE_PLATFORM")
 fi
 net_iface="${PIPER_NET_IFACE:-}"
-can_name="${PIPER_CAN_NAME:-can0}"
+can_name="${PIPER_CAN_NAME:-can_piper}"
 namespace="${PIPER_NAMESPACE:-piper}"
 ros_domain_id="${ROS_DOMAIN_ID:-0}"
 

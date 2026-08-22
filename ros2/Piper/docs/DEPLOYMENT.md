@@ -12,7 +12,7 @@
         │                                                     │
 A2 PC1 192.168.123.161                              A2 PC2 192.168.123.162
 Unitree 底盘 DDS                                    piper_bridge container
-                                                              │ SocketCAN can0
+                                                              │ SocketCAN can_piper
                                                               │ PiPER 原厂黑色 USB-CAN
                                                               └────────────── PiPER
 ```
@@ -90,24 +90,24 @@ git clone https://github.com/krushell/piper_sdk.git
 export PIPER_SDK_ROOT="$HOME/projects/piper_sdk"
 ```
 
-bridge 运行期间，不得同时运行该仓库中的直接控制脚本或 `piper_ros` 控制节点。PiPER `can0` 只能有一个命令所有者。
+bridge 运行期间，不得同时运行该仓库中的直接控制脚本或 `piper_ros` 控制节点。PiPER `can_piper` 只能有一个命令所有者。
 
 ### 4.3 在 host 激活 SocketCAN
 
-PiPER 原厂模块固定使用 1 Mbit/s。直接复用 SDK 自带脚本，不再维护第二份 USB/CAN 配置逻辑：
+PiPER 原厂模块固定使用 1 Mbit/s。bridge 默认将目标接口命名为 `can_piper`，避免与 A2/PC2 上可能已经存在的 `can0` 冲突。直接复用 SDK 自带脚本，不再维护第二份 USB/CAN 配置逻辑：
 
 ```bash
 cd <GeneralSim2Real>
 PIPER_SDK_ROOT="$HOME/projects/piper_sdk" \
-PIPER_CAN_NAME=can0 \
+PIPER_CAN_NAME=can_piper \
 bash ros2/Piper/scripts/activate_can.sh
 ```
 
 检查：
 
 ```bash
-ip -details link show can0
-candump can0
+ip -details link show can_piper
+candump can_piper
 ```
 
 应能看到 PiPER 反馈帧。进入运动测试前结束临时 `candump` 终端，避免混淆日志。
@@ -116,7 +116,7 @@ candump can0
 
 ```bash
 PIPER_SDK_ROOT="$HOME/projects/piper_sdk" \
-PIPER_CAN_NAME=can0 \
+PIPER_CAN_NAME=can_piper \
 PIPER_USB_ADDRESS=1-2:1.0 \
 bash ros2/Piper/scripts/activate_can.sh
 ```
@@ -156,12 +156,12 @@ ip -br address
 
 ```bash
 PIPER_NET_IFACE=<pc2-123-interface> \
-PIPER_CAN_NAME=can0 \
+PIPER_CAN_NAME=can_piper \
 ROS_DOMAIN_ID=0 \
 bash ros2/Piper/docker/run_bridge.sh
 ```
 
-container 使用 host network，因此可直接访问 host 的 `can0` 和 `192.168.123.162`。节点启动后只连接、读状态并发布 diagnostics，默认 command gate 关闭，不发送运动目标。该状态不声称 motor driver 已硬件失能。
+container 使用 host network，因此可直接访问 host 的 `can_piper` 和 `192.168.123.162`。节点启动后只连接、读状态并发布 diagnostics，默认 command gate 关闭，不发送运动目标。该状态不声称 motor driver 已硬件失能。
 
 ## 6. 笔记本准备
 
@@ -291,7 +291,7 @@ ros2 service call /piper/enable std_srvs/srv/Trigger '{}'
 
 以下内容不进入第一版，以免用未验证复杂度替代可工作的端到端链路：
 
-- 根据实测 USB bus address 固化 `can0`；
+- 根据实测 USB bus address 固化 `can_piper`；
 - 将已验证 container 变成 PC2 system service，但仍保持启动后 command gate closed；
 - 在宇树导航后台运行时记录 PC2 CPU 与 DDS jitter，必要时再做 CPU affinity；
 - policy 真正需要时再增加 gripper 独立接口；

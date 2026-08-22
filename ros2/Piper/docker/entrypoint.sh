@@ -7,7 +7,7 @@ source /opt/piper_ws/install/setup.bash
 export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 export ROS_LOCALHOST_ONLY=0
 export PIPER_NET_IFACE="${PIPER_NET_IFACE:-}"
-export PIPER_CAN_NAME="${PIPER_CAN_NAME:-can0}"
+export PIPER_CAN_NAME="${PIPER_CAN_NAME:-can_piper}"
 export PIPER_NAMESPACE="${PIPER_NAMESPACE:-piper}"
 
 if [ -z "$PIPER_NET_IFACE" ]; then

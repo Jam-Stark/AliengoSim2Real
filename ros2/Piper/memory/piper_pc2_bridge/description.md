@@ -28,8 +28,8 @@ read_when:
 
 ## Deployment boundary
 
-- PC2 推荐使用 Ubuntu 22.04 + ROS 2 Humble container；host 先使用 SDK 自带 script 把 PiPER 原厂 USB-CAN 配为 1 Mbit/s SocketCAN。
-- container 使用 host network 访问 host `can0`，无需把 USB device 直接交给 container，也不在 container 内修改 CAN link。
+- PC2 推荐使用 Ubuntu 22.04 + ROS 2 Humble container；host 先使用 SDK 自带 script 把 PiPER 原厂 USB-CAN 配为 1 Mbit/s SocketCAN，并命名为 `can_piper` 以避免占用 A2/PC2 可能已有的 `can0`。
+- container 使用 host network 访问 host `can_piper`，无需把 USB device 直接交给 container，也不在 container 内修改 CAN link。
 - laptop 运行 policy、Torch/checkpoint 与 `PiperBridgeClient`；A2 base chain 仍走 PC1。
 - `piper_krushell_manipulation` 仅用于复现已验证 task：它把原 `Manipulation` 对 `C_PiperInterface_V2` 的已用 subset 映射到 ROS 2，policy/FK/observation/history 仍来自原仓库。
 - software quick stop 不是 safety-rated emergency stop；实机测试必须保留物理急停。

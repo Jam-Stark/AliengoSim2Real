@@ -1,6 +1,6 @@
 /**:
   ros__parameters:
-    can_name: can0
+    can_name: can_piper
     control_rate_hz: 50.0
     diagnostic_rate_hz: 10.0
     speed_percent: 5

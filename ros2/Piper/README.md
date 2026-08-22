@@ -7,7 +7,7 @@ Laptop GPU 192.168.123.10
   ├─ Unitree SDK2 / DDS ───────────────> A2 PC1 192.168.123.161
   └─ /piper/* ROS 2 topics/services ──> A2 PC2 192.168.123.162
                                              │
-                                             └─ can0 → official USB-CAN → PiPER
+                                             └─ can_piper → official USB-CAN → PiPER
 ```
 
 桥接的是**关节命令和状态**，不是原始 CAN 帧。PC2 本地负责 CAN、使能、状态检查、命令超时和快速停止；笔记本断线后不依赖笔记本进程执行停止。

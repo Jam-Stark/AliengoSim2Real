@@ -6,7 +6,7 @@
 
 - 保存 `collect_pc2_info.sh` 输出；
 - 通过插拔前后的 `lsusb -t` 确认所选 USB-C 确实连接 PC2；
-- 确认 `can0` 为 `UP`、1 Mbit/s，且 `candump can0` 有 PiPER 反馈；
+- 确认 `can_piper` 为 `UP`、1 Mbit/s，且 `candump can_piper` 有 PiPER 反馈；
 - 确认没有其他 PiPER SDK 或 `piper_ros` 控制进程；
 - 确认物理急停可触达。
 
