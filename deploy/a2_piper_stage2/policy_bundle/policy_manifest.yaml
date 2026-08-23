@@ -1,0 +1,396 @@
+schema: lmp_stage2_dual_policy_source_contract
+schema_version: 1
+
+identity:
+  name: a2_piper_stage2_dual_policy
+  task: locomotion_and_arm_position_tracking
+  deployment_stage: hybrid_enabled
+  deterministic_inference: true
+  runner_role: training_state
+
+checkpoint:
+  training_run: logs/manager_dual_rl/lmp_dual_policy/stage2_hybrid_a2_piper/2026-06-10_23-39-07
+  authoritative_file: checkpoints_meta/runner_state_020000.pt
+  checkpoint_format_version: 2
+  iteration: 20000
+  total_timesteps: 1966080000
+  runner_embeds_actor_branches: [dog, arm]
+  repository_revision_in_checkpoint: unavailable
+  resolved_environment_config_in_checkpoint: unavailable
+  scheduler:
+    switch_open: true
+    count: 20000
+    start_iteration: -1
+    end_iteration: 0
+    transition: instant
+    reward_mix: 1.0
+    ppo_beta: 0.0
+
+numeric:
+  dtype: float32
+  angle_unit: rad
+  angular_velocity_unit: rad/s
+  linear_position_unit: m
+  observation_normalization: none
+  observation_clip: none
+  observation_corruption: disabled
+
+timing:
+  training_sim_dt_s: 0.005
+  training_decimation: 4
+  policy_period_s: 0.02
+  policy_frequency_hz: 50
+  target_hold_inner_steps: 4
+  target_update_frequency_hz: 50
+
+snapshot:
+  rule: dog_and_arm_use_one_synchronized_logical_tick
+  required_state:
+    - a2_root_link_attitude
+    - a2_leg_joint_position
+    - a2_leg_joint_velocity
+    - piper_arm_j1_to_j6_position
+  actor_does_not_use:
+    - base_linear_velocity
+    - base_angular_velocity
+    - piper_joint_velocity
+    - tcp_pose
+    - foot_contact
+    - torque_or_current
+    - critic_privileged_signals
+
+base_frame:
+  handedness: right_handed
+  axes: {x: forward, y: left, z: up}
+  ros_quaternion_order: [x, y, z, w]
+  actor_internal_quaternion_order: [w, x, y, z]
+  quaternion_semantics: active_rotation_from_root_link_body_to_world
+  projected_gravity:
+    source: a2.projected_gravity
+    formula: R_body_to_world_transpose_times_[0,0,-1]
+    xyzw_component_formula:
+      - 2*(w*y-x*z)
+      - -2*(y*z+w*x)
+      - 2*(x*x+y*y)-1
+    parity_reference: parity/dog_reference.npz
+
+models:
+  dog:
+    file: dog_actor.pt
+    format: torchscript
+    method: forward
+    device_at_export: cpu
+    dynamic_batch_axis: 0
+    input_shape: [B, 1620]
+    canonical_probe_shape: [1, 1620]
+    output_shape: [B, 12]
+    output_activation: linear
+    adaptation_layers: [1620, 256, 128, 25]
+    actor_layers: [1645, 512, 256, 128, 12]
+    hidden_activation: elu
+    parity_reference: parity/dog_reference.npz
+  arm:
+    file: arm_actor.pt
+    format: torchscript
+    method: forward
+    device_at_export: cpu
+    dynamic_batch_axis: 0
+    input_shape: [B, 600]
+    canonical_probe_shape: [1, 600]
+    output_shape: [B, 8]
+    output_slices:
+      control: [0, 6]
+      plan: [6, 8]
+    output_activation:
+      control: linear
+      plan: tanh_applied_inside_model
+    adaptation_layers: [600, 256, 128, 9]
+    history_encoder_layers: [580, 512, 256, 128]
+    actor_layers: [157, 512, 256, 128, 8]
+    actor_concat_order: [current_frame_20, adaptation_latent_9, history_latent_128]
+    hidden_activation: elu
+    parity_reference: parity/arm_reference.npz
+
+history:
+  layout: frame_major
+  flatten_order: oldest_to_newest
+  dog: {frame_dim: 54, frames: 30, flattened_dim: 1620}
+  arm: {frame_dim: 20, frames: 30, flattened_dim: 600}
+  reset:
+    rule: repeat_first_valid_post_reset_frame_30_times
+    all_zero_flat_history_is_invalid: true
+    previous_raw_dog_action: zeros_12
+    previous_raw_arm_control_action: zeros_6
+    plan: zeros_2
+    gait_phase: 0.0
+  previous_action_semantics: previous_actor_raw_output_not_processed_hardware_target
+
+inference_protocol:
+  order:
+    - run_arm_actor_on_committed_arm_history
+    - split_arm_control_0_6_and_plan_6_8
+    - compute_plan_command_as_clip_arm_actor_output_6_8_times_0_4
+    - recompute_current_dog_frame_with_same_robot_state_and_new_plan
+    - build_dog_actor_input_as_concat_committed_dog_history_54_1620_and_preview_frame
+    - run_dog_actor
+    - commit_the_same_arm_plan
+    - process_and_publish_named_joint_targets
+  persistent_history_update: append_once_after_next_state_snapshot
+  preview_mutates_persistent_history: false
+
+observations:
+  dog:
+    frame_dim: 54
+    blocks:
+      - name: projected_gravity_b
+        source: a2.projected_gravity
+        slice: [0, 3]
+        dim: 3
+        scale: 1.0
+        offset: 0.0
+        clip: null
+        measurable: true
+      - name: leg_joint_position_relative
+        source: a2.joint_pos_rel
+        slice: [3, 15]
+        dim: 12
+        joint_order:
+          - FL_hip_joint
+          - FR_hip_joint
+          - RL_hip_joint
+          - RR_hip_joint
+          - FL_thigh_joint
+          - FR_thigh_joint
+          - RL_thigh_joint
+          - RR_thigh_joint
+          - FL_calf_joint
+          - FR_calf_joint
+          - RL_calf_joint
+          - RR_calf_joint
+        formula: measured_position_minus_default_position
+        scale: 1.0
+        clip: null
+        measurable: true
+      - name: leg_joint_velocity_scaled
+        source: a2.joint_vel
+        slice: [15, 27]
+        dim: 12
+        joint_order:
+          - FL_hip_joint
+          - FR_hip_joint
+          - RL_hip_joint
+          - RR_hip_joint
+          - FL_thigh_joint
+          - FR_thigh_joint
+          - RL_thigh_joint
+          - RR_thigh_joint
+          - FL_calf_joint
+          - FR_calf_joint
+          - RL_calf_joint
+          - RR_calf_joint
+        scale: 0.05
+        offset: 0.0
+        clip: null
+        measurable: true
+      - name: previous_raw_dog_action
+        source: policy.dog.last_action
+        slice: [27, 39]
+        dim: 12
+        scale: 1.0
+        clip: null
+        measurable: internal
+      - name: dog_command
+        source: task.command
+        command_name: locomotion_and_arm_plan
+        slice: [39, 44]
+        dim: 5
+        raw_order: [desired_vx_body, desired_vy_body, desired_yaw_rate, body_pitch_plan, body_roll_plan]
+        raw_units: [m/s, m/s, rad/s, rad, rad]
+        scale: [2.0, 2.0, 0.25, 1.0, 1.0]
+        clip: null
+        measurable: internal
+      - name: arm_goal
+        source: task.command
+        command_name: arm_goal_lpy6
+        slice: [44, 50]
+        dim: 6
+        order: [radius, elevation_pitch, yaw, orientation_0, orientation_1, orientation_2]
+        formula: hybrid_mask_times_[radius,pitch,yaw,0,0,0]
+        scale: 1.0
+        clip: null
+        measurable: internal
+      - name: base_roll_pitch
+        source: signal:a2.base_roll_pitch
+        slice: [50, 52]
+        dim: 2
+        order: [roll_x, pitch_y]
+        scale: 1.0
+        clip: null
+        measurable: derived_from_base_attitude
+      - name: gait_clock
+        source: signal:gait_clock
+        slice: [52, 54]
+        dim: 2
+        formula: [sin_2pi_phase, cos_2pi_phase]
+        scale: 1.0
+        clip: null
+        measurable: internal
+  arm:
+    frame_dim: 20
+    blocks:
+      - name: arm_joint_position_relative
+        source: piper.joint_pos_rel
+        slice: [0, 6]
+        dim: 6
+        joint_order: [arm_j1, arm_j2, arm_j3, arm_j4, arm_j5, arm_j6]
+        formula: measured_position_minus_default_position
+        scale: 1.0
+        clip: null
+        measurable: true
+      - name: previous_raw_arm_control_action
+        source: policy.arm.last_action
+        slice: [6, 12]
+        dim: 6
+        note: excludes_plan_output_6_8
+        scale: 1.0
+        clip: null
+        measurable: internal
+      - name: arm_goal
+        source: task.command
+        command_name: arm_goal_lpy6
+        slice: [12, 18]
+        dim: 6
+        order: [radius, elevation_pitch, yaw, orientation_0, orientation_1, orientation_2]
+        formula: hybrid_mask_times_[radius,pitch,yaw,0,0,0]
+        scale: 1.0
+        clip: null
+        measurable: internal
+      - name: base_roll_pitch
+        source: signal:a2.base_roll_pitch
+        slice: [18, 20]
+        dim: 2
+        order: [roll_x, pitch_y]
+        scale: 1.0
+        clip: null
+        measurable: derived_from_base_attitude
+
+commands:
+  locomotion:
+    frame: base
+    order: [vx, vy, yaw_rate]
+    training_ranges: [[-1.0, 1.0], [-0.5, 0.5], [-1.0, 1.0]]
+  gait:
+    frequency_hz: 2.0
+    increment_per_policy_tick: 0.04
+    standing_behavior: reset_and_freeze_phase_at_zero
+    standing_clock: [0.0, 1.0]
+  arm_goal:
+    task: position_only
+    order: [radius, elevation_pitch, yaw]
+    spherical_to_cartesian:
+      x: r*cos(pitch)*cos(yaw)
+      y: r*cos(pitch)*sin(yaw)
+      z: r*sin(pitch)
+    sphere_center_xy_in_base_yaw_frame_m: [0.145, 0.0]
+    sphere_center_world_z_m: 0.704
+    training_ranges:
+      radius_m: [0.4, 0.8]
+      elevation_pitch_rad: [-1.0, 1.0]
+      yaw_rad: [-1.2, 1.2]
+    actor_orientation_columns: [0.0, 0.0, 0.0]
+    tcp_body: arm_body6_to_gripper
+    tcp_offset_local_m: [0.0, 0.0, 0.105]
+
+actions:
+  dog:
+    actor_output_dim: 12
+    actor_clip: null
+    mode: position_offset
+    scale_rad: 0.25
+    processed_target_clip_rad: [-100.0, 100.0]
+    joint_order:
+      - FL_hip_joint
+      - FR_hip_joint
+      - RL_hip_joint
+      - RR_hip_joint
+      - FL_thigh_joint
+      - FR_thigh_joint
+      - RL_thigh_joint
+      - RR_thigh_joint
+      - FL_calf_joint
+      - FR_calf_joint
+      - RL_calf_joint
+      - RR_calf_joint
+    default_joint_position_rad: [0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5, -1.0, -1.0, -1.0, -1.0]
+    training_action_delay_control_steps: [0, 1]
+    deployment_artificial_delay_control_steps: 0
+    max_target_delta_per_policy_tick_rad: [0.44, 0.44, 0.44, 0.44, 0.44, 0.44, 0.44, 0.44, 0.293334, 0.293334, 0.293334, 0.293334]
+  arm:
+    actor_output_dim: 8
+    control_slice: [0, 6]
+    plan_slice: [6, 8]
+    actor_clip: null
+    mode: position_offset
+    scale_rad: 0.25
+    processed_target_clip_rad: [-100.0, 100.0]
+    joint_order: [arm_j1, arm_j2, arm_j3, arm_j4, arm_j5, arm_j6]
+    default_joint_position_rad: [0.0, 1.48, -0.63, -0.84, 0.0, 1.57]
+    training_action_delay_control_steps: 0
+    deployment_artificial_delay_control_steps: 0
+    max_target_delta_per_policy_tick_rad: [0.1, 0.1, 0.1, 0.1, 0.1, 0.06]
+    plan:
+      actor_output_activation: tanh_already_applied_inside_arm_actor_pt
+      order: [body_pitch, body_roll]
+      postprocess: clip_actor_output_to_minus1_plus1_then_multiply_0_4
+      limits_rad: [[-0.4, 0.4], [-0.4, 0.4]]
+  gripper:
+    actor_outputs: none
+    training_fixed_targets: {arm_j7: 0.0, arm_j8: 0.0}
+    pc2_bridge_v1_command: absent
+    deployment_rule: do_not_synthesize_gripper_action_from_arm_plan
+
+joint_limits:
+  provenance: active_LMP_resources_A2_Piper_a2_piper_urdf
+  hardware_certification: not_provided_by_LMP
+  deployment_rate_limit_provenance: training_velocity_limit_times_policy_period
+  entries:
+    - {name: FL_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: FR_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: RL_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: RR_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: FL_thigh_joint, type: revolute, unit: rad, lower: -2.34, upper: 3.15, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: FR_thigh_joint, type: revolute, unit: rad, lower: -2.34, upper: 3.15, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: RL_thigh_joint, type: revolute, unit: rad, lower: -1.56, upper: 3.94, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: RR_thigh_joint, type: revolute, unit: rad, lower: -1.56, upper: 3.94, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+    - {name: FL_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+    - {name: FR_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+    - {name: RL_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+    - {name: RR_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+    - {name: arm_j1, type: revolute, unit: rad, lower: -2.618, upper: 2.618, default: 0.0, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+    - {name: arm_j2, type: revolute, unit: rad, lower: 0.0, upper: 3.14, default: 1.48, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+    - {name: arm_j3, type: revolute, unit: rad, lower: -2.967, upper: 0.0, default: -0.63, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+    - {name: arm_j4, type: revolute, unit: rad, lower: -1.745, upper: 1.745, default: -0.84, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+    - {name: arm_j5, type: revolute, unit: rad, lower: -1.22, upper: 1.22, default: 0.0, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+    - {name: arm_j6, type: revolute, unit: rad, lower: -2.0944, upper: 2.0944, default: 1.57, training_velocity_limit: 3.0, training_effort_limit: 100.0}
+    - {name: arm_j7, type: prismatic, unit: m, lower: 0.0, upper: 0.035, default: 0.0, training_velocity_limit: 1.0, training_effort_limit: 10.0}
+    - {name: arm_j8, type: prismatic, unit: m, lower: -0.035, upper: 0.0, default: 0.0, training_velocity_limit: 1.0, training_effort_limit: 10.0}
+
+parity:
+  dog_reference: parity/dog_reference.npz
+  arm_reference: parity/arm_reference.npz
+  validator: tools/validate_bundle.py
+  tolerance: 1.0e-6
+  validates:
+    - torchscript_input_output
+    - raw_actor_action
+    - final_joint_target
+    - arm_plan_postprocess
+    - arm_plan_to_dog_same_tick_preview
+    - dog_29_plus_1_history
+    - projected_gravity_xyzw
+
+deployment_boundary:
+  manifest_provenance: generated_from_LMP_runtime_source_and_authoritative_checkpoint
+  downstream_GeneralSim2Real_yaml_schema_validation: unavailable_because_target_branch_files_were_not_publicly_accessible_at_handoff
+  hardware_soft_limits_watchdogs_and_hold_behavior: owned_by_site_and_existing_bridges
+  lmp_bundle_must_not_enable_live_output: true

@@ -1,0 +1,4 @@
+python==3.11.15
+torch==2.7.0+cu128
+numpy==1.26.0
+PyYAML==6.0.2

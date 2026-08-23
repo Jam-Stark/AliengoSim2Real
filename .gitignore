@@ -16,5 +16,11 @@ history_policy/
 .vscode/browse.vc.db-shm
 .vscode/browse.vc.db-wal
 
+# A2 + PiPER Stage2 operator-local state
+/deploy/a2_piper_stage2/docker/.env
+/deploy/a2_piper_stage2/config/site.yaml
+/deploy/a2_piper_stage2/evidence/
+/deploy/a2_piper_stage2/.stage2_sessions/
+
 # macOS Finder metadata
 .DS_Store

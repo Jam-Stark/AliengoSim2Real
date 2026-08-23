@@ -1,0 +1,33 @@
+schema: a2_piper_stage2_joint_inventory
+schema_version: 1
+
+provenance:
+  source: policy_bundle/policy_manifest.yaml
+  source_field: joint_limits.entries
+  lmp_resource: active_LMP_resources_A2_Piper_a2_piper_urdf
+  hardware_certified: false
+  deployment_rule: >-
+    Treat these as LMP training-model limits only. Before live output, intersect
+    them with site-verified bridge and manufacturer limits.
+
+joints:
+  - {name: FL_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: FR_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: RL_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: RR_hip_joint, type: revolute, unit: rad, lower: -1.01, upper: 1.01, default: 0.0, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: FL_thigh_joint, type: revolute, unit: rad, lower: -2.34, upper: 3.15, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: FR_thigh_joint, type: revolute, unit: rad, lower: -2.34, upper: 3.15, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: RL_thigh_joint, type: revolute, unit: rad, lower: -1.56, upper: 3.94, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: RR_thigh_joint, type: revolute, unit: rad, lower: -1.56, upper: 3.94, default: 0.5, training_velocity_limit: 22.0, training_effort_limit: 120.0}
+  - {name: FL_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+  - {name: FR_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+  - {name: RL_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+  - {name: RR_calf_joint, type: revolute, unit: rad, lower: -2.77, upper: -0.54, default: -1.0, training_velocity_limit: 14.6667, training_effort_limit: 180.0}
+  - {name: arm_j1, type: revolute, unit: rad, lower: -2.618, upper: 2.618, default: 0.0, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+  - {name: arm_j2, type: revolute, unit: rad, lower: 0.0, upper: 3.14, default: 1.48, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+  - {name: arm_j3, type: revolute, unit: rad, lower: -2.967, upper: 0.0, default: -0.63, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+  - {name: arm_j4, type: revolute, unit: rad, lower: -1.745, upper: 1.745, default: -0.84, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+  - {name: arm_j5, type: revolute, unit: rad, lower: -1.22, upper: 1.22, default: 0.0, training_velocity_limit: 5.0, training_effort_limit: 100.0}
+  - {name: arm_j6, type: revolute, unit: rad, lower: -2.0944, upper: 2.0944, default: 1.57, training_velocity_limit: 3.0, training_effort_limit: 100.0}
+  - {name: arm_j7, type: prismatic, unit: m, lower: 0.0, upper: 0.035, default: 0.0, training_velocity_limit: 1.0, training_effort_limit: 10.0}
+  - {name: arm_j8, type: prismatic, unit: m, lower: -0.035, upper: 0.0, default: 0.0, training_velocity_limit: 1.0, training_effort_limit: 10.0}

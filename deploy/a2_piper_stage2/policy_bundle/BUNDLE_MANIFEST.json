@@ -1,0 +1,31 @@
+{
+  "bundle": "a2_piper_stage2_policy_bundle_020000_20260823",
+  "created_at": "2026-08-23 23:30 HKT",
+  "manifest_version": 1,
+  "payload_files": [
+    {"path": "README.md", "size_bytes": 1684, "role": "entrypoint"},
+    {"path": "PRO_HANDOFF.md", "size_bytes": 1150, "role": "handoff_receipt"},
+    {"path": "dog_actor.pt", "size_bytes": 5856461, "role": "dog_torchscript_actor"},
+    {"path": "arm_actor.pt", "size_bytes": 3605821, "role": "arm_torchscript_actor"},
+    {"path": "policy_manifest.yaml", "size_bytes": 14529, "role": "lmp_source_manifest"},
+    {"path": "parity/dog_reference.npz", "size_bytes": 48916, "role": "dog_parity"},
+    {"path": "parity/arm_reference.npz", "size_bytes": 17206, "role": "arm_parity"},
+    {"path": "metadata/export_versions.yaml", "size_bytes": 1029, "role": "export_versions"},
+    {"path": "metadata/export_validation.json", "size_bytes": 1203, "role": "validation_receipt"},
+    {"path": "metadata/lmp_source_contract.json", "size_bytes": 23213, "role": "full_source_contract"},
+    {"path": "metadata/export_requirements.txt", "size_bytes": 63, "role": "export_environment"},
+    {"path": "metadata/deployment_cpu_requirements.txt", "size_bytes": 41, "role": "cpu_candidate_environment"},
+    {"path": "tools/export_stage2_deployment_bundle.py", "size_bytes": 36300, "role": "export_source"},
+    {"path": "tools/validate_bundle.py", "size_bytes": 4885, "role": "parity_validator"},
+    {"path": "docs/delivery_guide_zh_CN.md", "size_bytes": 3339, "role": "delivery_guide"},
+    {"path": "docs/parity_contract.md", "size_bytes": 1064, "role": "parity_documentation"},
+    {"path": "docs/general_sim2real_integration.md", "size_bytes": 1148, "role": "downstream_boundary"}
+  ],
+  "excluded": [
+    "runner checkpoint",
+    "critic and optimizer state",
+    "training logs",
+    "credentials and site configuration",
+    "hardware live enablement"
+  ]
+}

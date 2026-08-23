@@ -1,0 +1,46 @@
+/**:
+  ros__parameters:
+    bundle_dir: /policy_bundle
+    site_config: /site.yaml
+    validate_live_site_only: false
+
+    lowstate_topic: /lowstate
+    lowcmd_topic: /lowcmd
+    state_timeout_ms: 200
+
+    piper_state_topic: /piper/joint_states
+    piper_command_topic: /piper/joint_command
+    piper_stop_service: /piper/stop
+    status_topic: /a2_piper_stage2/status
+
+    a2_state_max_age_ms: 200
+    piper_state_max_age_ms: 200
+    maximum_state_skew_ms: 50
+
+    max_remote_vx: 0.8
+    max_remote_vy: 0.5
+    max_remote_yaw: 0.6
+    remote_deadzone: 0.08
+
+    arm_goal_radius_m: 0.6
+    arm_goal_pitch_rad: 0.0
+    arm_goal_yaw_rad: 0.0
+
+    standup_stage1_steps: 150
+    standup_stage2_steps: 150
+    standup_rear_alpha_lead: 0.10
+    standup_front_alpha_lag: 0.04
+    standup_kp_start: 3.0
+    standup_kd_start: 0.5
+    controlled_down_steps: 250
+    controlled_down_hip_q: 0.0
+    controlled_down_thigh_q: 1.5
+    controlled_down_calf_q: -2.77
+    controlled_down_gain_scale: 1.0
+    status_period_ms: 200
+
+    # Safe defaults. stage2_gate.sh live overrides all three only after the
+    # matching receipts, STAGE2_ALLOW_LIVE=1, and explicit --live.
+    enable_motion: false
+    live_acknowledged: false
+    component_mode: both

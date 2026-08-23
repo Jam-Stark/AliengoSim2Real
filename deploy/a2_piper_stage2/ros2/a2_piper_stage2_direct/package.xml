@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>a2_piper_stage2_direct</name>
+  <version>0.1.0</version>
+  <description>Direct A2 LowCmd and PiPER semantic ROS deployment for the LMP Stage2 dual policy.</description>
+  <maintainer email="unitree@unitree.com">Unitree</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>a2_lowlevel</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>yaml-cpp</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

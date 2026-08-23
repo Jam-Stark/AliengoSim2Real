@@ -1,0 +1,177 @@
+schema: a2_piper_stage2_site
+schema_version: 1
+
+# 这是同一台已部署 A2 的 direct-mode 模板。ROS domain、NIC、IP 和现场动作边界
+# 必须在 Gate network/ros-readonly 中复核；已知 mapping/PD/topic 不再标成缺失。
+identity:
+  site_name: same_a2_stage2_direct_site
+  policy_host: same_a2_policy_host_site_specific
+  ros_domain_id: 0
+  ros_domain_id_evidence: same_host_default_reverify_at_network_gate
+  policy_network_interface: enp131s0
+  policy_network_interface_evidence: same_a2_connected_preflight_evidence_reverify_at_network_gate
+  a2_ip: 192.168.123.161
+  pc2_ip: 192.168.123.162
+
+topology:
+  mode: a2_direct_lowcmd
+  policy_process_location: a2_control_host
+  python_external_semantic_mode_available: false
+  description: >-
+    The C++ Stage2 node composes A2LowLevelInterface in the same process, reads
+    the same A2 LowState snapshot used by the proven main-branch locomotion
+    deployment, runs arm-first dual inference, publishes A2 only through
+    publish_joint_commands(), and uses the existing PC2 PiPER semantic bridge.
+
+transport:
+  a2:
+    status: repository_path_verified_site_motion_gate_required
+    lowstate_topic: /lowstate
+    lowstate_message_type: unitree_hg/msg/LowState
+    lowcmd_topic: /lowcmd
+    lowcmd_message_type: unitree_hg/msg/LowCmd
+    raw_motor_order:
+      - FR_BODY
+      - FR_THIGH
+      - FR_CALF
+      - FL_BODY
+      - FL_THIGH
+      - FL_CALF
+      - RR_BODY
+      - RR_THIGH
+      - RR_CALF
+      - RL_BODY
+      - RL_THIGH
+      - RL_CALF
+    training_joint_order:
+      - FL_hip_joint
+      - FR_hip_joint
+      - RL_hip_joint
+      - RR_hip_joint
+      - FL_thigh_joint
+      - FR_thigh_joint
+      - RL_thigh_joint
+      - RR_thigh_joint
+      - FL_calf_joint
+      - FR_calf_joint
+      - RL_calf_joint
+      - RR_calf_joint
+    training_to_raw_motor_index: [3, 0, 9, 6, 4, 1, 10, 7, 5, 2, 11, 8]
+    state_extraction:
+      joint_position: motor_state[index].q
+      joint_velocity: motor_state[index].dq
+      raw_quaternion_order: wxyz
+      policy_formula_input_order: wxyz
+      attitude_semantics: same_body_to_world_semantics_as_verified_main_a2_path_reverify_at_gate
+      timestamp: local_steady_receipt_time
+    command:
+      only_lowcmd_boundary: A2LowLevelInterface.publish_joint_commands
+      target_semantics: absolute_position_rad_after_policy_default_plus_scale
+      training_to_raw_motor_index: [3, 0, 9, 6, 4, 1, 10, 7, 5, 2, 11, 8]
+      pd_gains:
+        hip_and_thigh: {kp: 140.0, kd: 5.0}
+        calf: {kp: 220.0, kd: 9.0}
+      note: gains_are_code_locked_to_the_proven_main_path_not_operator_params
+    local_state_timeout_s: 0.20
+  piper:
+    status: repository_interface_verified_hardware_gate_required
+    namespace: /piper
+    state:
+      topic: /piper/joint_states
+      message_type: sensor_msgs/msg/JointState
+      joint_order: [arm_j1, arm_j2, arm_j3, arm_j4, arm_j5, arm_j6]
+      position_unit: rad
+    command:
+      topic: /piper/joint_command
+      message_type: trajectory_msgs/msg/JointTrajectory
+      joint_order: [arm_j1, arm_j2, arm_j3, arm_j4, arm_j5, arm_j6]
+      exactly_one_point: true
+      position_semantics: absolute
+      position_unit: rad
+    diagnostics_topic: /piper/diagnostics
+    services:
+      resume: /piper/resume
+      enable: /piper/enable
+      stop: /piper/stop
+      disable: /piper/disable
+      message_type: std_srvs/srv/Trigger
+    gripper_interface: absent
+    can_owner: A2_PC2_only
+    bridge:
+      control_rate_hz: 50.0
+      command_timeout_s: 0.20
+      feedback_timeout_s: 0.50
+
+commands:
+  locomotion_source: a2_wireless_remote_vx_vy_yaw
+  locomotion_caps: {vx_m_s: 0.8, vy_m_s: 0.5, yaw_rad_s: 0.6, deadzone: 0.08}
+  arm_goal_source: static_first_bringup
+  arm_goal_radius_pitch_yaw: [0.6, 0.0, 0.0]
+
+site_limits:
+  # 必须从 Gate 8 的逐关节现场 evidence 填入；LMP URDF 不是硬件认证限位。
+  a2_joint_position_rad:
+    FL_hip_joint: [TO_VERIFY, TO_VERIFY]
+    FR_hip_joint: [TO_VERIFY, TO_VERIFY]
+    RL_hip_joint: [TO_VERIFY, TO_VERIFY]
+    RR_hip_joint: [TO_VERIFY, TO_VERIFY]
+    FL_thigh_joint: [TO_VERIFY, TO_VERIFY]
+    FR_thigh_joint: [TO_VERIFY, TO_VERIFY]
+    RL_thigh_joint: [TO_VERIFY, TO_VERIFY]
+    RR_thigh_joint: [TO_VERIFY, TO_VERIFY]
+    FL_calf_joint: [TO_VERIFY, TO_VERIFY]
+    FR_calf_joint: [TO_VERIFY, TO_VERIFY]
+    RL_calf_joint: [TO_VERIFY, TO_VERIFY]
+    RR_calf_joint: [TO_VERIFY, TO_VERIFY]
+  piper_joint_position_rad:
+    arm_j1: [TO_VERIFY, TO_VERIFY]
+    arm_j2: [TO_VERIFY, TO_VERIFY]
+    arm_j3: [TO_VERIFY, TO_VERIFY]
+    arm_j4: [TO_VERIFY, TO_VERIFY]
+    arm_j5: [TO_VERIFY, TO_VERIFY]
+    arm_j6: [TO_VERIFY, TO_VERIFY]
+  a2_target_rate_rad_per_policy_tick:
+    FL_hip_joint: TO_VERIFY
+    FR_hip_joint: TO_VERIFY
+    RL_hip_joint: TO_VERIFY
+    RR_hip_joint: TO_VERIFY
+    FL_thigh_joint: TO_VERIFY
+    FR_thigh_joint: TO_VERIFY
+    RL_thigh_joint: TO_VERIFY
+    RR_thigh_joint: TO_VERIFY
+    FL_calf_joint: TO_VERIFY
+    FR_calf_joint: TO_VERIFY
+    RL_calf_joint: TO_VERIFY
+    RR_calf_joint: TO_VERIFY
+  piper_target_rate_rad_per_policy_tick:
+    arm_j1: TO_VERIFY
+    arm_j2: TO_VERIFY
+    arm_j3: TO_VERIFY
+    arm_j4: TO_VERIFY
+    arm_j5: TO_VERIFY
+    arm_j6: TO_VERIFY
+
+timing:
+  policy_period_s: 0.02
+  a2_state_max_age_s: 0.20
+  piper_state_max_age_s: 0.20
+  maximum_state_skew_s: 0.05
+  inference_deadline_s: 0.02
+  consecutive_deadline_miss_limit: TO_VERIFY
+  a2_command_fresh_state_gate_s: 0.20
+  a2_process_loss_stop_watchdog_s: TO_VERIFY
+  piper_command_watchdog_s: 0.20
+  piper_feedback_watchdog_s: 0.50
+
+operations:
+  initial_joint_range_acceptance: TO_VERIFY
+  hold_behavior: TO_VERIFY
+  normal_stop_behavior: TO_VERIFY
+  software_stop_behavior: TO_VERIFY
+  recovery_behavior: TO_VERIFY
+  hardware_emergency_stop: TO_VERIFY
+  operator_live_approval: receipt_required
+
+safety:
+  # Gate script永远不会修改此值。完成现场字段并人工审批后，由operator手动改为true。
+  output_enabled: false

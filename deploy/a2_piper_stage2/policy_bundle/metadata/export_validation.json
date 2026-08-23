@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "evidence_level": "runtime_pass_offline_cpu",
+  "parity": {
+    "device": "cpu",
+    "torch": "2.7.0+cu128",
+    "tolerance": 1e-06,
+    "dog_input_shape": [1, 1620],
+    "dog_output_shape": [1, 12],
+    "arm_input_shape": [1, 600],
+    "arm_output_shape": [1, 8],
+    "max_absolute_errors": {
+      "dog_actor_output": 0.0,
+      "arm_actor_output": 0.0,
+      "dog_final_joint_target": 0.0,
+      "arm_final_joint_target": 0.0,
+      "arm_plan_command": 0.0,
+      "arm_plan_to_dog_preview": 0.0,
+      "dog_preview_history": 0.0,
+      "dog_flattened_history": 0.0,
+      "projected_gravity": 0.0
+    }
+  },
+  "checkpoint_direct_comparison": {
+    "saved_torchscript_batch_size": 3,
+    "dog_max_absolute_error": 0.0,
+    "arm_max_absolute_error": 0.0,
+    "reference_final_action_max_absolute_error": 4.768e-07
+  },
+  "cpu_benchmark": {
+    "torch_threads": 1,
+    "warmup_pairs": 200,
+    "measured_pairs": 2000,
+    "pair": "arm_actor_then_dog_actor",
+    "batch": 1,
+    "latency_ms": {
+      "mean": 0.352047212,
+      "p50": 0.346809,
+      "p95": 0.36419295,
+      "p99": 0.5088587,
+      "max": 8.758339
+    },
+    "host_specific": true
+  },
+  "hardware_run": false
+}

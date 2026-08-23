@@ -12,12 +12,14 @@ Updated: 2026-06-04 14:48 HKT
 - `shared_policy_runtime/`
   - `ManagerBasedEnv`、`PolicySpec`、policy assets、observation/action runtime 的共享事实。
   - 修改 policy loading、inference device、observation terms、action terms、history buffer 或跨 robot policy contract 时读取。
+- A2 + PiPER Stage2 dual-policy deployment: `../deploy/a2_piper_stage2/MEMORY.md`
 
 ## Downstream Routes
 
 - ROS1 Aliengo: `../ros1/memory/MEMORY.md`
 - ROS2 Go2W: `../ros2/src/memory/MEMORY.md`
 - ROS2 A2: `../ros2/A2/MEMORY.md`
+- A2 + PiPER Stage2: `../deploy/a2_piper_stage2/MEMORY.md`
 
 ## Notes
 

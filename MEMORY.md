@@ -24,6 +24,9 @@ Updated: 2026-08-22 HKT
 - `ros2/Piper/MEMORY.md`
   - A2 PC2 上的 PiPER USB-CAN hardware owner 与 ROS 2 semantic bridge memory。
   - 处理 `/piper/*` interface、PC2 container、SocketCAN、PiPER watchdog、remote manipulation adapter 时读取。
+- `deploy/a2_piper_stage2/MEMORY.md`
+  - A2 + PiPER LMP Stage2 dual-policy direct runtime、真实 bundle contract、offline parity/shadow、Docker 与现场 Gate。
+  - 处理 `deploy/a2_piper_stage2/**`、dog/arm history、arm-first preview、Stage2 action mapping 或现场 manifest/site 填写时读取。
 
 ## Read Order
 

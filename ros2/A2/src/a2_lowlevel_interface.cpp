@@ -172,6 +172,7 @@ void A2LowLevelInterface::low_state_callback(
     const unitree_hg::msg::LowState::SharedPtr msg) {
   A2LowStateSnapshot snapshot;
   snapshot.has_state = true;
+  snapshot.received_steady_time = std::chrono::steady_clock::now();
   snapshot.mode_pr = static_cast<std::uint8_t>(msg->mode_pr);
   snapshot.mode_machine = static_cast<std::uint8_t>(msg->mode_machine);
   snapshot.tick = static_cast<std::uint32_t>(msg->tick);
@@ -189,7 +190,7 @@ void A2LowLevelInterface::low_state_callback(
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
     latest_state_ = snapshot;
-    latest_state_time_ = std::chrono::steady_clock::now();
+    latest_state_time_ = snapshot.received_steady_time;
   }
 }
 

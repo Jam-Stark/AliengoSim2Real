@@ -1,0 +1,64 @@
+schema: a2_piper_stage2_site
+schema_version: 1
+
+identity:
+  site_name: deterministic_offline_mock
+  policy_host: localhost
+  ros_domain_id: 0
+  policy_network_interface: loopback
+
+transport:
+  mode: synthetic_mock
+  hardware_connected: false
+  a2:
+    semantic_state:
+      joint_topic: /mock/a2/joint_states
+      joint_message_type: sensor_msgs/msg/JointState
+      attitude_topic: /mock/a2/imu
+      attitude_message_type: sensor_msgs/msg/Imu
+      joint_order:
+        - FL_hip_joint
+        - FR_hip_joint
+        - RL_hip_joint
+        - RR_hip_joint
+        - FL_thigh_joint
+        - FR_thigh_joint
+        - RL_thigh_joint
+        - RR_thigh_joint
+        - FL_calf_joint
+        - FR_calf_joint
+        - RL_calf_joint
+        - RR_calf_joint
+      quaternion_order: xyzw
+      attitude_frame: mock_root_link
+    semantic_command:
+      topic: /mock/a2/joint_command
+      message_type: trajectory_msgs/msg/JointTrajectory
+      target_semantics: absolute_position_rad
+  piper:
+    semantic_state:
+      topic: /mock/piper/joint_states
+      message_type: sensor_msgs/msg/JointState
+      joint_order: [arm_j1, arm_j2, arm_j3, arm_j4, arm_j5, arm_j6]
+    semantic_command:
+      topic: /mock/piper/joint_command
+      message_type: trajectory_msgs/msg/JointTrajectory
+      target_semantics: absolute_position_rad
+    gripper_interface: absent
+
+commands:
+  locomotion_source: deterministic_zero
+  arm_goal_source: deterministic_radius_0.6_pitch_0_yaw_0
+
+timing:
+  policy_period_s: 0.02
+  clock: local_monotonic_mock
+
+operations:
+  hardware_emergency_stop: not_applicable_no_hardware
+  hold_behavior: no_hardware_output
+  stop_behavior: stop_mock_loop
+  recovery_behavior: restart_mock_loop
+
+safety:
+  output_enabled: false

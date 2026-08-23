@@ -1,0 +1,29 @@
+bundle_format: lmp_stage2_deployment
+bundle_format_version: 1
+reference_format_version: 1
+checkpoint_format_version: 2
+checkpoint_iteration: 20000
+python: "3.11.15"
+torch: "2.7.0+cu128"
+numpy: "1.26.0"
+pyyaml: "6.0.2"
+platform: "Linux x86_64 glibc 2.39"
+cuda_runtime_reported_by_torch: "12.8"
+torch_install_source_provenance: unavailable_from_installed_environment
+deployment_cpu_candidate:
+  torch: "2.7.0"
+  index_url: "https://download.pytorch.org/whl/cpu"
+  acceptance: must_pass_bundle_parity_on_deployment_host
+torchscript_export: torch.jit.script
+artifacts:
+  dog_actor: dog_actor.pt
+  arm_actor: arm_actor.pt
+  dog_reference: parity/dog_reference.npz
+  arm_reference: parity/arm_reference.npz
+  source_contract: metadata/lmp_source_contract.json
+  policy_manifest: policy_manifest.yaml
+  validator: tools/validate_bundle.py
+policy_manifest:
+  status: included
+  schema: lmp_stage2_dual_policy_source_contract
+  downstream_schema_validation: unavailable_because_target_branch_files_were_not_publicly_accessible_at_handoff

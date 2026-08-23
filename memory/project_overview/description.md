@@ -25,6 +25,7 @@ read_when:
 - ROS1 Aliengo deployment: `ros1/memory/MEMORY.md`
 - ROS2 Go2W deployment: `ros2/src/memory/MEMORY.md`
 - ROS2 A2 low-level deployment: `ros2/A2/MEMORY.md`
+- A2 + PiPER Stage2 dual-policy deployment: `deploy/a2_piper_stage2/MEMORY.md`
 - Shared policy runtime: `memory/shared_policy_runtime/description.md`
 
 ## When Codex/AI Should Read This Entry
@@ -43,6 +44,7 @@ read_when:
 - `ros1/`: Aliengo ROS1 deployment package。
 - `ros2/src/`: Go2W ROS2 `go2w_vtm` package。
 - `ros2/A2/`: A2 ROS2 low-level adapter package。
+- `deploy/a2_piper_stage2/`: LMP Stage2 dog+arm direct C++ runtime、真实 policy bundle、offline parity/mock、Docker 与 site/Gate verification；A2 复用同机 `A2LowLevelInterface`，实机状态仍只认现场 receipts。
 - `ros2/A2_Guide/`: A2 SDK/reference docs，memory 只引用该目录，不复制长文档。
 
 ## TODO Summary
@@ -53,6 +55,7 @@ read_when:
 ## DONE Summary
 
 - 已建立顶层 memory routing，覆盖 global、ROS1 Aliengo、ROS2 Go2W、ROS2 A2 四类入口。
+- 已增加 A2 + PiPER Stage2 dual-policy deployment route，保持 A2/PiPER 底层 subsystem ownership 不变。
 - Global README 已转为 general robot policy deployment framework 入口，避免只描述单一机器人。
 
 ## Recommended Next Files To Read

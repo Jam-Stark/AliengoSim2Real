@@ -1,0 +1,51 @@
+name: a2-piper-stage2
+
+services:
+  policy-runtime:
+    image: ${A2_PIPER_STAGE2_IMAGE:-a2-piper-stage2:humble-torch2.7.0-cpu}
+    build:
+      context: ../../..
+      dockerfile: deploy/a2_piper_stage2/docker/Dockerfile
+      args:
+        A2_BASE_IMAGE: ${A2_BASE_IMAGE:-a2-humble-deploy:2026-06-05}
+        TORCH_VERSION: ${TORCH_VERSION:-2.7.0}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
+        LIBTORCH_URL: ${LIBTORCH_URL:-https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.0%2Bcpu.zip}
+        NUMPY_VERSION: ${NUMPY_VERSION:-1.26.0}
+        PYYAML_VERSION: ${PYYAML_VERSION:-6.0.2}
+    platform: ${A2_DOCKER_PLATFORM:-linux/amd64}
+    network_mode: host
+    ipc: host
+    privileged: true
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      A2_NET_IFACE: ${A2_NET_IFACE:?Run configure_policy_host.sh with --iface}
+      ROS_NETWORK_INTERFACE: ${A2_NET_IFACE:?Run configure_policy_host.sh with --iface}
+      POLICY_HOST_IPV4: ${POLICY_HOST_IPV4:?Run configure_policy_host.sh with --host-ip}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:?Run configure_policy_host.sh with --domain-id}
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      A2_LOWSTATE_TOPIC: ${A2_LOWSTATE_TOPIC:-/lowstate}
+      A2_LOWCMD_TOPIC: ${A2_LOWCMD_TOPIC:-/lowcmd}
+      A2_TEST_LOG_DIR: /evidence/a2_existing
+    volumes:
+      - type: bind
+        source: ${POLICY_BUNDLE_DIR:?Run configure_policy_host.sh with --bundle}
+        target: /policy_bundle
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SITE_CONFIG_FILE:?Run configure_policy_host.sh with --site}
+        target: /site.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${EVIDENCE_DIR:?Run configure_policy_host.sh with --evidence}
+        target: /evidence
+        bind:
+          create_host_path: false

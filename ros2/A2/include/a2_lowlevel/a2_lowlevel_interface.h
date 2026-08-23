@@ -47,6 +47,7 @@ inline constexpr std::array<const char *, kA2JointCount> kA2MotorNames = {
 
 struct A2LowStateSnapshot {
   bool has_state = false;
+  std::chrono::steady_clock::time_point received_steady_time{};
   std::uint8_t mode_pr = 0;
   std::uint8_t mode_machine = 0;
   std::uint32_t tick = 0;
@@ -55,6 +56,13 @@ struct A2LowStateSnapshot {
   std::array<float, kA2JointCount> joint_q{};
   std::array<float, kA2JointCount> joint_dq{};
   std::array<std::uint8_t, kA2WirelessRemoteSize> wireless_remote{};
+
+  std::chrono::steady_clock::duration receive_age() const {
+    if (!has_state) {
+      return std::chrono::steady_clock::duration::max();
+    }
+    return std::chrono::steady_clock::now() - received_steady_time;
+  }
 };
 
 struct A2JointCommand {
