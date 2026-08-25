@@ -36,10 +36,13 @@ if [[ "${ID:-}" != "ubuntu" ]]; then
   echo "ERROR: expected Ubuntu, found ID=${ID:-UNSET}." >&2
   exit 1
 fi
-if [[ "${VERSION_ID:-}" != "22.04" ]]; then
-  echo "ERROR: expected Ubuntu 22.04, found VERSION_ID=${VERSION_ID:-UNSET}." >&2
-  exit 1
-fi
+case "${VERSION_ID:-}" in
+  22.04|24.04) ;;
+  *)
+    echo "ERROR: expected Ubuntu 22.04 or 24.04 LTS, found VERSION_ID=${VERSION_ID:-UNSET}." >&2
+    exit 1
+    ;;
+esac
 docker_arch="$(dpkg --print-architecture)"
 if [[ "${docker_arch}" != "amd64" ]]; then
   echo "ERROR: expected amd64/x86_64, found ${docker_arch}." >&2

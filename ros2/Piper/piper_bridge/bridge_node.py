@@ -29,7 +29,6 @@ class PiperBridgeNode(Node):
         self.declare_parameter("can_name", "can0")
         self.declare_parameter("control_rate_hz", 50.0)
         self.declare_parameter("diagnostic_rate_hz", 10.0)
-        self.declare_parameter("speed_percent", 5)
         self.declare_parameter("command_timeout_s", 0.20)
         self.declare_parameter("feedback_timeout_s", 0.50)
         self.declare_parameter("startup_feedback_timeout_s", 3.0)
@@ -42,7 +41,6 @@ class PiperBridgeNode(Node):
         self.diagnostic_rate_hz = float(
             self.get_parameter("diagnostic_rate_hz").value
         )
-        self.speed_percent = int(self.get_parameter("speed_percent").value)
         self.command_timeout_s = float(
             self.get_parameter("command_timeout_s").value
         )
@@ -72,9 +70,6 @@ class PiperBridgeNode(Node):
             self.resume_timeout_s,
         ) <= 0.0:
             raise ValueError("all timeout parameters must be positive")
-        if not 1 <= self.speed_percent <= 100:
-            raise ValueError("speed_percent must be in [1, 100]")
-
         command_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
@@ -105,7 +100,6 @@ class PiperBridgeNode(Node):
         self._adapter = PiperSdkAdapter(
             can_name=self.can_name,
             control_period_s=period_s,
-            speed_percent=self.speed_percent,
         )
         self._motion_enabled = False
         self._hardware_stop_required = False
@@ -122,6 +116,10 @@ class PiperBridgeNode(Node):
             initial_feedback = self._adapter.wait_for_feedback(
                 startup_feedback_timeout_s
             )
+            (
+                self._hardware_joint_limits_rad,
+                self._hardware_max_joint_speed_rad_s,
+            ) = self._adapter.read_joint_limits()
         except Exception:
             self._adapter.disconnect()
             raise
@@ -159,7 +157,9 @@ class PiperBridgeNode(Node):
                     "joint_command must contain exactly one trajectory point"
                 )
             command = normalize_joint_command(
-                message.joint_names, message.points[0].positions
+                message.joint_names,
+                message.points[0].positions,
+                self._hardware_joint_limits_rad,
             )
         except CommandValidationError as exc:
             self.get_logger().error(f"rejecting joint command: {exc}")
@@ -273,6 +273,7 @@ class PiperBridgeNode(Node):
                 raise PiperSdkError(
                     "PiPER did not report all motors enabled before timeout"
                 )
+            feedback = self._adapter.prepare_joint_control(self.enable_timeout_s)
         except Exception as exc:
             self._close_command_gate()
             stop_error = self._quick_stop_hardware()
@@ -283,6 +284,10 @@ class PiperBridgeNode(Node):
             self._fault_reason = response.message
             return response
 
+        now = time.monotonic()
+        self._last_feedback = feedback
+        self._last_sdk_timestamp_s = feedback.sdk_timestamp_s
+        self._last_feedback_change_monotonic = now
         self._motion_enabled = True
         self._latest_command = None
         self._last_command_monotonic = None
@@ -290,7 +295,8 @@ class PiperBridgeNode(Node):
         self._fault_reason = ""
         response.success = True
         response.message = (
-            "motor enable confirmed and command gate opened; send a fresh "
+            "motor enable and CAN/MIT-high-follow mode confirmed; command gate "
+            "opened; send a fresh "
             f"joint_command within {self.command_timeout_s:.3f}s"
         )
         return response
@@ -438,7 +444,19 @@ class PiperBridgeNode(Node):
             "can_name": self.can_name,
             "command_gate_open": str(self._motion_enabled).lower(),
             "hardware_stop_required": str(self._hardware_stop_required).lower(),
-            "speed_percent": str(self.speed_percent),
+            "joint_control_mode": "move_j_mit_high_follow",
+            "motion_ctrl_2": "0x01,0x01,0,0xAD",
+            "hardware_joint_min_deg": ",".join(
+                f"{math.degrees(lower):.1f}"
+                for lower, _upper in self._hardware_joint_limits_rad
+            ),
+            "hardware_joint_max_deg": ",".join(
+                f"{math.degrees(upper):.1f}"
+                for _lower, upper in self._hardware_joint_limits_rad
+            ),
+            "hardware_max_joint_speed_rad_s": ",".join(
+                f"{speed:.3f}" for speed in self._hardware_max_joint_speed_rad_s
+            ),
             "feedback_age_s": self._format_age(self._feedback_age(now)),
             "command_age_s": self._format_age(command_age),
             "arm_status": str(feedback.arm_status if feedback else -1),

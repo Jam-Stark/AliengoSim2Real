@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG PIPER_SDK_REPO=https://github.com/krushell/piper_sdk.git
 ARG PIPER_SDK_REF=master
 RUN git clone --depth 1 --branch "${PIPER_SDK_REF}" "${PIPER_SDK_REPO}" /opt/piper_sdk \
-    && python3 -m pip install --no-cache-dir /opt/piper_sdk
+    && python3 -m pip install --no-cache-dir "typing-extensions>=4.0" /opt/piper_sdk
 
 COPY . /opt/piper_ws/src/piper_bridge
 RUN source /opt/ros/humble/setup.bash \

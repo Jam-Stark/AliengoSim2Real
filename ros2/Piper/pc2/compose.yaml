@@ -1,0 +1,15 @@
+name: a2-piper-stage2
+
+services:
+  piper-bridge:
+    image: ${PIPER_BRIDGE_IMAGE}
+    container_name: a2-piper-pc2-bridge
+    network_mode: host
+    restart: "no"
+    environment:
+      PIPER_NET_IFACE: ${PIPER_NET_IFACE}
+      PIPER_CAN_NAME: ${PIPER_CAN_NAME}
+      PIPER_NAMESPACE: ${PIPER_NAMESPACE}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}
+    volumes:
+      - ../bridge/piper_bridge.yaml:/opt/piper_ws/install/piper_bridge/share/piper_bridge/config/piper_bridge.yaml:ro

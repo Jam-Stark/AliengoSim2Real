@@ -80,7 +80,7 @@ PiPER route 由 A2 PC2 本地独占 USB-CAN，并通过 `/piper/*` ROS 2 interfa
 ```bash
 cd deploy/a2_piper_stage2
 ./scripts/configure_policy_host.sh \
-  --iface enp131s0 \
+  --iface enp130s0 \
   --host-ip 192.168.123.222/24 \
   --domain-id 0 \
   --site "$PWD/config/site.mock.yaml"

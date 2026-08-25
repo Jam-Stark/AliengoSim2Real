@@ -11,8 +11,8 @@ Usage:
   $0 --iface IFACE --host-ip IPV4/CIDR --domain-id ID [options]
 
 Required explicit values:
-  --iface IFACE       Robot Ethernet interface (observed host: enp131s0)
-  --host-ip CIDR      Address on that interface (observed host: 192.168.123.222/24)
+  --iface IFACE       Robot Ethernet interface (m45: enp130s0)
+  --host-ip CIDR      Address on that interface (m45: 192.168.123.222/24)
   --domain-id ID      ROS_DOMAIN_ID shared by policy host, A2, and PC2 (example: 0)
 
 Options:

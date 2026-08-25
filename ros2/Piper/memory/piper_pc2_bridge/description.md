@@ -1,8 +1,8 @@
 ---
 name: piper_pc2_bridge
 scope: ros2/Piper
-status: hardware-validation-pending
-last_updated: "2026-08-22 HKT"
+status: dual-live-pass-bridge-stopped
+last_updated: "2026-08-25 00:55 HKT"
 owned_paths:
   - ros2/Piper/
 read_when:
@@ -36,4 +36,15 @@ read_when:
 
 ## Validation status
 
-Local-only checks completed: Python compile, model/facade unit tests, shell syntax, package metadata. Docker image、ROS 2 graph、PC2 USB-CAN 与 real PiPER motion 尚未在本环境执行，因此 status 保持 `hardware-validation-pending`。
+- 2026-08-25 dual live完成first-A resume/enable、同步init、PolicyActive及两次显式轨迹；Stage2 live evidence为`evidence/live-both/20260825_004737_129916`。
+- 旧second-L2+B立即stop PiPER，实测没有回first-A启动休息位。新policy-host build改为同步回启动休息位后stop，尚待下一次hardware验证；PC2 bridge contract/image不变。
+- 当前测试已结束，PC2 bridge container停止；A2已恢复官方`ai_sport`。
+
+- 实机PC2只读盘点见`docs/PC2_READONLY_20260824.md`：Ubuntu 22.04.4 RT kernel、i7-1355U、30 GiB RAM、`.123.162`/`.124.162`双网口、ROS2 Humble/CycloneDDS已确认。
+- 用户标记USB【3】上的PiPER USB-CAN已枚举为`1d50:606f`、serial `003100365343570F20363330`、driver `gs_usb`、kernel path `1-6:1.0`、interface `can0`。
+- 当前`can_piper`为1 Mbit/s UP/ERROR-ACTIVE且无bus error；bridge运行、command gate关闭，`/piper/joint_states`稳定50 Hz。
+- M45通过`.123.0/24`同时访问PC1`.161`和PC2`.162`，domain 0可见A2 graph；`/lowstate`约1052.7 Hz。`.124.162`是PC2 `net1`地址，不是m45当前runtime直达路径。
+- PC2当前没有default route；后续SDK/image/offline packages应由m45准备后经`.123.162`传入，不擅自修改PC2系统网络。
+- PC2 bootstrap、CAN feedback、bridge launch与ros-readonly已PASS；尚未执行任何PiPER motion，下一步是physical与ros-readonly人工approval。
+- 2026-08-24 21:05 HKT，操作员在command gate关闭且无joint command时逐一人工移动PiPER关节，确认`arm_j1..arm_j6` state mapping全部PASS；direction/zero/limits/stop仍待正式Gate。
+- Stage2 direct pre-policy lifecycle已改为订阅`/piper/diagnostics`：first A后发送measured-position hold，人工enable后的fresh hold先接管watchdog，只有fresh `command_gate_open=true`才开始300-tick manifest-init插值。bridge本身仍不auto-enable，PC2 local stop/latch语义不变；新policy-host代码尚未目标build或实机enable。

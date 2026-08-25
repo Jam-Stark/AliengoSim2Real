@@ -1,5 +1,11 @@
 # DONE
 
+## 2026-08-24 21:24 HKT
+
+- [x] Stage2 pre-enable candidate在isolated A2 command topic下shadow ready且零输出；同场全局`/lowcmd` observer发现约1000 Hz bare-DDS active publisher。已明确区分candidate no-output PASS与现场唯一LowCmd owner FAIL，并保留evidence。
+- [x] 2026-08-24 21:35 HKT，`CheckMode`实测`form='0', name='ai', service='ai_sport'`；操作员授权guarded release后`ReleaseMode ret=0`、mode为空且5秒`lowcmd_count=0`，确认官方owner与MotionSwitcher交接路径。
+- [x] 2026-08-25 dual live结束后formal stop与`no-lowcmd`通过，guarded `SelectMode('ai_sport')`及最终`CheckMode service='ai_sport'`均PASS。
+
 ## 2026-06-04 14:34 HKT
 
 - [x] 确认项目根目录没有顶层 `MEMORY.md`，因此原项目没有可用 root memory 入口。

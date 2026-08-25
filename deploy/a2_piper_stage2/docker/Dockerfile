@@ -29,8 +29,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-trajectory-msgs \
     && rm -rf /var/lib/apt/lists/*
 
-# Python Torch is used only by the offline parity/benchmark CLI.
-RUN python3 -m pip install --no-cache-dir \
+# Ubuntu Jammy's pip 22 emits UNKNOWN package metadata for this PEP 621
+# pyproject. Use the exact pip version verified on the target host build.
+RUN python3 -m pip install --no-cache-dir --upgrade "pip==25.1.1" \
+    && python3 -m pip install --no-cache-dir \
         --index-url "${TORCH_INDEX_URL}" \
         "torch==${TORCH_VERSION}" \
     && python3 -m pip install --no-cache-dir \
@@ -77,6 +79,7 @@ RUN source /opt/ros/humble/setup.bash \
            -DBUILD_A2_POLICY_DEPLOY=ON \
            -DCMAKE_BUILD_TYPE=Release \
            -DTorch_DIR=/opt/libtorch-stage2/share/cmake/Torch \
+           -DCMAKE_INSTALL_RPATH=/opt/libtorch-stage2/lib \
            -DA2_PIPER_STAGE2_DEFAULT_BUNDLE_PATH=/policy_bundle \
     && test -x /opt/stage2_ws/install/lib/a2_lowlevel/a2_policy_deploy \
     && test -x /opt/stage2_ws/install/lib/a2_piper_stage2_direct/a2_piper_stage2_direct \

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 source /opt/ros/humble/setup.bash
 source /opt/piper_ws/install/setup.bash
+set -u
 
 export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 export ROS_LOCALHOST_ONLY=0

@@ -18,11 +18,9 @@ class PiperSdkAdapter:
         self,
         can_name: str,
         control_period_s: float,
-        speed_percent: int,
     ) -> None:
         self.can_name = can_name
         self.control_period_s = control_period_s
-        self.speed_percent = speed_percent
         self._piper: Any | None = None
         self._previous_joint_timestamp_s: float | None = None
 
@@ -137,6 +135,37 @@ class PiperSdkAdapter:
             speed_sample_count=counts,
         )
 
+    def read_joint_limits(
+        self, timeout_s: float = 2.0
+    ) -> tuple[tuple[tuple[float, float], ...], tuple[float, ...]]:
+        piper = self._require_connected()
+        piper.SearchAllMotorMaxAngleSpd()
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            motors = (
+                piper.GetAllMotorAngleLimitMaxSpd()
+                .all_motor_angle_limit_max_spd.motor
+            )
+            limits = tuple(
+                (
+                    math.radians(float(motors[index].min_angle_limit) * 0.1),
+                    math.radians(float(motors[index].max_angle_limit) * 0.1),
+                )
+                for index in range(1, 7)
+            )
+            speeds = tuple(
+                float(motors[index].max_joint_spd) * 0.001
+                for index in range(1, 7)
+            )
+            if all(lower < upper for lower, upper in limits) and all(
+                speed > 0.0 for speed in speeds
+            ):
+                return limits, speeds
+            time.sleep(0.02)
+        raise PiperSdkError(
+            f"no complete PiPER motor limit feedback within {timeout_s:.1f}s"
+        )
+
     def enable(self, timeout_s: float) -> bool:
         piper = self._require_connected()
         deadline = time.monotonic() + timeout_s
@@ -145,6 +174,43 @@ class PiperSdkAdapter:
                 return True
             time.sleep(0.01)
         return False
+
+    def prepare_joint_control(self, timeout_s: float) -> PiperFeedback:
+        piper = self._require_connected()
+        deadline = time.monotonic() + timeout_s
+        stable_since: float | None = None
+        last_timestamp: float | None = None
+        last_feedback: PiperFeedback | None = None
+        while time.monotonic() < deadline:
+            piper.MotionCtrl_2(0x01, 0x01, 0, 0xAD)
+            status_msg = piper.GetArmStatus()
+            timestamp = float(status_msg.time_stamp)
+            if float(status_msg.Hz) <= 0.0 or timestamp == last_timestamp:
+                time.sleep(0.005)
+                continue
+            last_timestamp = timestamp
+            arm_status = int(status_msg.arm_status.arm_status)
+            ctrl_mode = int(status_msg.arm_status.ctrl_mode)
+            if arm_status == 0 and ctrl_mode == 0x01:
+                if stable_since is None:
+                    stable_since = time.monotonic()
+                if time.monotonic() - stable_since >= 0.5:
+                    return self.read_feedback(require_speed_samples=False)
+            else:
+                stable_since = None
+                if arm_status not in (0, 0x05):
+                    raise PiperSdkError(
+                        "PiPER mode switch failed: "
+                        f"arm_status={arm_status}, ctrl_mode={ctrl_mode}"
+                    )
+            time.sleep(0.005)
+        if last_feedback is None:
+            last_feedback = self.read_feedback(require_speed_samples=False)
+        raise PiperSdkError(
+            "PiPER CAN/MIT-high-follow mode did not stabilize: "
+            f"arm_status={last_feedback.arm_status}, "
+            f"ctrl_mode={last_feedback.ctrl_mode}"
+        )
 
     def disable(self, timeout_s: float) -> bool:
         piper = self._require_connected()
@@ -188,7 +254,10 @@ class PiperSdkAdapter:
     def command_joint_positions(self, positions_rad: tuple[float, ...]) -> None:
         piper = self._require_connected()
         target = radians_to_millidegrees(positions_rad)
-        piper.MotionCtrl_2(0x01, 0x01, self.speed_percent, 0x00)
+        # Match krushell/piper_sdk's piper_set_mit.py: CAN control, MOVE J,
+        # zero trajectory speed, and the 0xAD MIT/high-follow flag.  JointCtrl
+        # remains the absolute-position command; this is not JointMitCtrl.
+        piper.MotionCtrl_2(0x01, 0x01, 0, 0xAD)
         piper.JointCtrl(*target)
 
     def quick_stop(self) -> None:

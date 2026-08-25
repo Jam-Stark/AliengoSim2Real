@@ -9,8 +9,13 @@
     state_timeout_ms: 200
 
     piper_state_topic: /piper/joint_states
+    piper_diagnostics_topic: /piper/diagnostics
     piper_command_topic: /piper/joint_command
+    piper_resume_service: /piper/resume
+    piper_enable_service: /piper/enable
     piper_stop_service: /piper/stop
+    arm_goal_topic: /a2_piper_stage2/arm_goal
+    trajectory_start_service: /a2_piper_stage2/start_arm_goal_trajectory
     status_topic: /a2_piper_stage2/status
 
     a2_state_max_age_ms: 200
@@ -25,6 +30,18 @@
     arm_goal_radius_m: 0.6
     arm_goal_pitch_rad: 0.0
     arm_goal_yaw_rad: 0.0
+    # PolicyActive uses a zero arm task command and holds PiPER at init until
+    # an explicit arm-goal topic message or trajectory trigger is received.
+    # One trigger runs init -> start -> end -> init. These are spherical
+    # task-space goals [radius_m, elevation_pitch_rad, yaw_rad], not joint
+    # angles. PiPER joint targets remain limited by the verified site contract.
+    arm_goal_trajectory_enabled: true
+    arm_goal_trajectory_start: [0.4, 1.0472, 0.0]
+    arm_goal_trajectory_end: [0.4, -1.2566, 0.0]
+    arm_goal_trajectory_approach_duration_s: 4.0
+    arm_goal_trajectory_duration_s: 6.0
+    arm_goal_trajectory_return_duration_s: 4.0
+    policy_handover_steps: 50
 
     standup_stage1_steps: 150
     standup_stage2_steps: 150
@@ -32,11 +49,15 @@
     standup_front_alpha_lag: 0.04
     standup_kp_start: 3.0
     standup_kd_start: 0.5
-    controlled_down_steps: 250
-    controlled_down_hip_q: 0.0
-    controlled_down_thigh_q: 1.5
-    controlled_down_calf_q: -2.77
-    controlled_down_gain_scale: 1.0
+    stop_reset_steps: 250
+    prone_interpolation_steps: 250
+    # 2026-08-24 m45 read-only capture while this A2 was lying prone.
+    # Training order: FL/FR/RL/RR hip, thigh, calf; unit rad.
+    prone_target_training_rad:
+      [0.3602, -0.3789, 0.3382, -0.3506,
+       1.1862, 1.1942, 1.2177, 1.1831,
+       -2.7570, -2.7380, -2.7485, -2.7468]
+    stop_gain_scale: 1.0
     status_period_ms: 200
 
     # Safe defaults. stage2_gate.sh live overrides all three only after the

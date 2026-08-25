@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-08-24 21:36 HKT
+
+- [x] m45/domain 0约1000 Hz bare-DDS `/lowcmd`已通过`CheckMode service='ai_sport'`与ReleaseMode前后流量变化确认为宇树官方控制链。
+- [x] Stage2 policy测试结束、A2安全落地、自研LowCmd publisher停止且`no-lowcmd`通过后，guarded restore已恢复`ai_sport`并确认`CheckMode service='ai_sport'`。
+
 ## 2026-06-04 14:34 HKT
 
 - [ ] 用 Unitree SDK2 sample 或实机 low-level smoke 对照 A2 CRC；如不一致，修正 `a2_crc` raw layout。

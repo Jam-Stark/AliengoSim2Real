@@ -18,7 +18,8 @@ class FakeClient:
                 "arm_status": "0",
                 "ctrl_mode": "1",
                 "status_hz": "100.0",
-                "speed_percent": "5",
+                "joint_control_mode": "move_j_mit_high_follow",
+                "motion_ctrl_2": "0x01,0x01,0,0xAD",
                 "command_gate_open": "true",
             }
         )
@@ -85,8 +86,13 @@ def test_facade_rejects_unsupported_motion_mode() -> None:
     client = FakeClient()
     facade = PiperSdkRos2Facade(client)
     try:
-        facade.MotionCtrl_2(0x01, 0x02, 5, 0x00)
+        facade.MotionCtrl_2(0x01, 0x02, 0, 0xAD)
     except RuntimeError as exc:
         assert "MOVE J" in str(exc)
     else:
         raise AssertionError("unsupported motion mode was accepted")
+
+
+def test_facade_accepts_krushell_move_j_mit_high_follow_mode() -> None:
+    facade = PiperSdkRos2Facade(FakeClient())
+    facade.MotionCtrl_2(0x01, 0x01, 0, 0xAD)

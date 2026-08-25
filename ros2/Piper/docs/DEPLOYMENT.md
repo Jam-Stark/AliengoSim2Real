@@ -44,15 +44,13 @@ read-only → resume（仅需要时）→ enable → fresh command stream
 
 - PC2 是用户开发计算机，具有 `192.168.123.162` 和 `192.168.124.162`；
 - `192.168.123.0/24` 是 switch-1 和 Unitree SDK/DDS 网段；
-- 外置 USB-C 与用户 PC 相连；本机仍需用 `lsusb -t` 确认所选物理口 `[2]` 的实际拓扑；
+- 用户确认通信线接在PC2 USB【3】；实机`lsusb -t`已映射到kernel path`1-6:1.0`；
 - PC2 运行宇树导航服务，不应替换系统镜像或进行无边界的系统升级；复杂依赖优先放入 Docker。
 
-以下信息不猜测，先标记为 `[待验证]`：
+2026-08-24已经完成的只读盘点和获批bootstrap/CAN/bridge见[PC2_READONLY_20260824.md](PC2_READONLY_20260824.md)：PC2是Ubuntu22.04.4/x86_64/RT kernel，`eth0=.123.162`、`net1=.124.162`，m45通过`.123.162`直达。PC2现已离线安装Docker/Compose/can-utils、PiPER SDK source与bridge image；`can_piper`为1 Mbit/s UP/ERROR-ACTIVE，command-gate-closed bridge与50 Hz joint state已验证。
 
-- PC2 的 OS、CPU architecture、Docker、ROS、磁盘余量和真实网卡名；
-- 本台 A2 能否通过端口 `[7]` 的单网线直接 SSH `192.168.123.162`；
-- USB-C `[2]` 的稳定 USB bus address；
-- 当前 A2 部署使用的 `ROS_DOMAIN_ID`；
+以下信息仍标记为 `[待验证]`：
+
 - 笔记本上已跑通的 krushell/PyTorch 环境是否与 ROS 2 Humble `rclpy` 共存；若不共存，先补 exact CUDA/driver/Torch report，再决定 native environment 或独立 GPU client container；
 - 宇树导航后台负载是否影响 PC2 的 50 Hz 周期。
 
@@ -68,7 +66,7 @@ bash ros2/Piper/scripts/collect_pc2_info.sh > pc2_piper_bridge_info.md
 
 ### 4.1 安装物理链路
 
-1. 断电后，将 PC2 USB-C `[2]` 通过支持数据的线/转接头连接到 PiPER 原厂 USB-CAN。
+1. 断电后，将PC2 USB【3】通过支持数据的线/转接头连接到PiPER原厂USB-CAN。
 2. 按 PiPER 硬件手册连接 CAN-H/CAN-L 和机械臂供电。
 3. 保证物理急停始终可触达。
 4. 启动 A2 与 PiPER，确认 USB 设备：
@@ -89,6 +87,8 @@ cd ~/projects
 git clone https://github.com/krushell/piper_sdk.git
 export PIPER_SDK_ROOT="$HOME/projects/piper_sdk"
 ```
+
+本台PC2的2026-08-24实测network没有default route，因此不要直接照抄上述在线`git clone`。应在m45准备并review目标source tree，再经`192.168.123.162`复制到PC2；除非网络负责人另行批准，不修改PC2 route。
 
 bridge 运行期间，不得同时运行该仓库中的直接控制脚本或 `piper_ros` 控制节点。PiPER `can_piper` 只能有一个命令所有者。
 
@@ -117,11 +117,11 @@ candump can_piper
 ```bash
 PIPER_SDK_ROOT="$HOME/projects/piper_sdk" \
 PIPER_CAN_NAME=can_piper \
-PIPER_USB_ADDRESS=1-2:1.0 \
+PIPER_USB_ADDRESS=1-6:1.0 \
 bash ros2/Piper/scripts/activate_can.sh
 ```
 
-示例中的 `1-2:1.0` 必须替换为目标 A2 实测值。
+`1-6:1.0`是本台A2的2026-08-24实测值；重新插线、更换USB口或更换模块后必须重新只读核对，不能沿用旧值。
 
 ## 5. 构建并运行 PC2 bridge container
 
@@ -145,6 +145,8 @@ PC2 上导入：
 ```bash
 gunzip -c ~/doordog-piper-bridge_humble.tar.gz | docker load
 ```
+
+PC2没有default route；本次已从m45经`.123.162`离线安装Docker Engine/can-utils并导入bridge image。恢复时不要重新在线安装或修改PC2 route，直接使用`/home/unitree/Workspace/baoquanc/`内的现场文件与evidence。
 
 查找持有 `192.168.123.162` 的 PC2 网卡：
 
@@ -248,7 +250,7 @@ ros2 run piper_bridge piper_krushell_manipulation -- \
 --resume_before_enable  # 仅用于明确清除前一次 bridge quick stop
 ```
 
-runner 加载原始 `Manipulation` 类，只在构造时把 `C_PiperInterface_V2` 替换为 `PiperSdkRos2Facade`。policy 网络、action scale、FK、keypoint observation、history 和 reset 逻辑仍由已经跑通的仓库提供。原任务中的 `MotionCtrl_2(..., speed=5, ...)` 映射为 PC2 bridge 固定参数 `speed_percent=5`；两边不一致时 adapter 会拒绝执行。
+runner 加载原始 `Manipulation` 类，只在构造时把 `C_PiperInterface_V2` 替换为 `PiperSdkRos2Facade`。policy 网络、action scale、FK、keypoint observation、history 和 reset 逻辑仍由已经跑通的仓库提供。当前bridge按krushell fork的`piper_set_mit.py`固定使用`MotionCtrl_2(1,1,0,0xAD)`后接`JointCtrl`，即MOVE J MIT/high-follow位置控制；facade会拒绝其他mode tuple。旧`Manipulation`若仍请求`(1,1,5,0x00)`，必须先与当前控制模式对齐，不能静默映射。
 
 ## 10. 与 A2 底盘同时运行
 

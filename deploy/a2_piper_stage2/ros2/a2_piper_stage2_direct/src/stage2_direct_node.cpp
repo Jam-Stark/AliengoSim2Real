@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 
@@ -45,6 +46,20 @@ std::string clean_status_reason(std::string reason) {
   return reason;
 }
 
+std::array<double, 2> quaternion_to_roll_pitch(
+    const std::array<float, 4> &quaternion_wxyz) {
+  const double w = quaternion_wxyz[0];
+  const double x = quaternion_wxyz[1];
+  const double y = quaternion_wxyz[2];
+  const double z = quaternion_wxyz[3];
+  const double roll =
+      std::atan2(2.0 * (w * x + y * z),
+                 1.0 - 2.0 * (x * x + y * y));
+  const double pitch =
+      std::asin(std::clamp(2.0 * (w * y - z * x), -1.0, 1.0));
+  return {roll, pitch};
+}
+
 }  // namespace
 
 Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
@@ -57,10 +72,21 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<bool>("validate_live_site_only", false);
   piper_state_topic_ = this->declare_parameter<std::string>(
       "piper_state_topic", "/piper/joint_states");
+  piper_diagnostics_topic_ = this->declare_parameter<std::string>(
+      "piper_diagnostics_topic", "/piper/diagnostics");
   piper_command_topic_ = this->declare_parameter<std::string>(
       "piper_command_topic", "/piper/joint_command");
+  piper_resume_service_ = this->declare_parameter<std::string>(
+      "piper_resume_service", "/piper/resume");
+  piper_enable_service_ = this->declare_parameter<std::string>(
+      "piper_enable_service", "/piper/enable");
   piper_stop_service_ = this->declare_parameter<std::string>(
       "piper_stop_service", "/piper/stop");
+  arm_goal_topic_ = this->declare_parameter<std::string>(
+      "arm_goal_topic", "/a2_piper_stage2/arm_goal");
+  trajectory_start_service_ = this->declare_parameter<std::string>(
+      "trajectory_start_service",
+      "/a2_piper_stage2/start_arm_goal_trajectory");
   status_topic_ = this->declare_parameter<std::string>(
       "status_topic", "/a2_piper_stage2/status");
   enable_motion_ = this->declare_parameter<bool>("enable_motion", false);
@@ -84,6 +110,31 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("arm_goal_pitch_rad", 0.0);
   arm_goal_yaw_rad_ =
       this->declare_parameter<double>("arm_goal_yaw_rad", 0.0);
+  arm_goal_trajectory_enabled_ =
+      this->declare_parameter<bool>("arm_goal_trajectory_enabled", false);
+  const std::vector<double> arm_goal_trajectory_start =
+      this->declare_parameter<std::vector<double>>(
+          "arm_goal_trajectory_start", {0.4, 1.0472, 0.0});
+  const std::vector<double> arm_goal_trajectory_end =
+      this->declare_parameter<std::vector<double>>(
+          "arm_goal_trajectory_end", {0.4, -1.2566, 0.0});
+  if (arm_goal_trajectory_start.size() != arm_goal_trajectory_start_.size() ||
+      arm_goal_trajectory_end.size() != arm_goal_trajectory_end_.size()) {
+    throw std::runtime_error(
+        "arm_goal_trajectory_start/end must contain exactly 3 values");
+  }
+  std::copy(arm_goal_trajectory_start.begin(), arm_goal_trajectory_start.end(),
+            arm_goal_trajectory_start_.begin());
+  std::copy(arm_goal_trajectory_end.begin(), arm_goal_trajectory_end.end(),
+            arm_goal_trajectory_end_.begin());
+  arm_goal_trajectory_approach_duration_s_ = this->declare_parameter<double>(
+      "arm_goal_trajectory_approach_duration_s", 4.0);
+  arm_goal_trajectory_duration_s_ = this->declare_parameter<double>(
+      "arm_goal_trajectory_duration_s", 6.0);
+  arm_goal_trajectory_return_duration_s_ = this->declare_parameter<double>(
+      "arm_goal_trajectory_return_duration_s", 4.0);
+  policy_handover_steps_ =
+      this->declare_parameter<int>("policy_handover_steps", 50);
   standup_stage1_steps_ =
       this->declare_parameter<int>("standup_stage1_steps", 150);
   standup_stage2_steps_ =
@@ -96,16 +147,22 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
       this->declare_parameter<double>("standup_kp_start", 3.0);
   standup_kd_start_ =
       this->declare_parameter<double>("standup_kd_start", 0.5);
-  controlled_down_steps_ =
-      this->declare_parameter<int>("controlled_down_steps", 250);
-  controlled_down_hip_q_ =
-      this->declare_parameter<double>("controlled_down_hip_q", 0.0);
-  controlled_down_thigh_q_ =
-      this->declare_parameter<double>("controlled_down_thigh_q", 1.5);
-  controlled_down_calf_q_ =
-      this->declare_parameter<double>("controlled_down_calf_q", -2.77);
-  controlled_down_gain_scale_ =
-      this->declare_parameter<double>("controlled_down_gain_scale", 1.0);
+  stop_reset_steps_ = this->declare_parameter<int>("stop_reset_steps", 250);
+  prone_interpolation_steps_ =
+      this->declare_parameter<int>("prone_interpolation_steps", 250);
+  const std::vector<double> prone_target = this->declare_parameter<std::vector<double>>(
+      "prone_target_training_rad",
+      {0.3602, -0.3789, 0.3382, -0.3506, 1.1862, 1.1942,
+       1.2177, 1.1831, -2.7570, -2.7380, -2.7485, -2.7468});
+  if (prone_target.size() != prone_target_training_rad_.size()) {
+    throw std::runtime_error(
+        "prone_target_training_rad must contain exactly 12 values");
+  }
+  std::transform(prone_target.begin(), prone_target.end(),
+                 prone_target_training_rad_.begin(),
+                 [](double value) { return static_cast<float>(value); });
+  stop_gain_scale_ =
+      this->declare_parameter<double>("stop_gain_scale", 1.0);
   status_period_ms_ =
       this->declare_parameter<int>("status_period_ms", 200);
 
@@ -120,6 +177,8 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
   }
   runtime_ =
       std::make_unique<DualPolicyRuntime>(std::move(policy_contract));
+  control_callback_group_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive);
 
   const auto command_qos =
       rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile();
@@ -131,8 +190,35 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
       [this](const sensor_msgs::msg::JointState::SharedPtr message) {
         piper_state_callback(message);
       });
+  piper_diagnostics_sub_ =
+      this->create_subscription<diagnostic_msgs::msg::DiagnosticArray>(
+          piper_diagnostics_topic_, 10,
+          [this](
+              const diagnostic_msgs::msg::DiagnosticArray::SharedPtr message) {
+            piper_diagnostics_callback(message);
+          });
+  rclcpp::SubscriptionOptions arm_goal_options;
+  arm_goal_options.callback_group = control_callback_group_;
+  arm_goal_sub_ =
+      this->create_subscription<std_msgs::msg::Float64MultiArray>(
+          arm_goal_topic_, 10,
+          [this](const std_msgs::msg::Float64MultiArray::SharedPtr message) {
+            arm_goal_callback(message);
+          },
+          arm_goal_options);
+  piper_resume_client_ =
+      this->create_client<std_srvs::srv::Trigger>(piper_resume_service_);
+  piper_enable_client_ =
+      this->create_client<std_srvs::srv::Trigger>(piper_enable_service_);
   piper_stop_client_ =
       this->create_client<std_srvs::srv::Trigger>(piper_stop_service_);
+  trajectory_start_server_ = this->create_service<std_srvs::srv::Trigger>(
+      trajectory_start_service_,
+      [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+             std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        start_arm_goal_trajectory_callback(request, response);
+      },
+      rmw_qos_profile_services_default, control_callback_group_);
   status_pub_ =
       this->create_publisher<std_msgs::msg::String>(status_topic_, 10);
 
@@ -141,8 +227,8 @@ Stage2DirectNode::Stage2DirectNode(const rclcpp::NodeOptions &options)
   }
   const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::duration<double>(runtime_->contract().policy_period_s));
-  control_timer_ =
-      this->create_wall_timer(period, [this]() { control_tick(); });
+  control_timer_ = this->create_wall_timer(
+      period, [this]() { control_tick(); }, control_callback_group_);
 
   RCLCPP_INFO(
       this->get_logger(),
@@ -200,6 +286,78 @@ void Stage2DirectNode::piper_state_callback(
   latest_piper_state_ = snapshot;
 }
 
+void Stage2DirectNode::piper_diagnostics_callback(
+    const diagnostic_msgs::msg::DiagnosticArray::SharedPtr message) {
+  bool found = false;
+  bool gate_open = false;
+  for (const auto &status : message->status) {
+    for (const auto &value : status.values) {
+      if (value.key == "command_gate_open") {
+        if (found) {
+          RCLCPP_ERROR_THROTTLE(
+              this->get_logger(), *this->get_clock(), 2000,
+              "Rejecting PiPER diagnostics: duplicate command_gate_open");
+          return;
+        }
+        if (value.value != "true" && value.value != "false") {
+          RCLCPP_ERROR_THROTTLE(
+              this->get_logger(), *this->get_clock(), 2000,
+              "Rejecting PiPER diagnostics: command_gate_open must be "
+              "true|false");
+          return;
+        }
+        found = true;
+        gate_open = value.value == "true";
+      }
+    }
+  }
+  if (!found) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "Rejecting PiPER diagnostics: command_gate_open is missing");
+    return;
+  }
+  bool gate_changed = false;
+  {
+    std::lock_guard<std::mutex> lock(piper_state_mutex_);
+    gate_changed = have_piper_diagnostics_ &&
+                   piper_command_gate_open_ != gate_open;
+    have_piper_diagnostics_ = true;
+    piper_command_gate_open_ = gate_open;
+    piper_diagnostics_received_steady_time_ = SteadyClock::now();
+  }
+  if (gate_changed) {
+    RCLCPP_INFO(this->get_logger(), "PiPER diagnostics command gate changed: %s",
+                gate_open ? "open" : "closed");
+  }
+}
+
+void Stage2DirectNode::arm_goal_callback(
+    const std_msgs::msg::Float64MultiArray::SharedPtr message) {
+  if (message->data.size() != position_arm_goal_.size() ||
+      !all_finite(message->data)) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "Arm goal rejected: expected three finite values "
+                 "[radius_m,pitch_rad,yaw_rad]");
+    return;
+  }
+  if (!live_requested() || phase_ != Phase::kPolicyActive) {
+    RCLCPP_WARN(this->get_logger(),
+                "Arm goal rejected: live PolicyActive state is required");
+    return;
+  }
+  std::copy(message->data.begin(), message->data.end(),
+            position_arm_goal_.begin());
+  arm_goal_position_tracking_active_ = true;
+  arm_goal_trajectory_started_ = false;
+  arm_goal_trajectory_started_at_ = SteadyClock::time_point{};
+  arm_goal_trajectory_progress_ = 0.0;
+  RCLCPP_INFO(this->get_logger(),
+              "Arm position tracking accepted: goal=[%.4f,%.4f,%.4f]",
+              position_arm_goal_[0], position_arm_goal_[1],
+              position_arm_goal_[2]);
+}
+
 bool Stage2DirectNode::refresh_parameters() {
   this->get_parameter("enable_motion", enable_motion_);
   this->get_parameter("live_acknowledged", live_acknowledged_);
@@ -214,18 +372,56 @@ bool Stage2DirectNode::refresh_parameters() {
   this->get_parameter("arm_goal_radius_m", arm_goal_radius_m_);
   this->get_parameter("arm_goal_pitch_rad", arm_goal_pitch_rad_);
   this->get_parameter("arm_goal_yaw_rad", arm_goal_yaw_rad_);
+  this->get_parameter("arm_goal_trajectory_enabled",
+                      arm_goal_trajectory_enabled_);
+  std::vector<double> arm_goal_trajectory_start;
+  std::vector<double> arm_goal_trajectory_end;
+  this->get_parameter("arm_goal_trajectory_start",
+                      arm_goal_trajectory_start);
+  this->get_parameter("arm_goal_trajectory_end", arm_goal_trajectory_end);
+  if (arm_goal_trajectory_start.size() != arm_goal_trajectory_start_.size() ||
+      arm_goal_trajectory_end.size() != arm_goal_trajectory_end_.size()) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "arm_goal_trajectory_start/end must contain exactly 3 values");
+    return false;
+  }
+  std::copy(arm_goal_trajectory_start.begin(), arm_goal_trajectory_start.end(),
+            arm_goal_trajectory_start_.begin());
+  std::copy(arm_goal_trajectory_end.begin(), arm_goal_trajectory_end.end(),
+            arm_goal_trajectory_end_.begin());
+  this->get_parameter("arm_goal_trajectory_approach_duration_s",
+                      arm_goal_trajectory_approach_duration_s_);
+  this->get_parameter("arm_goal_trajectory_duration_s",
+                      arm_goal_trajectory_duration_s_);
+  this->get_parameter("arm_goal_trajectory_return_duration_s",
+                      arm_goal_trajectory_return_duration_s_);
+  this->get_parameter("policy_handover_steps", policy_handover_steps_);
+  if (!arm_goal_trajectory_started_) {
+    current_arm_goal_ = {arm_goal_radius_m_, arm_goal_pitch_rad_,
+                         arm_goal_yaw_rad_};
+  }
   this->get_parameter("standup_stage1_steps", standup_stage1_steps_);
   this->get_parameter("standup_stage2_steps", standup_stage2_steps_);
   this->get_parameter("standup_rear_alpha_lead", standup_rear_alpha_lead_);
   this->get_parameter("standup_front_alpha_lag", standup_front_alpha_lag_);
   this->get_parameter("standup_kp_start", standup_kp_start_);
   this->get_parameter("standup_kd_start", standup_kd_start_);
-  this->get_parameter("controlled_down_steps", controlled_down_steps_);
-  this->get_parameter("controlled_down_hip_q", controlled_down_hip_q_);
-  this->get_parameter("controlled_down_thigh_q", controlled_down_thigh_q_);
-  this->get_parameter("controlled_down_calf_q", controlled_down_calf_q_);
-  this->get_parameter("controlled_down_gain_scale",
-                      controlled_down_gain_scale_);
+  this->get_parameter("stop_reset_steps", stop_reset_steps_);
+  this->get_parameter("prone_interpolation_steps",
+                      prone_interpolation_steps_);
+  std::vector<double> prone_target;
+  this->get_parameter("prone_target_training_rad", prone_target);
+  if (prone_target.size() != prone_target_training_rad_.size()) {
+    RCLCPP_ERROR_THROTTLE(
+        this->get_logger(), *this->get_clock(), 3000,
+        "prone_target_training_rad must contain exactly 12 values");
+    return false;
+  }
+  std::transform(prone_target.begin(), prone_target.end(),
+                 prone_target_training_rad_.begin(),
+                 [](double value) { return static_cast<float>(value); });
+  this->get_parameter("stop_gain_scale", stop_gain_scale_);
   this->get_parameter("status_period_ms", status_period_ms_);
 
   ComponentMode parsed_mode;
@@ -247,22 +443,29 @@ bool Stage2DirectNode::refresh_parameters() {
       a2_state_max_age_ms_ > 0 && piper_state_max_age_ms_ > 0 &&
       maximum_state_skew_ms_ >= 0 && status_period_ms_ > 0 &&
       standup_stage1_steps_ > 0 && standup_stage2_steps_ > 0 &&
-      controlled_down_steps_ > 0 && std::isfinite(max_remote_vx_) &&
+      policy_handover_steps_ > 0 &&
+      stop_reset_steps_ > 0 && prone_interpolation_steps_ > 0 &&
+      std::isfinite(max_remote_vx_) &&
       max_remote_vx_ >= 0.0 && std::isfinite(max_remote_vy_) &&
       max_remote_vy_ >= 0.0 && std::isfinite(max_remote_yaw_) &&
       max_remote_yaw_ >= 0.0 && std::isfinite(remote_deadzone_) &&
       remote_deadzone_ >= 0.0 && remote_deadzone_ <= 1.0 &&
       std::isfinite(arm_goal_radius_m_) &&
       std::isfinite(arm_goal_pitch_rad_) && std::isfinite(arm_goal_yaw_rad_) &&
+      all_finite(arm_goal_trajectory_start_) &&
+      all_finite(arm_goal_trajectory_end_) &&
+      std::isfinite(arm_goal_trajectory_approach_duration_s_) &&
+      arm_goal_trajectory_approach_duration_s_ > 0.0 &&
+      std::isfinite(arm_goal_trajectory_duration_s_) &&
+      arm_goal_trajectory_duration_s_ > 0.0 &&
+      std::isfinite(arm_goal_trajectory_return_duration_s_) &&
+      arm_goal_trajectory_return_duration_s_ > 0.0 &&
       std::isfinite(standup_rear_alpha_lead_) &&
       std::isfinite(standup_front_alpha_lag_) &&
       std::isfinite(standup_kp_start_) && standup_kp_start_ >= 0.0 &&
       std::isfinite(standup_kd_start_) && standup_kd_start_ >= 0.0 &&
-      std::isfinite(controlled_down_hip_q_) &&
-      std::isfinite(controlled_down_thigh_q_) &&
-      std::isfinite(controlled_down_calf_q_) &&
-      std::isfinite(controlled_down_gain_scale_) &&
-      controlled_down_gain_scale_ > 0.0;
+      all_finite(prone_target_training_rad_) &&
+      std::isfinite(stop_gain_scale_) && stop_gain_scale_ > 0.0;
   if (!numeric_valid) {
     RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 3000,
                           "Stage2 direct numeric parameters are invalid");
@@ -353,6 +556,7 @@ bool Stage2DirectNode::get_synchronized_snapshot(
   }
 
   snapshot.root_quaternion_wxyz = a2.quaternion;
+  last_base_roll_pitch_ = quaternion_to_roll_pitch(a2.quaternion);
   snapshot.dog_joint_position_rad = map_a2_to_training(a2.joint_q);
   snapshot.dog_joint_velocity_rad_s = map_a2_to_training(a2.joint_dq);
   snapshot.arm_joint_position_rad = piper.joint_position_rad;
@@ -360,16 +564,60 @@ bool Stage2DirectNode::get_synchronized_snapshot(
 }
 
 PolicyCommand Stage2DirectNode::make_policy_command(
-    const a2_lowlevel::A2RemoteState &remote) const {
+    const a2_lowlevel::A2RemoteState &remote) {
   PolicyCommand command;
   command.locomotion_vx_vy_yaw = {
       static_cast<float>(remote.ly * max_remote_vx_),
       static_cast<float>(-remote.lx * max_remote_vy_),
       static_cast<float>(-remote.rx * max_remote_yaw_)};
+  current_arm_goal_ = {0.0, 0.0, 0.0};
+  arm_goal_trajectory_progress_ = 0.0;
+  if (arm_goal_position_tracking_active_) {
+    current_arm_goal_ = position_arm_goal_;
+  } else if (arm_goal_trajectory_enabled_ &&
+             phase_ == Phase::kPolicyActive &&
+             arm_goal_trajectory_started_) {
+    const std::array<double, 3> init_goal = {
+        arm_goal_radius_m_, arm_goal_pitch_rad_, arm_goal_yaw_rad_};
+    const double elapsed_s =
+        std::chrono::duration<double>(SteadyClock::now() -
+                                      arm_goal_trajectory_started_at_)
+            .count();
+    const double total_duration_s = arm_goal_trajectory_approach_duration_s_ +
+                                    arm_goal_trajectory_duration_s_ +
+                                    arm_goal_trajectory_return_duration_s_;
+    arm_goal_trajectory_progress_ =
+        std::clamp(elapsed_s / total_duration_s, 0.0, 1.0);
+    const std::array<double, 3> *from = &init_goal;
+    const std::array<double, 3> *to = &arm_goal_trajectory_start_;
+    double segment_elapsed_s = elapsed_s;
+    double segment_duration_s = arm_goal_trajectory_approach_duration_s_;
+    if (elapsed_s >= arm_goal_trajectory_approach_duration_s_ +
+                         arm_goal_trajectory_duration_s_) {
+      from = &arm_goal_trajectory_end_;
+      to = &init_goal;
+      segment_elapsed_s =
+          elapsed_s - arm_goal_trajectory_approach_duration_s_ -
+          arm_goal_trajectory_duration_s_;
+      segment_duration_s = arm_goal_trajectory_return_duration_s_;
+    } else if (elapsed_s >= arm_goal_trajectory_approach_duration_s_) {
+      from = &arm_goal_trajectory_start_;
+      to = &arm_goal_trajectory_end_;
+      segment_elapsed_s =
+          elapsed_s - arm_goal_trajectory_approach_duration_s_;
+      segment_duration_s = arm_goal_trajectory_duration_s_;
+    }
+    const double alpha = smoothstep01(
+        std::clamp(segment_elapsed_s / segment_duration_s, 0.0, 1.0));
+    for (std::size_t index = 0; index < current_arm_goal_.size(); ++index) {
+      current_arm_goal_[index] =
+          (*from)[index] + ((*to)[index] - (*from)[index]) * alpha;
+    }
+  }
   command.arm_goal_radius_pitch_yaw = {
-      static_cast<float>(arm_goal_radius_m_),
-      static_cast<float>(arm_goal_pitch_rad_),
-      static_cast<float>(arm_goal_yaw_rad_)};
+      static_cast<float>(current_arm_goal_[0]),
+      static_cast<float>(current_arm_goal_[1]),
+      static_cast<float>(current_arm_goal_[2])};
   return command;
 }
 
@@ -377,6 +625,8 @@ RuntimeOutput Stage2DirectNode::run_policy_tick(
     const RobotSnapshot &snapshot, const PolicyCommand &command) {
   RuntimeOutput output = runtime_->tick(snapshot, command);
   last_inference_ms_ = output.inference_latency_ms;
+  last_body_pitch_roll_plan_[0] = output.body_pitch_roll_plan_rad[0];
+  last_body_pitch_roll_plan_[1] = output.body_pitch_roll_plan_rad[1];
   if (live_requested()) {
     if (output.inference_latency_ms > inference_deadline_s_ * 1000.0) {
       ++consecutive_deadline_misses_;
@@ -425,16 +675,28 @@ void Stage2DirectNode::reset_policy_runtime() {
   warm_frames_ = 0;
   consecutive_deadline_misses_ = 0;
   last_inference_ms_ = -1.0;
+  arm_goal_trajectory_started_ = false;
+  arm_goal_position_tracking_active_ = false;
+  arm_goal_trajectory_started_at_ = SteadyClock::time_point{};
+  arm_goal_trajectory_progress_ = 0.0;
+  position_arm_goal_ = {0.0, 0.0, 0.0};
+  current_arm_goal_ = {0.0, 0.0, 0.0};
+  last_body_pitch_roll_plan_ = {0.0, 0.0};
 }
 
 void Stage2DirectNode::reset_live_lifecycle() {
   phase_ = Phase::kIdleBlocked;
   standup_step_ = 0;
-  controlled_down_step_ = 0;
+  stop_transition_step_ = 0;
+  policy_handover_step_ = 0;
   standup_start_training_.fill(0.0f);
-  controlled_down_start_training_.fill(0.0f);
+  stop_start_training_.fill(0.0f);
+  piper_start_position_.fill(0.0f);
+  stop_piper_start_position_.fill(0.0f);
   piper_hold_position_.fill(0.0f);
   have_piper_hold_ = false;
+  piper_prone_stop_requested_ = false;
+  piper_ready_request_attempted_ = false;
   warm_frames_ = 0;
 }
 
@@ -471,15 +733,9 @@ void Stage2DirectNode::control_tick() {
     return;
   }
   if (live_requested() &&
-      (phase_ == Phase::kControlledDown || phase_ == Phase::kHoldProne)) {
-    publish_controlled_down();
-    publish_status("ready", "controlled down path active", false);
-    return;
-  }
-  if (live_requested() && remote.valid && remote.buttons.l2 &&
-      remote.buttons.b) {
-    start_controlled_down(a2);
-    publish_status("ready", "L2+B controlled down started", true);
+      (phase_ == Phase::kProneInterpolating || phase_ == Phase::kHoldProne)) {
+    publish_prone_transition();
+    publish_status("ready", "prone transition path active", false);
     return;
   }
   if (!remote.valid) {
@@ -495,6 +751,15 @@ void Stage2DirectNode::control_tick() {
   PiperSnapshot piper;
   RobotSnapshot snapshot;
   if (!get_synchronized_snapshot(a2, snapshot, piper, reason)) {
+    if (live_requested() &&
+        phase_ == Phase::kInitHoldWaitingForPiperGate &&
+        piper_ready_request_in_flight_.load()) {
+      publish_initial_position_hold();
+      publish_status(
+          "ready",
+          "holding measured positions while PiPER enable stabilizes", false);
+      return;
+    }
     reset_policy_runtime();
     if (live_requested()) {
       reset_live_lifecycle();
@@ -531,14 +796,59 @@ void Stage2DirectNode::handle_live(
     const a2_lowlevel::A2LowStateSnapshot &a2, const PiperSnapshot &piper,
     const RobotSnapshot &snapshot, const a2_lowlevel::A2RemoteState &remote,
     const RemoteEdges &edges, const PolicyCommand &command) {
+  if (remote.buttons.l2 && edges.b_rising &&
+      phase_ != Phase::kIdleBlocked &&
+      phase_ != Phase::kInitHoldWaitingForPiperGate) {
+    if (phase_ == Phase::kResetHoldWaitingForAOrStop) {
+      start_prone_transition(a2, piper);
+      publish_status(
+          "ready",
+          "second L2+B: synchronized A2/PiPER rest interpolation started",
+          true);
+    } else if (phase_ != Phase::kResetInterpolating) {
+      start_reset_transition(a2, piper);
+      publish_status("ready", "first L2+B: reset interpolation started",
+                     true);
+    }
+    return;
+  }
+
   switch (phase_) {
     case Phase::kIdleBlocked:
       if (edges.a_rising) {
         start_standup(a2, piper);
-        publish_standup_step();
-        publish_piper_hold();
+        if (phase_ == Phase::kInitHoldWaitingForPiperGate) {
+          publish_initial_position_hold();
+          publish_status("ready",
+                         "holding measured positions; waiting for PiPER "
+                         "command gate open",
+                         true);
+        } else {
+          publish_standup_step();
+          publish_status("ready", "A2 init-position interpolation", true);
+        }
+        return;
       }
       publish_status("ready", "waiting for first A", false);
+      return;
+
+    case Phase::kInitHoldWaitingForPiperGate:
+      if (edges.b_rising) {
+        cancel_handover();
+        return;
+      }
+      publish_initial_position_hold();
+      request_piper_handover_ready();
+      if (piper_command_gate_open()) {
+        phase_ = Phase::kStandUpInterpolating;
+        RCLCPP_INFO(
+            this->get_logger(),
+            "PiPER command gate open: starting synchronized A2/PiPER init "
+            "interpolation");
+      }
+      publish_status("ready", "holding measured positions; waiting for PiPER "
+                              "command gate open",
+                     false);
       return;
 
     case Phase::kStandUpInterpolating:
@@ -547,8 +857,7 @@ void Stage2DirectNode::handle_live(
         return;
       }
       publish_standup_step();
-      publish_piper_hold();
-      publish_status("ready", "stand-up interpolation", false);
+      publish_status("ready", "A2/PiPER init-position interpolation", false);
       return;
 
     case Phase::kStandHoldWaitingForA:
@@ -601,24 +910,85 @@ void Stage2DirectNode::handle_live(
                     arm_limiter_seed.begin());
         }
         runtime_->seed_output_targets(dog_limiter_seed, arm_limiter_seed);
+        policy_handover_step_ = 0;
+        arm_goal_trajectory_started_ = false;
+        arm_goal_position_tracking_active_ = false;
+        arm_goal_trajectory_started_at_ = SteadyClock::time_point{};
+        arm_goal_trajectory_progress_ = 0.0;
         phase_ = Phase::kPolicyActive;
-        RCLCPP_INFO(this->get_logger(),
-                    "Stage2 warmup complete: PolicyActive starts next tick");
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Stage2 warmup complete: PolicyActive starts next tick with a "
+            "%d-tick smooth dog-output handover; arm task command=zero and "
+            "PiPER holds init until an arm-goal or trajectory command",
+            policy_handover_steps_);
       }
       publish_status("ready", "policy warmup hold", false);
       return;
     }
 
     case Phase::kPolicyActive: {
-      const RuntimeOutput output = run_policy_tick(snapshot, command);
+      RuntimeOutput output = run_policy_tick(snapshot, command);
+      if (policy_handover_step_ < policy_handover_steps_) {
+        policy_handover_step_ =
+            std::min(policy_handover_step_ + 1, policy_handover_steps_);
+        const double alpha = smoothstep01(
+            static_cast<double>(policy_handover_step_) /
+            static_cast<double>(policy_handover_steps_));
+        for (std::size_t index = 0; index < output.dog_target_rad.size();
+             ++index) {
+          const double init =
+              runtime_->contract().dog.default_position_rad[index];
+          output.dog_target_rad[index] = static_cast<float>(
+              init + (output.dog_target_rad[index] - init) * alpha);
+        }
+        if (component_has_arm() && have_piper_hold_) {
+          for (std::size_t index = 0; index < output.arm_target_rad.size();
+               ++index) {
+            const double init = piper_hold_position_[index];
+            output.arm_target_rad[index] = static_cast<float>(
+                init + (output.arm_target_rad[index] - init) * alpha);
+          }
+        }
+      }
+      if (component_has_arm() && !arm_goal_position_tracking_active_ &&
+          !arm_goal_trajectory_started_) {
+        runtime_->seed_output_targets(output.dog_target_rad,
+                                      piper_hold_position_);
+      }
       publish_active_output(output);
       publish_status("ready", "policy output active", false);
       return;
     }
 
-    case Phase::kControlledDown:
+    case Phase::kResetInterpolating:
+      publish_reset_transition();
+      publish_status("ready", "returning to reset pose", false);
+      return;
+
+    case Phase::kResetHoldWaitingForAOrStop:
+      publish_default_a2_hold();
+      publish_piper_hold();
+      if (edges.a_rising) {
+        if (!sticks_centered(remote)) {
+          RCLCPP_WARN(this->get_logger(),
+                      "Resume A refused: lx/rx/ly must be centered");
+        } else {
+          reset_policy_runtime();
+          phase_ = Phase::kPolicyWarmupHold;
+          RCLCPP_INFO(this->get_logger(),
+                      "Resume A accepted: entering 30-frame Stage2 warmup "
+                      "hold");
+        }
+      }
+      publish_status(
+          "ready",
+          "holding reset pose; A resumes, second L2+B ends test", false);
+      return;
+
+    case Phase::kProneInterpolating:
     case Phase::kHoldProne:
-      publish_controlled_down();
+      publish_prone_transition();
       return;
   }
 }
@@ -632,41 +1002,115 @@ void Stage2DirectNode::handle_select_stop() {
   }
 }
 
-void Stage2DirectNode::start_controlled_down(
-    const a2_lowlevel::A2LowStateSnapshot &state) {
+void Stage2DirectNode::start_reset_transition(
+    const a2_lowlevel::A2LowStateSnapshot &a2, const PiperSnapshot &piper) {
   reset_policy_runtime();
-  controlled_down_start_training_ = map_a2_to_training(state.joint_q);
-  controlled_down_step_ = 0;
-  phase_ = Phase::kControlledDown;
-  request_piper_stop("L2+B controlled down");
-  publish_controlled_down();
+  stop_start_training_ = map_a2_to_training(a2.joint_q);
+  stop_piper_start_position_ = piper.joint_position_rad;
+  std::copy(runtime_->contract().arm.default_position_rad.begin(),
+            runtime_->contract().arm.default_position_rad.end(),
+            piper_hold_position_.begin());
+  have_piper_hold_ = true;
+  stop_transition_step_ = 0;
+  phase_ = Phase::kResetInterpolating;
+  publish_reset_transition();
 }
 
-void Stage2DirectNode::publish_controlled_down() {
+void Stage2DirectNode::publish_reset_transition() {
   if (!live_requested()) {
     reset_live_lifecycle();
     return;
   }
-  if (phase_ == Phase::kControlledDown) {
+  if (phase_ != Phase::kResetInterpolating) {
+    return;
+  }
+  const int current_step =
+      std::min(stop_transition_step_ + 1, stop_reset_steps_);
+  const double alpha =
+      smoothstep01(static_cast<double>(current_step) / stop_reset_steps_);
+  std::array<float, 12> reset_target{};
+  std::copy(runtime_->contract().dog.default_position_rad.begin(),
+            runtime_->contract().dog.default_position_rad.end(),
+            reset_target.begin());
+  if (!publish_joint_commands(build_stop_transition_commands(
+          stop_start_training_, reset_target, alpha))) {
+    reset_live_lifecycle();
+    return;
+  }
+  if (component_has_arm()) {
+    std::array<float, 6> piper_target{};
+    for (std::size_t index = 0; index < piper_target.size(); ++index) {
+      piper_target[index] = static_cast<float>(
+          stop_piper_start_position_[index] +
+          (piper_hold_position_[index] - stop_piper_start_position_[index]) *
+              alpha);
+    }
+    publish_piper_target(piper_target);
+  }
+  stop_transition_step_ = current_step;
+  if (stop_transition_step_ >= stop_reset_steps_) {
+    phase_ = Phase::kResetHoldWaitingForAOrStop;
+    RCLCPP_INFO(this->get_logger(),
+                "Reset interpolation complete: holding reset pose; press A "
+                "to resume policy or L2+B again to end test");
+  }
+}
+
+void Stage2DirectNode::start_prone_transition(
+    const a2_lowlevel::A2LowStateSnapshot &a2,
+    const PiperSnapshot &piper) {
+  reset_policy_runtime();
+  stop_start_training_ = map_a2_to_training(a2.joint_q);
+  stop_piper_start_position_ = piper.joint_position_rad;
+  stop_transition_step_ = 0;
+  piper_prone_stop_requested_ = false;
+  phase_ = Phase::kProneInterpolating;
+  publish_prone_transition();
+}
+
+void Stage2DirectNode::publish_prone_transition() {
+  if (!live_requested()) {
+    reset_live_lifecycle();
+    return;
+  }
+  if (phase_ == Phase::kProneInterpolating) {
     const int current_step =
-        std::min(controlled_down_step_ + 1, controlled_down_steps_);
+        std::min(stop_transition_step_ + 1, prone_interpolation_steps_);
     const double alpha = smoothstep01(
-        static_cast<double>(current_step) / controlled_down_steps_);
-    if (!publish_joint_commands(build_controlled_down_commands(alpha))) {
+        static_cast<double>(current_step) / prone_interpolation_steps_);
+    if (!publish_joint_commands(build_stop_transition_commands(
+            stop_start_training_, prone_target_training_rad_, alpha))) {
       reset_live_lifecycle();
       return;
     }
-    controlled_down_step_ = current_step;
-    if (controlled_down_step_ >= controlled_down_steps_) {
+    if (component_has_arm()) {
+      std::array<float, 6> piper_target{};
+      for (std::size_t index = 0; index < piper_target.size(); ++index) {
+        piper_target[index] = static_cast<float>(
+            stop_piper_start_position_[index] +
+            (piper_start_position_[index] -
+             stop_piper_start_position_[index]) *
+                alpha);
+      }
+      publish_piper_target(piper_target);
+    }
+    stop_transition_step_ = current_step;
+    if (stop_transition_step_ >= prone_interpolation_steps_) {
       phase_ = Phase::kHoldProne;
+      if (component_has_arm() && !piper_prone_stop_requested_) {
+        piper_prone_stop_requested_ = true;
+        request_piper_stop("second L2+B rest interpolation complete");
+      }
       RCLCPP_WARN(this->get_logger(),
-                  "Controlled down complete: holding prone; stop node, verify "
-                  "no-lowcmd, then restore motion service");
+                  "A2/PiPER rest interpolation complete: A2 holds prone, "
+                  "PiPER quick stop requested at the first-A startup pose; "
+                  "stop node, verify no-lowcmd, then restore motion service");
     }
     return;
   }
   if (phase_ == Phase::kHoldProne &&
-      !publish_joint_commands(build_controlled_down_commands(1.0))) {
+      !publish_joint_commands(build_stop_transition_commands(
+          prone_target_training_rad_, prone_target_training_rad_, 1.0))) {
     reset_live_lifecycle();
   }
 }
@@ -685,12 +1129,31 @@ void Stage2DirectNode::start_standup(
     const PiperSnapshot &piper) {
   reset_policy_runtime();
   standup_start_training_ = map_a2_to_training(state.joint_q);
-  piper_hold_position_ = piper.joint_position_rad;
+  piper_start_position_ = piper.joint_position_rad;
+  std::copy(runtime_->contract().arm.default_position_rad.begin(),
+            runtime_->contract().arm.default_position_rad.end(),
+            piper_hold_position_.begin());
   have_piper_hold_ = true;
+  piper_ready_request_attempted_ = false;
   standup_step_ = 0;
-  phase_ = Phase::kStandUpInterpolating;
-  RCLCPP_INFO(this->get_logger(),
-              "First A accepted: starting A2 stand-up interpolation");
+  phase_ = component_has_arm() ? Phase::kInitHoldWaitingForPiperGate
+                               : Phase::kStandUpInterpolating;
+  RCLCPP_INFO(
+      this->get_logger(),
+      component_has_arm()
+          ? "First A accepted: holding measured positions; automatically "
+            "resuming/enabling PiPER before init interpolation"
+          : "First A accepted: starting A2 init-position interpolation");
+}
+
+void Stage2DirectNode::publish_initial_position_hold() {
+  if (!publish_joint_commands(build_standup_commands(0.0, 0.0, 0.0))) {
+    reset_live_lifecycle();
+    return;
+  }
+  if (component_has_arm()) {
+    publish_piper_target(piper_start_position_);
+  }
 }
 
 void Stage2DirectNode::publish_standup_step() {
@@ -708,11 +1171,23 @@ void Stage2DirectNode::publish_standup_step() {
     reset_live_lifecycle();
     return;
   }
+  if (component_has_arm()) {
+    const double piper_alpha = smoothstep01(alpha);
+    std::array<float, 6> piper_target{};
+    for (std::size_t index = 0; index < piper_target.size(); ++index) {
+      piper_target[index] = static_cast<float>(
+          piper_start_position_[index] +
+          (piper_hold_position_[index] - piper_start_position_[index]) *
+              piper_alpha);
+    }
+    publish_piper_target(piper_target);
+  }
   standup_step_ = current_step;
   if (standup_step_ >= total_steps) {
     phase_ = Phase::kStandHoldWaitingForA;
     RCLCPP_INFO(this->get_logger(),
-                "A2 stand-up complete: holding default pose, waiting second A");
+                "A2/PiPER init interpolation complete: holding manifest "
+                "default pose, waiting second A");
   }
 }
 
@@ -742,20 +1217,115 @@ void Stage2DirectNode::publish_active_output(const RuntimeOutput &output) {
     publish_default_a2_hold();
   }
   if (component_has_arm()) {
-    publish_piper_target(output.arm_target_rad);
+    if (arm_goal_position_tracking_active_ ||
+        arm_goal_trajectory_started_) {
+      publish_piper_target(output.arm_target_rad);
+    } else {
+      publish_piper_hold();
+    }
   }
 }
 
 void Stage2DirectNode::publish_piper_target(
     const std::array<float, 6> &positions_rad) {
   trajectory_msgs::msg::JointTrajectory message;
-  message.header.stamp = this->get_clock()->now().to_msg();
+  message.header.stamp = this->get_clock()->now();
   message.joint_names.assign(kPiperJointNames.begin(), kPiperJointNames.end());
   trajectory_msgs::msg::JointTrajectoryPoint point;
   point.positions.assign(positions_rad.begin(), positions_rad.end());
   point.time_from_start.nanosec = 20'000'000;
   message.points.push_back(std::move(point));
   piper_command_pub_->publish(message);
+}
+
+void Stage2DirectNode::request_piper_handover_ready() {
+  if (!live_requested() || !component_has_arm() ||
+      piper_ready_request_attempted_ || piper_ready_request_in_flight_ ||
+      piper_command_gate_open()) {
+    return;
+  }
+  if (!piper_resume_client_->service_is_ready() ||
+      !piper_enable_client_->service_is_ready()) {
+    RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "Waiting for PiPER resume/enable services before init interpolation");
+    return;
+  }
+  piper_ready_request_attempted_ = true;
+  piper_ready_request_in_flight_ = true;
+  auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+  piper_resume_client_->async_send_request(
+      request,
+      [this](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture future) {
+        const auto response = future.get();
+        if (!response->success) {
+          piper_ready_request_in_flight_ = false;
+          RCLCPP_ERROR(this->get_logger(), "PiPER automatic resume rejected: %s",
+                       response->message.c_str());
+          return;
+        }
+        RCLCPP_INFO(this->get_logger(), "PiPER automatic resume accepted: %s",
+                    response->message.c_str());
+        auto enable_request =
+            std::make_shared<std_srvs::srv::Trigger::Request>();
+        piper_enable_client_->async_send_request(
+            enable_request,
+            [this](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture
+                       enable_future) {
+              piper_ready_request_in_flight_ = false;
+              const auto enable_response = enable_future.get();
+              if (enable_response->success) {
+                {
+                  std::lock_guard<std::mutex> lock(piper_state_mutex_);
+                  have_piper_diagnostics_ = true;
+                  piper_command_gate_open_ = true;
+                  piper_diagnostics_received_steady_time_ = SteadyClock::now();
+                }
+                RCLCPP_INFO(this->get_logger(),
+                            "PiPER automatic enable accepted and handover "
+                            "gate seeded open: %s",
+                            enable_response->message.c_str());
+              } else {
+                RCLCPP_ERROR(this->get_logger(),
+                             "PiPER automatic enable rejected: %s",
+                             enable_response->message.c_str());
+              }
+            });
+      });
+}
+
+void Stage2DirectNode::start_arm_goal_trajectory_callback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  static_cast<void>(request);
+  if (!live_requested() || phase_ != Phase::kPolicyActive) {
+    response->success = false;
+    response->message = "trajectory requires live PolicyActive state";
+    return;
+  }
+  if (!arm_goal_trajectory_enabled_) {
+    response->success = false;
+    response->message = "arm-goal trajectory is disabled";
+    return;
+  }
+  arm_goal_trajectory_started_ = true;
+  arm_goal_position_tracking_active_ = false;
+  arm_goal_trajectory_started_at_ = SteadyClock::now();
+  arm_goal_trajectory_progress_ = 0.0;
+  response->success = true;
+  const double total_duration_s = arm_goal_trajectory_approach_duration_s_ +
+                                  arm_goal_trajectory_duration_s_ +
+                                  arm_goal_trajectory_return_duration_s_;
+  std::ostringstream response_message;
+  response_message << total_duration_s
+                   << "-second round-trip arm-goal trajectory started";
+  response->message = response_message.str();
+  RCLCPP_INFO(this->get_logger(),
+              "Arm-goal trajectory trigger accepted: init->start %.3fs, "
+              "start->end %.3fs, end->init %.3fs",
+              arm_goal_trajectory_approach_duration_s_,
+              arm_goal_trajectory_duration_s_,
+              arm_goal_trajectory_return_duration_s_);
 }
 
 void Stage2DirectNode::request_piper_stop(const std::string &reason) {
@@ -783,6 +1353,15 @@ void Stage2DirectNode::request_piper_stop(const std::string &reason) {
                        reason.c_str(), response->message.c_str());
         }
       });
+}
+
+bool Stage2DirectNode::piper_command_gate_open() const {
+  std::lock_guard<std::mutex> lock(piper_state_mutex_);
+  if (!have_piper_diagnostics_ || !piper_command_gate_open_) {
+    return false;
+  }
+  return SteadyClock::now() - piper_diagnostics_received_steady_time_ <=
+         std::chrono::milliseconds(piper_state_max_age_ms_);
 }
 
 std::array<float, 12> Stage2DirectNode::map_a2_to_training(
@@ -840,20 +1419,16 @@ Stage2DirectNode::build_standup_commands(double front_alpha,
 }
 
 std::array<a2_lowlevel::A2JointCommand, a2_lowlevel::kA2JointCount>
-Stage2DirectNode::build_controlled_down_commands(double alpha) const {
-  std::array<float, 12> target{};
-  std::fill_n(target.begin(), 4, static_cast<float>(controlled_down_hip_q_));
-  std::fill_n(target.begin() + 4, 4,
-              static_cast<float>(controlled_down_thigh_q_));
-  std::fill_n(target.begin() + 8, 4,
-              static_cast<float>(controlled_down_calf_q_));
+Stage2DirectNode::build_stop_transition_commands(
+    const std::array<float, 12> &start,
+    const std::array<float, 12> &target, double alpha) const {
+  std::array<float, 12> interpolated{};
   const double safe_alpha = std::clamp(alpha, 0.0, 1.0);
-  for (std::size_t index = 0; index < target.size(); ++index) {
-    target[index] = static_cast<float>(
-        controlled_down_start_training_[index] +
-        (target[index] - controlled_down_start_training_[index]) * safe_alpha);
+  for (std::size_t index = 0; index < interpolated.size(); ++index) {
+    interpolated[index] = static_cast<float>(
+        start[index] + (target[index] - start[index]) * safe_alpha);
   }
-  return build_a2_commands(target, controlled_down_gain_scale_);
+  return build_a2_commands(interpolated, stop_gain_scale_);
 }
 
 bool Stage2DirectNode::component_has_dog() const {
@@ -894,6 +1469,8 @@ const char *Stage2DirectNode::phase_name() const {
   switch (phase_) {
     case Phase::kIdleBlocked:
       return "IdleBlocked";
+    case Phase::kInitHoldWaitingForPiperGate:
+      return "InitHoldWaitingForPiperGate";
     case Phase::kStandUpInterpolating:
       return "StandUpInterpolating";
     case Phase::kStandHoldWaitingForA:
@@ -902,8 +1479,12 @@ const char *Stage2DirectNode::phase_name() const {
       return "PolicyWarmupHold";
     case Phase::kPolicyActive:
       return "PolicyActive";
-    case Phase::kControlledDown:
-      return "ControlledDown";
+    case Phase::kResetInterpolating:
+      return "ResetInterpolating";
+    case Phase::kResetHoldWaitingForAOrStop:
+      return "ResetHoldWaitingForAOrStop";
+    case Phase::kProneInterpolating:
+      return "ProneInterpolating";
     case Phase::kHoldProne:
       return "HoldProne";
   }
@@ -922,25 +1503,46 @@ void Stage2DirectNode::publish_status(const char *state,
   const char *a2_output = "not_published";
   const char *piper_output = "not_published";
   if (live_requested()) {
-    if (phase_ == Phase::kStandUpInterpolating) {
-      a2_output = "standup_interpolation";
+    if (phase_ == Phase::kInitHoldWaitingForPiperGate) {
+      a2_output = "measured_position_hold";
       piper_output = component_has_arm() ? "measured_position_hold"
+                                         : "not_published";
+    } else if (phase_ == Phase::kStandUpInterpolating) {
+      a2_output = "init_position_interpolation";
+      piper_output = component_has_arm() ? "init_position_interpolation"
                                          : "not_published";
     } else if (phase_ == Phase::kStandHoldWaitingForA ||
                phase_ == Phase::kPolicyWarmupHold) {
-      a2_output = "default_position_hold";
-      piper_output = component_has_arm() ? "measured_position_hold"
+      a2_output = "init_position_hold";
+      piper_output = component_has_arm() ? "init_position_hold"
                                          : "not_published";
     } else if (phase_ == Phase::kPolicyActive) {
       a2_output = component_has_dog() ? "dog_actor_target"
                                       : "default_position_hold";
-      piper_output = component_has_arm() ? "arm_actor_target"
+      piper_output = component_has_arm()
+                         ? ((arm_goal_position_tracking_active_ ||
+                             arm_goal_trajectory_started_)
+                                ? "arm_actor_target"
+                                : "init_position_hold")
+                         : "not_published";
+    } else if (phase_ == Phase::kResetInterpolating) {
+      a2_output = "reset_position_interpolation";
+      piper_output = component_has_arm() ? "reset_position_interpolation"
                                          : "not_published";
-    } else if (phase_ == Phase::kControlledDown ||
+    } else if (phase_ == Phase::kResetHoldWaitingForAOrStop) {
+      a2_output = "reset_position_hold";
+      piper_output = component_has_arm() ? "reset_position_hold"
+                                         : "not_published";
+    } else if (phase_ == Phase::kProneInterpolating ||
                phase_ == Phase::kHoldProne) {
-      a2_output = phase_ == Phase::kControlledDown ? "controlled_down"
-                                                   : "prone_hold";
-      piper_output = "stop_requested_not_published";
+      a2_output = phase_ == Phase::kProneInterpolating
+                      ? "prone_position_interpolation"
+                      : "prone_hold";
+      piper_output = component_has_arm()
+                         ? (phase_ == Phase::kProneInterpolating
+                                ? "startup_rest_position_interpolation"
+                                : "stop_requested_not_published")
+                         : "not_published";
     }
   }
   std::ostringstream payload;
@@ -960,6 +1562,33 @@ void Stage2DirectNode::publish_status(const char *state,
           << ";piper_age_ms=" << last_piper_age_ms_ << ";skew_ms="
           << last_skew_ms_ << ";inference_ms=" << last_inference_ms_
           << ";deadline_misses=" << consecutive_deadline_misses_
+          << ";goal_r=" << current_arm_goal_[0]
+          << ";goal_pitch=" << current_arm_goal_[1]
+          << ";goal_yaw=" << current_arm_goal_[2]
+          << ";arm_tracking="
+          << (arm_goal_trajectory_started_
+                  ? "trajectory"
+                  : (arm_goal_position_tracking_active_ ? "position"
+                                                        : "idle_zero_hold"))
+          << ";goal_trajectory="
+          << (arm_goal_trajectory_enabled_ ? "enabled" : "disabled")
+          << ";goal_trajectory_state="
+          << (!arm_goal_trajectory_started_
+                  ? "armed"
+                  : (arm_goal_trajectory_progress_ < 1.0 ? "running"
+                                                         : "complete"))
+          << ";goal_progress=" << arm_goal_trajectory_progress_
+          << ";goal_end_r=" << arm_goal_trajectory_end_[0]
+          << ";goal_end_pitch=" << arm_goal_trajectory_end_[1]
+          << ";goal_end_yaw=" << arm_goal_trajectory_end_[2]
+          << ";goal_duration_s="
+          << (arm_goal_trajectory_approach_duration_s_ +
+              arm_goal_trajectory_duration_s_ +
+              arm_goal_trajectory_return_duration_s_)
+          << ";plan_body_pitch=" << last_body_pitch_roll_plan_[0]
+          << ";plan_body_roll=" << last_body_pitch_roll_plan_[1]
+          << ";base_roll=" << last_base_roll_pitch_[0]
+          << ";base_pitch=" << last_base_roll_pitch_[1]
           << ";reason=" << clean_status_reason(reason);
   std_msgs::msg::String message;
   message.data = payload.str();
@@ -973,7 +1602,10 @@ int main(int argc, char **argv) {
   try {
     auto node =
         std::make_shared<a2_piper_stage2_direct::Stage2DirectNode>();
-    rclcpp::spin(node);
+    rclcpp::executors::MultiThreadedExecutor executor(
+        rclcpp::ExecutorOptions(), 2);
+    executor.add_node(node);
+    executor.spin();
   } catch (const std::exception &error) {
     RCLCPP_FATAL(rclcpp::get_logger("a2_piper_stage2_direct"), "%s",
                  error.what());

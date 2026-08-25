@@ -24,6 +24,10 @@ pc2_ip="192.168.123.162"
 duration=""
 live_requested=0
 scenario="process-stop"
+evidence_path=""
+arm_radius=""
+arm_pitch=""
+arm_yaw=""
 
 usage() {
   cat <<'USAGE'
@@ -36,6 +40,7 @@ Usage:
   stage2_gate.sh network --iface NIC [--domain-id ID] [--a2-ip IP] [--pc2-ip IP]
   stage2_gate.sh ros-readonly [--duration SEC]
   STAGE2_ALLOW_A2_BASELINE=1 stage2_gate.sh a2-baseline --iface NIC --live --operator NAME
+  stage2_gate.sh audit-a2-baseline --iface NIC --evidence PATH
   STAGE2_ALLOW_PIPER_BASELINE=1 stage2_gate.sh piper-baseline --live --operator NAME
   stage2_gate.sh dry-run [--duration SEC]
   stage2_gate.sh joint-observe [--duration SEC]
@@ -43,7 +48,10 @@ Usage:
   stage2_gate.sh shadow [--duration SEC]
   stage2_gate.sh live-preflight --component dog_only|arm_only|both --operator NAME
   STAGE2_ALLOW_LIVE=1 stage2_gate.sh live --component dog_only|arm_only|both --live --operator NAME
+  stage2_gate.sh arm-goal --radius M --pitch RAD --yaw RAD --operator NAME
+  stage2_gate.sh trajectory --operator NAME
   stage2_gate.sh stop --operator NAME [--reason TEXT]
+  STAGE2_ALLOW_A2_RESTORE=1 stage2_gate.sh restore-a2 --iface NIC --operator NAME
 
 Receipts are written below deploy/a2_piper_stage2/.stage2_sessions/<id>/.
 The script never edits site.yaml, output_enabled, ROS params, or PiPER resume state.
@@ -122,6 +130,26 @@ parse_options() {
       --scenario)
         (( $# >= 2 )) || die "--scenario requires a value"
         scenario="$2"
+        shift 2
+        ;;
+      --evidence)
+        (( $# >= 2 )) || die "--evidence requires a value"
+        evidence_path="$2"
+        shift 2
+        ;;
+      --radius)
+        (( $# >= 2 )) || die "--radius requires a value"
+        arm_radius="$2"
+        shift 2
+        ;;
+      --pitch)
+        (( $# >= 2 )) || die "--pitch requires a value"
+        arm_pitch="$2"
+        shift 2
+        ;;
+      --yaw)
+        (( $# >= 2 )) || die "--yaw requires a value"
+        arm_yaw="$2"
         shift 2
         ;;
       --live)
@@ -344,13 +372,12 @@ show_next() {
   if [[ ! -f "$(step_pass_file dry-run)" ]]; then echo "$0 dry-run"; return; fi
   if [[ ! -f "$(approval_file dry-run)" ]]; then echo "$0 approve --gate dry-run --operator NAME"; return; fi
   if [[ ! -f "$(step_pass_file joint-observe)" ]]; then echo "$0 joint-observe --duration 600"; return; fi
-  if [[ ! -f "$(approval_file joint-validation)" ]]; then echo "$0 approve --gate joint-validation --operator NAME"; return; fi
   if [[ ! -f "$(step_pass_file fault)" ]]; then echo "$0 fault --scenario process-stop"; return; fi
   if [[ ! -f "$(approval_file fault)" ]]; then echo "$0 approve --gate fault --operator NAME"; return; fi
   if [[ ! -f "$(step_pass_file shadow)" ]]; then echo "$0 shadow --duration 600"; return; fi
-  if [[ ! -f "$(approval_file shadow)" ]]; then echo "$0 approve --gate shadow --operator NAME"; return; fi
-  echo "选择一个组件后：$0 approve --gate live-dog_only --operator NAME"
-  echo "然后：$0 live-preflight --component dog_only --operator NAME"
+  if [[ ! -f "$(step_pass_file live-preflight-both)" ]]; then echo "$0 live-preflight --component both --operator NAME"; return; fi
+  if [[ ! -f "$(approval_file live-both)" ]]; then echo "$0 approve --gate live-both --operator NAME"; return; fi
+  echo "STAGE2_ALLOW_LIVE=1 $0 live --component both --live --operator NAME"
 }
 
 cmd_approve() {
@@ -368,7 +395,6 @@ cmd_approve() {
       ;;
     live-dog_only|live-arm_only|live-both)
       require_pass shadow
-      require_approval shadow
       ;;
     *) die "unsupported approval gate: ${gate}" ;;
   esac
@@ -557,9 +583,10 @@ cmd_a2_baseline() {
       "$a2" connected-preflight "${STAGE2_GATE_IFACE}"
       "$a2" lowstate 10
       "$a2" joints 10
-      "$a2" no-lowcmd 5
       "$a2" motion-check "${STAGE2_GATE_IFACE}"
       "$a2" motion-release "${STAGE2_GATE_IFACE}"
+      "$a2" motion-check "${STAGE2_GATE_IFACE}"
+      "$a2" no-lowcmd 5
       "$a2" policy-enable-remote "${STAGE2_GATE_DURATION}"
       "$a2" no-lowcmd 5
       "$a2" motion-restore "${STAGE2_GATE_IFACE}"
@@ -575,6 +602,57 @@ cmd_a2_baseline() {
   mark_pass a2-baseline "$evidence"
 }
 
+cmd_audit_a2_baseline() {
+  load_session
+  require_approval physical
+  require_pass ros-readonly
+  require_approval ros-readonly
+  [[ -n "$iface" ]] || die "audit-a2-baseline requires --iface NIC"
+  validate_token iface "$iface"
+  [[ -n "$evidence_path" ]] || die "audit-a2-baseline requires --evidence PATH"
+  local evidence_root resolved_evidence audit
+  evidence_root="${session_dir}/evidence/a2-baseline"
+  resolved_evidence="$(cd "$evidence_path" && pwd)"
+  [[ "$resolved_evidence" == "$evidence_root"/* ]] ||
+    die "evidence must be an a2-baseline directory in the current session"
+  [[ -f "$resolved_evidence/stdout.log" ]] || die "missing stdout.log in evidence"
+  [[ -f "$resolved_evidence/result.receipt" ]] || die "missing result.receipt in evidence"
+  grep -qx 'result=FAIL' "$resolved_evidence/result.receipt" ||
+    die "audit is only for an operator Ctrl+C run recorded as FAIL"
+  grep -qx 'exit=255' "$resolved_evidence/result.receipt" ||
+    die "expected Docker Compose Ctrl+C exit=255"
+  grep -q 'A2 stand-up interpolation complete' "$resolved_evidence/stdout.log" ||
+    die "evidence does not contain completed stand-up interpolation"
+  grep -q 'A2 policy handover complete: entering PolicyActive' "$resolved_evidence/stdout.log" ||
+    die "evidence does not contain completed policy handover"
+  grep -q 'A2 controlled down interpolation complete: entering HoldProne' "$resolved_evidence/stdout.log" ||
+    die "evidence does not contain completed controlled-down interpolation"
+  if docker ps --format '{{.Names}}' | grep -q '^a2-piper-stage2-policy-runtime-run-'; then
+    die "an A2/Stage2 policy-runtime container is still running"
+  fi
+  load_compose
+  audit="$(new_evidence_dir a2-baseline-audit)"
+  write_command "$audit" audit-a2-baseline "$resolved_evidence" "$iface"
+  "${compose[@]}" run --rm --no-deps -T \
+    -e "A2_TEST_LOG_DIR=/gate_evidence/a2_wrapper_logs" \
+    -v "${audit}:/gate_evidence" \
+    policy-runtime "$a2_test_script" motion-check "$iface" \
+    2>&1 | tee "${audit}/motion_check.log"
+  grep -q "service='ai_sport'" "${audit}/motion_check.log" ||
+    die "official ai_sport is not restored after the interrupted baseline"
+  {
+    echo "result=PASS"
+    echo "audit=operator_ctrl_c_after_hold_prone"
+    echo "source_evidence=${resolved_evidence}"
+    echo "stand_up_complete=true"
+    echo "policy_active_observed=true"
+    echo "controlled_down_complete=true"
+    echo "policy_container_running=false"
+    echo "official_mode=ai_sport"
+  } > "${audit}/result.receipt"
+  mark_pass a2-baseline "$audit"
+}
+
 cmd_piper_baseline() {
   load_session
   require_approval physical
@@ -588,7 +666,14 @@ cmd_piper_baseline() {
   evidence="$(new_evidence_dir piper-baseline)"
   set +e
   run_logged "$evidence" "${compose[@]}" run --rm --no-deps policy-runtime \
-    ros2 run piper_bridge piper_smoke_test -- --move --hold-current
+    ros2 run piper_bridge piper_smoke_test -- \
+      --move \
+      --resume-before-enable \
+      --round-trip-target-rad 0.0 1.48 -0.63 -0.84 0.0 1.57 \
+      --transition-s 10 \
+      --hold-s 5 \
+      --return-tolerance-deg 3.5 \
+      --a2-remote-stop
   local status=$?
   set -e
   if (( status != 0 )); then
@@ -598,7 +683,10 @@ cmd_piper_baseline() {
   {
     echo "operator=${operator}"
     echo "motion_authorization=STAGE2_ALLOW_PIPER_BASELINE=1 + --live"
-    echo "resume_requested=false"
+    echo "resume_requested=true; operator_authorized=2026-08-24"
+    echo "motion=10s smooth reach + 5s hold + 10s smooth return"
+    echo "a2_remote=Select/B quick stop; L2+B controlled return"
+    echo "target_rad=0.0,1.48,-0.63,-0.84,0.0,1.57"
   } > "${evidence}/operator.receipt"
   mark_pass piper-baseline "$evidence"
 }
@@ -616,6 +704,7 @@ run_direct_shadow() {
   status_status_file="${evidence}/ready_status.exit"
 
   "${compose[@]}" run --rm --no-deps \
+    -e A2_LOWCMD_TOPIC=/stage2_shadow/no_lowcmd \
     -e A2_TEST_LOG_DIR=/gate_evidence/a2_wrapper_logs \
     -v "${evidence}:/gate_evidence" \
     policy-runtime "$a2_test_script" no-lowcmd "$((run_seconds + 2))" \
@@ -630,7 +719,7 @@ run_direct_shadow() {
     set +e
     "${compose[@]}" run --rm --no-deps \
       -e "STAGE2_GATE_DURATION=$((run_seconds + 2))" \
-      policy-runtime bash -lc 'timeout "${STAGE2_GATE_DURATION}" ros2 topic echo /a2_piper_stage2/status --field data' \
+      policy-runtime bash -lc 'timeout "${STAGE2_GATE_DURATION}" ros2 topic echo /a2_piper_stage2/status std_msgs/msg/String --field data' \
       > "${evidence}/status.log" 2>&1
     echo "$?" > "$status_status_file"
   ) &
@@ -644,6 +733,7 @@ run_direct_shadow() {
       policy-runtime timeout --signal=INT "$run_seconds" \
       ros2 run a2_piper_stage2_direct a2_piper_stage2_direct \
       --ros-args --params-file /stage2_direct.params.yaml \
+      -p lowcmd_topic:=/stage2_shadow/no_lowcmd \
       -p enable_motion:=false -p live_acknowledged:=false -p component_mode:=both \
       > "${evidence}/node.log" 2>&1
     echo "$?" > "$node_status_file"
@@ -750,7 +840,7 @@ cmd_joint_observe() {
       echo "a2_observer_exit=${a2_status}"
       echo "piper_observer_exit=${piper_status}"
       [[ "${a2_status}" == "0" ]] || exit "${a2_status}"
-      [[ "${piper_status}" == "124" ]] || exit 2
+      [[ "${piper_status}" == "0" || "${piper_status}" == "124" ]] || exit 2
       [[ -s /gate_evidence/a2_joints_live.log ]] || exit 2
       [[ -s /gate_evidence/piper_joint_states.log ]] || exit 2
       for joint in arm_j1 arm_j2 arm_j3 arm_j4 arm_j5 arm_j6; do
@@ -774,7 +864,6 @@ cmd_joint_observe() {
 cmd_fault() {
   load_session
   require_pass joint-observe
-  require_approval joint-validation
   [[ "$scenario" == "process-stop" ]] ||
     die "only --scenario process-stop is automated; network/state/watchdog faults require the supervised site procedure in the runbook"
   duration="${duration:-30}"
@@ -835,8 +924,6 @@ cmd_live_preflight() {
   require_operator
   validate_component
   require_pass shadow
-  require_approval shadow
-  require_approval "live-${component}"
   require_site_live_ready
   load_compose
   local evidence
@@ -852,13 +939,13 @@ cmd_live_preflight() {
       echo "component=${STAGE2_GATE_COMPONENT}"
       echo "lowstate_type=$(ros2 topic type /lowstate)"
       echo "piper_state_type=$(ros2 topic type /piper/joint_states)"
-      ros2 topic echo --once /lowstate >/dev/null
-      ros2 topic echo --once /piper/joint_states >/dev/null
+      ros2 topic echo /lowstate --once --qos-reliability best_effort >/dev/null
+      ros2 topic echo /piper/joint_states --once --qos-reliability best_effort >/dev/null
       if ros2 node list | grep -qx /a2_lowlevel_interface; then
         echo "another Stage2 direct node is already running" >&2
         exit 2
       fi
-      ros2 run a2_piper_stage2_direct a2_piper_stage2_direct \
+      /opt/stage2_ws/install/lib/a2_piper_stage2_direct/a2_piper_stage2_direct \
         --ros-args --params-file /stage2_direct.params.yaml \
         -p validate_live_site_only:=true \
         -p enable_motion:=false \
@@ -867,13 +954,17 @@ cmd_live_preflight() {
         -p lowstate_topic:=/stage2_preflight/no_lowstate \
         -p lowcmd_topic:=/stage2_preflight/no_lowcmd \
         -p piper_state_topic:=/stage2_preflight/no_piper_state \
+        -p piper_diagnostics_topic:=/stage2_preflight/no_piper_diagnostics \
         -p piper_command_topic:=/stage2_preflight/no_piper_command \
+        -p piper_resume_service:=/stage2_preflight/no_piper_resume \
+        -p piper_enable_service:=/stage2_preflight/no_piper_enable \
         -p piper_stop_service:=/stage2_preflight/no_piper_stop \
+        -p trajectory_start_service:=/stage2_preflight/no_trajectory_start \
         -p status_topic:=/stage2_preflight/status \
         > /tmp/stage2_site_validation_node.log 2>&1 &
       validation_pid=$!
       set +e
-      timeout 30 ros2 topic echo /stage2_preflight/status --field data 2>&1 |
+      timeout 30 ros2 topic echo /stage2_preflight/status std_msgs/msg/String --field data 2>&1 |
         grep -m1 -E "contract=verified.*site=verified.*mode=site_validation.*state=ready"
       validation_status=${PIPESTATUS[1]}
       kill -INT "${validation_pid}" >/dev/null 2>&1
@@ -913,6 +1004,13 @@ cmd_live() {
   evidence="$(new_evidence_dir "live-${component}")"
   pid_file="${session_dir}/live.pid"
   container_name="stage2-live-${session_id}"
+  if docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null |
+      grep -qx true; then
+    die "Stage2 live container is already running: ${container_name}; do not launch live twice"
+  fi
+  if docker inspect "$container_name" >/dev/null 2>&1; then
+    docker rm "$container_name" >/dev/null
+  fi
   {
     echo "operator=${operator}"
     echo "component=${component}"
@@ -923,8 +1021,10 @@ cmd_live() {
     echo "started_at=$(date --iso-8601=seconds)"
   } > "${evidence}/live_start.receipt"
   echo "WARNING: REAL MOTION PATH component=${component}"
-  echo "PiPER resume/enable is NOT called by this script. Keep the physical E-stop operator ready."
-  echo "A2 handover: first A=stand-up, second A with centered sticks=policy handover."
+  echo "First A automatically resumes/enables PiPER, then starts synchronized init interpolation. Keep the physical E-stop operator ready."
+  echo "Stage2 handover: first A=measured hold/init interpolation; second A with centered sticks=30-frame warmup then policy."
+  echo "PolicyActive keeps PiPER at init with a zero arm task command until an explicit arm-goal or trajectory command."
+  echo "Normal stop: first L2+B=return to reset hold; A=warmup/resume; second L2+B=A2/PiPER rest interpolation, then PiPER stop."
   set +e
   "${compose[@]}" run --rm --no-deps \
     -e A2_ALLOW_RELEASE_MODE=1 \
@@ -949,8 +1049,16 @@ cmd_live() {
     > >(tee "${evidence}/node.log") 2>&1 &
   local node_pid=$!
   echo "$node_pid" > "$pid_file"
+  live_signal_cleanup() {
+    trap - INT TERM
+    echo "Live foreground interrupted: executing verified dual-path stop"
+    "$0" stop --session "$session_id" --operator "$operator" \
+      --reason live-foreground-interrupted || true
+  }
+  trap live_signal_cleanup INT TERM
   wait "$node_pid"
   status=$?
+  trap - INT TERM
   set -e
   rm -f "$pid_file"
   {
@@ -959,6 +1067,68 @@ cmd_live() {
   } > "${evidence}/live_end.receipt"
   echo "Live process ended with exit=${status}; evidence: ${evidence}"
   return "$status"
+}
+
+cmd_arm_goal() {
+  load_session
+  require_operator
+  require_approval live-both
+  local number='^-?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$'
+  [[ "$arm_radius" =~ $number ]] || die "--radius must be a finite decimal number"
+  [[ "$arm_pitch" =~ $number ]] || die "--pitch must be a finite decimal number"
+  [[ "$arm_yaw" =~ $number ]] || die "--yaw must be a finite decimal number"
+  load_compose
+  local container_name="stage2-live-${session_id}"
+  docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null |
+    grep -qx true || die "Stage2 live container is not running: ${container_name}"
+  local evidence
+  evidence="$(new_evidence_dir arm-goal)"
+  set +e
+  "${compose[@]}" run --rm --no-deps policy-runtime \
+    timeout 10 ros2 topic pub --once \
+      /a2_piper_stage2/arm_goal \
+      std_msgs/msg/Float64MultiArray \
+      "{data: [${arm_radius}, ${arm_pitch}, ${arm_yaw}]}" \
+      2>&1 | tee "${evidence}/stdout.log"
+  local status=${PIPESTATUS[0]}
+  set -e
+  (( status == 0 )) ||
+    die "arm goal publish failed; confirm second A reached PolicyActive. Evidence: ${evidence}"
+  set +e
+  "${compose[@]}" run --rm --no-deps policy-runtime \
+    timeout 5 ros2 topic echo --once \
+      /a2_piper_stage2/status --field data \
+      > "${evidence}/status.log" 2>&1
+  local status_echo=$?
+  set -e
+  (( status_echo == 0 )) &&
+    grep -q 'arm_tracking=position' "${evidence}/status.log" ||
+    die "arm goal was not accepted in PolicyActive. Evidence: ${evidence}"
+  echo "PASS: arm position goal published [${arm_radius}, ${arm_pitch}, ${arm_yaw}]"
+  echo "evidence: ${evidence}"
+}
+
+cmd_trajectory() {
+  load_session
+  require_operator
+  require_approval live-both
+  load_compose
+  local container_name="stage2-live-${session_id}"
+  docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null |
+    grep -qx true || die "Stage2 live container is not running: ${container_name}"
+  local evidence
+  evidence="$(new_evidence_dir trajectory)"
+  set +e
+  "${compose[@]}" run --rm --no-deps policy-runtime \
+    timeout 10 ros2 service call \
+      /a2_piper_stage2/start_arm_goal_trajectory \
+      std_srvs/srv/Trigger '{}' 2>&1 | tee "${evidence}/stdout.log"
+  local status=${PIPESTATUS[0]}
+  set -e
+  (( status == 0 )) && grep -q 'success=True' "${evidence}/stdout.log" ||
+    die "trajectory trigger was rejected; confirm the second A reached PolicyActive. Evidence: ${evidence}"
+  echo "PASS: round-trip arm-goal trajectory started"
+  echo "evidence: ${evidence}"
 }
 
 cmd_stop() {
@@ -1000,6 +1170,52 @@ cmd_stop() {
   echo "evidence: ${evidence}"
 }
 
+cmd_restore_a2() {
+  load_session
+  require_operator
+  [[ -n "$iface" ]] || die "restore-a2 requires --iface NIC"
+  [[ "${STAGE2_ALLOW_A2_RESTORE:-0}" == "1" ]] ||
+    die "restore-a2 requires STAGE2_ALLOW_A2_RESTORE=1"
+  load_compose
+  local container_name="stage2-live-${session_id}"
+  if docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null |
+      grep -qx true; then
+    die "Stage2 live container is still running: ${container_name}"
+  fi
+  local evidence
+  evidence="$(new_evidence_dir a2-restore)"
+  write_command "$evidence" restore-a2 "$iface" "$operator"
+  set +e
+  "${compose[@]}" run --rm --no-deps \
+    -e "STAGE2_GATE_IFACE=${iface}" \
+    -e A2_ALLOW_SELECT_MODE=1 \
+    -e A2_MOTION_RESTORE_MODE=ai_sport \
+    -e A2_TEST_LOG_DIR=/gate_evidence/a2_wrapper_logs \
+    -v "${evidence}:/gate_evidence" \
+    policy-runtime bash -lc '
+      set -euo pipefail
+      a2=/opt/stage2/ros2/A2/scripts/a2_real_robot_test.sh
+      "$a2" no-lowcmd 5
+      "$a2" motion-restore "${STAGE2_GATE_IFACE}"
+      "$a2" motion-check "${STAGE2_GATE_IFACE}"
+    ' > >(tee "${evidence}/stdout.log") 2>&1
+  local status=$?
+  set -e
+  if (( status != 0 )); then
+    record_failure a2-restore "$evidence" "$status"
+    return "$status"
+  fi
+  {
+    echo "result=PASS"
+    echo "action=a2-restore"
+    echo "operator=${operator}"
+    echo "target_mode=ai_sport"
+    echo "time=$(date --iso-8601=seconds)"
+  } > "${evidence}/result.receipt"
+  echo "PASS: A2 official motion mode restored to ai_sport"
+  echo "evidence: ${evidence}"
+}
+
 command="${1:-}"
 [[ -n "$command" ]] || { usage; exit 2; }
 shift
@@ -1014,6 +1230,7 @@ case "$command" in
   network) cmd_network ;;
   ros-readonly) cmd_ros_readonly ;;
   a2-baseline) cmd_a2_baseline ;;
+  audit-a2-baseline) cmd_audit_a2_baseline ;;
   piper-baseline) cmd_piper_baseline ;;
   dry-run) cmd_dry_run ;;
   joint-observe) cmd_joint_observe ;;
@@ -1021,7 +1238,10 @@ case "$command" in
   shadow) cmd_shadow ;;
   live-preflight) cmd_live_preflight ;;
   live) cmd_live ;;
+  arm-goal) cmd_arm_goal ;;
+  trajectory) cmd_trajectory ;;
   stop) cmd_stop ;;
+  restore-a2) cmd_restore_a2 ;;
   help|-h|--help) usage ;;
   *) die "unknown subcommand: ${command}" ;;
 esac

@@ -47,7 +47,7 @@ A2 direct node与existing low-level adapter负责：
 
 - direct snapshot freshness与fixed training-to-low-level mapping；
 - low-level mode/CRC/PD path；
-- remote Select immediate stop与L2+B controlled-down；
+- remote Select immediate stop；第一次L2+B平滑回reset hold、A重新warmup、第二次L2+B停止PiPER并让A2平滑趴地；
 - process/network loss后的实际hardware行为仍必须在Fault Gate现场确认。
 
 PC2 PiPER bridge负责：

@@ -23,7 +23,7 @@ def test_resume_sends_explicit_resume_and_waits_for_normal_status(monkeypatch) -
     fake_piper = SimpleNamespace(
         MotionCtrl_1=lambda *args: calls.append(args),
     )
-    adapter = PiperSdkAdapter("can0", control_period_s=0.02, speed_percent=5)
+    adapter = PiperSdkAdapter("can0", control_period_s=0.02)
     adapter._piper = fake_piper
     monkeypatch.setattr("piper_bridge.sdk_adapter.time.sleep", lambda _seconds: None)
     monkeypatch.setattr(
@@ -38,18 +38,18 @@ def test_resume_sends_explicit_resume_and_waits_for_normal_status(monkeypatch) -
     assert calls == [(0x02, 0, 0)] * 5
 
 
-def test_joint_command_uses_tested_move_j_contract() -> None:
+def test_joint_command_uses_krushell_move_j_mit_high_follow_contract() -> None:
     calls = []
     fake_piper = SimpleNamespace(
         MotionCtrl_2=lambda *args: calls.append(("mode", args)),
         JointCtrl=lambda *args: calls.append(("joint", args)),
     )
-    adapter = PiperSdkAdapter("can0", control_period_s=0.02, speed_percent=5)
+    adapter = PiperSdkAdapter("can0", control_period_s=0.02)
     adapter._piper = fake_piper
 
     adapter.command_joint_positions((0.0, 1.5707963267948966, -1.5707963267948966, 0.0, 0.0, 0.0))
 
-    assert calls[0] == ("mode", (0x01, 0x01, 5, 0x00))
+    assert calls[0] == ("mode", (0x01, 0x01, 0, 0xAD))
     assert calls[1] == ("joint", (0, 90000, -90000, 0, 0, 0))
 
 
@@ -59,7 +59,7 @@ def test_disable_repeats_until_all_motors_report_disabled(monkeypatch) -> None:
     fake_piper = SimpleNamespace(
         DisablePiper=lambda: calls.append("disable") or next(reports),
     )
-    adapter = PiperSdkAdapter("can0", control_period_s=0.02, speed_percent=5)
+    adapter = PiperSdkAdapter("can0", control_period_s=0.02)
     adapter._piper = fake_piper
     monkeypatch.setattr("piper_bridge.sdk_adapter.time.sleep", lambda _seconds: None)
 

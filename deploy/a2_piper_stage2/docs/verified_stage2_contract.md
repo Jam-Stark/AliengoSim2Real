@@ -61,6 +61,14 @@ bundle parity 中的 `final_joint_target_rad` 指上式的 pre-site-limit target
 
 `arm_j7/j8` 没有 actor output；训练 target 固定为零，现有 PC2 bridge也没有 gripper command interface。禁止把 arm plan 两维解释成 gripper action。
 
+## Live init 与 two-A handover
+
+bundle manifest的default joint position就是live init target：A2 training order为`hip×4=0.0`、`thigh×4=0.5`、`calf×4=-1.0`；PiPER `arm_j1..arm_j6=[0.0,1.48,-0.63,-0.84,0.0,1.57] rad`。direct runtime不维护第二份姿态常量。
+
+Stage2沿用main A2的two-A语义并扩展到PiPER：第一次`A`锁存两侧实测position。包含arm输出时先持续发布measured-position hold，等待操作员显式enable PC2 bridge；只有fresh `/piper/diagnostics`明确`command_gate_open=true`后，才在`150+150=300`个50 Hz tick内用smoothstep从实测position插值到manifest init。完成后持续hold init并等待第二次`A`。第二次`A`要求摇杆归中，进入30-frame history warmup（约0.60秒），warmup tick只hold init，下一tick才允许policy target。
+
+main A2实现同样是history warmup而不是固定3秒延时；其约32个20 ms帧为约0.64秒。源码中的`3000`是日志throttle周期，不是handover sleep。
+
 ## Parity 入口与边界
 
 在解压后的 bundle 根目录运行：

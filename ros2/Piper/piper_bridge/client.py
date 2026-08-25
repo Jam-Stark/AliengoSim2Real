@@ -17,7 +17,7 @@ from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-from .model import JOINT_NAMES, normalize_joint_command, order_joint_values
+from .model import JOINT_NAMES, order_joint_values
 
 
 @dataclass(frozen=True)
@@ -104,6 +104,33 @@ class PiperBridgeClient(Node):
             f"no {self._topic('diagnostics')} message within {timeout_s:.1f}s"
         )
 
+    def wait_for_command_gate_open(self, timeout_s: float) -> RemoteDiagnostics:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            self.pump(min(0.05, max(0.0, deadline - time.monotonic())))
+            diagnostics = self.latest_diagnostics
+            if (
+                diagnostics is not None
+                and diagnostics.values.get("command_gate_open") == "true"
+            ):
+                return diagnostics
+        diagnostics = self.latest_diagnostics
+        detail = diagnostics.message if diagnostics is not None else "no diagnostics"
+        raise TimeoutError(
+            f"{self._topic('joint_command')} gate did not open within "
+            f"{timeout_s:.1f}s: {detail}"
+        )
+
+    def require_command_gate_open(self) -> None:
+        diagnostics = self.latest_diagnostics
+        if diagnostics is None or not self.diagnostics_are_fresh(0.5):
+            raise RuntimeError("PiPER diagnostics are stale")
+        if diagnostics.values.get("command_gate_open") != "true":
+            raise RuntimeError(
+                "PiPER command gate closed during motion: "
+                f"{diagnostics.message}; {diagnostics.values}"
+            )
+
     def enable(self, timeout_s: float = 6.0) -> tuple[bool, str]:
         return self._call_trigger(self._enable_client, "enable", timeout_s)
 
@@ -117,7 +144,7 @@ class PiperBridgeClient(Node):
         return self._call_trigger(self._disable_client, "disable", timeout_s)
 
     def publish_joint_positions(self, positions_rad: tuple[float, ...]) -> None:
-        ordered = normalize_joint_command(JOINT_NAMES, positions_rad)
+        ordered = order_joint_values(JOINT_NAMES, positions_rad, "position")
         message = JointTrajectory()
         message.header.stamp = self.get_clock().now().to_msg()
         message.joint_names = list(JOINT_NAMES)
@@ -194,9 +221,12 @@ class PiperBridgeClient(Node):
         if not message.status:
             return
         status = message.status[0]
+        level = status.level
+        if isinstance(level, bytes):
+            level = level[0]
         values = {item.key: item.value for item in status.values}
         self.latest_diagnostics = RemoteDiagnostics(
-            level=int(status.level),
+            level=int(level),
             message=str(status.message),
             values=values,
             received_monotonic_s=time.monotonic(),

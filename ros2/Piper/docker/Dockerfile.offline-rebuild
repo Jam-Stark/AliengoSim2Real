@@ -1,0 +1,9 @@
+FROM a2-piper-pc2-bridge:humble-20260824
+
+SHELL ["/bin/bash", "-c"]
+
+COPY . /opt/piper_ws/src/piper_bridge
+RUN rm -rf /opt/piper_ws/build/piper_bridge /opt/piper_ws/install/piper_bridge \
+    && source /opt/ros/humble/setup.bash \
+    && cd /opt/piper_ws \
+    && colcon build --packages-select piper_bridge

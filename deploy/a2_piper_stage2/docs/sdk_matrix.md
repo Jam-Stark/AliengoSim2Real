@@ -4,9 +4,9 @@
 
 | Domain | Expected stack | Responsibility | Current evidence | Remaining verification |
 | --- | --- | --- | --- | --- |
-| Policy host | Ubuntu 22.04 container, ROS 2 Humble, Cyclone DDS, Python Torch + C++ LibTorch | offline parity；direct dual-policy inference、obs/action、logs、supervision | Docker/direct runtime code exists；offline bundle contract independently checked | target-host build/parity/benchmark；NIC/DDS；site Gates |
+| Policy host | m45 Ubuntu 24.04 host；Ubuntu 22.04 container、ROS 2 Humble、Cyclone DDS、Python Torch + C++ LibTorch | offline parity；direct dual-policy inference、obs/action、logs、supervision | target image build、bundle parity、benchmark、500 tick mock shadow PASS | NIC/DDS；site与hardware Gates |
 | A2 control domain | existing `ros2/A2`, `unitree_hg`, `A2LowLevelInterface` composed by direct node | raw LowState/LowCmd、mapping、CRC、mode、PD | main成功path、mapping与API是repository facts | same-A2 attitude/mapping reconfirmation、real watchdog/hold/stop Gate |
-| A2 PC2 / PiPER | existing `ros2/Piper`, tested `krushell/piper_sdk` manipulation path, ROS 2 Humble, SocketCAN | `/piper/*` semantics、USB-CAN ownership、SDK conversion、local stop | interface and bridge code contract reviewed | exact PC2 OS/image/SDK revision、USB-CAN、CAN、firmware、feedback/motion |
+| A2 PC2 / PiPER | PC2 Ubuntu 22.04 RT + ROS 2 Humble；planned `ros2/Piper` + selected `krushell/piper_sdk` + SocketCAN | `/piper/*` semantics、USB-CAN ownership、SDK conversion、local stop | PC2 host/network/USB-CAN read-only inventory complete；USB recognized as `can0` | install/image/SDK；CAN UP/bitrate/feedback；firmware与motion |
 | Development/reference | official Unitree/PiPER docs, LMP bundle | interface and source-contract comparison | bundle metadata included | source revision and resolved training env unavailable |
 
 ## Policy host versions
@@ -24,12 +24,15 @@ Linux x86_64 / glibc 2.39
 CPU deployment：
 
 ```text
-Torch 2.7.0
+Python 3.10
+pip 25.1.1
+Torch 2.7.0+cpu
 NumPy 1.26.0
 PyYAML 6.0.2
+C++ LibTorch 2.7.0 cxx11 ABI CPU
 ```
 
-Export Torch install-source provenance明确unavailable；Python CPU wheel只有在目标host bundle parity通过后才算接受。C++ direct runtime使用official cxx11-ABI CPU LibTorch 2.7.0；当前不提供CUDA direct build。
+Export Torch install-source provenance明确unavailable。m45目标host已通过Python CPU wheel parity；C++ direct runtime使用official cxx11-ABI CPU LibTorch 2.7.0。两者runtime library path保持隔离；当前不提供CUDA direct build。
 
 ## A2 stack
 
@@ -59,7 +62,7 @@ Repository contract：
 
 Command 为一个 point、`arm_j1..arm_j6`、absolute radians。Repository defaults 是 `50 Hz` control、`0.20 s` command timeout、`0.50 s` feedback timeout。Gripper interface absent。
 
-以上只证明 interface/configuration code，不能证明：
+实机已经确认USB-CAN为`1d50:606f`、driver`gs_usb`、serial与kernel path`1-6:1.0`；当前`can0 DOWN/STOPPED`，并且没有bridge。以上仍不能证明：
 
 - PC2 当前使用的 SDK source URL、branch/tag 与工作区状态；
 - USB-CAN 已枚举并绑定 `can_piper`；

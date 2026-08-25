@@ -8,7 +8,7 @@ identity:
   policy_host: same_a2_policy_host_site_specific
   ros_domain_id: 0
   ros_domain_id_evidence: same_host_default_reverify_at_network_gate
-  policy_network_interface: enp131s0
+  policy_network_interface: enp130s0
   policy_network_interface_evidence: same_a2_connected_preflight_evidence_reverify_at_network_gate
   a2_ip: 192.168.123.161
   pc2_ip: 192.168.123.162

@@ -2,6 +2,8 @@
 
 本目录接入真实 LMP Stage2 导出，继续复用仓库现有的 A2 low-level 与 PC2 PiPER bridge，不复制两套底层控制实现。第一次部署或日常 bring-up 请只从 [新手操作员 Runbook](docs/operator_runbook_zh_CN.md) 开始；它给出每台机器、每个终端、可复制命令、精确 PASS、停止条件和 evidence 路径。
 
+当前正式 policy host 是 `baoquanc@ai-precog-m45`；已采集的 OS/GPU/NIC、安装状态与精确路径见 [m45 policy host 实机档案](docs/policy_host_m45.md)。
+
 ## 当前可用范围
 
 - `policy_bundle/`：用户提供的原始导出包，保持目录和内容不变。
@@ -44,7 +46,7 @@ cd deploy/a2_piper_stage2
 ```bash
 cd deploy/a2_piper_stage2
 ./scripts/configure_policy_host.sh \
-  --iface enp131s0 \
+  --iface enp130s0 \
   --host-ip 192.168.123.222/24 \
   --domain-id 0 \
   --site "$PWD/config/site.mock.yaml"

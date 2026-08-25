@@ -54,8 +54,7 @@ ament_target_dependencies(a2_lowlevel_smoke
   unitree_hg
 )
 
-set(A2_INSTALL_TARGETS
-  a2_lowlevel
+set(A2_EXECUTABLE_TARGETS
   a2_lowlevel_smoke
 )
 
@@ -102,14 +101,18 @@ if(BUILD_A2_POLICY_DEPLOY)
     std_msgs
     unitree_hg
   )
-  list(APPEND A2_INSTALL_TARGETS a2_policy_deploy)
+  list(APPEND A2_EXECUTABLE_TARGETS a2_policy_deploy)
 endif()
 
 install(TARGETS
-  ${A2_INSTALL_TARGETS}
+  a2_lowlevel
   EXPORT a2_lowlevelTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
+)
+
+install(TARGETS
+  ${A2_EXECUTABLE_TARGETS}
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

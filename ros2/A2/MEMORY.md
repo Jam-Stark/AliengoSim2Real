@@ -1,8 +1,14 @@
 # A2 Memory
 
-Updated: 2026-06-05 22:03 HKT
+Updated: 2026-08-24 21:36 HKT
 
 本目录记录 `ros2/A2` A2 专属部署链路的可复用项目事实、当前施工状态、blocker 和下一步 TODO。稳定技术概念保留 English technical terms。
+
+2026-08-24在m45/domain 0实测：`/lowcmd`的`_CREATED_BY_BARE_DDS_APP_` publisher以约1000 Hz持续发送；`MotionSwitcherClient::CheckMode()`同时返回`form='0', name='ai', service='ai_sport'`。操作员明确授权后，既有guarded wrapper执行`ReleaseMode ret=0`，随后mode为空且5秒`/lowcmd`计数为0，确认该流量来自宇树官方`ai_sport`控制链，正确交接方式是MotionSwitcher release而非kill进程。Evidence：`deploy/a2_piper_stage2/.stage2_sessions/20260824_173406/evidence/a2-motion-release/20260824_213519`。Stage2测试期间曾保持released；测试结束必须在自研publisher停止并`no-lowcmd` PASS后SelectMode恢复`ai_sport`，再以`service='ai_sport'`验收。
+
+2026-08-25 00:51 HKT最终Stage2 dual live成功结束后，formal stop先完成A2 zero-LowCmd，随后`restore-a2`实测`no-lowcmd_count=0`、`SelectMode('ai_sport') ret=0`并最终`CheckMode form='0' name='ai' service='ai_sport'`。当前A2已恢复宇树官方mode，不再是released状态。Evidence：`deploy/a2_piper_stage2/.stage2_sessions/20260824_173406/evidence/a2-restore/20260825_005440_131866`。下次Stage2 live仍由runner在启动direct node前执行`motion-check→motion-release`。
+
+同机当前静止趴地姿态已只读采集5秒/5263样本，training order为`[0.3602,-0.3789,0.3382,-0.3506,1.1862,1.1942,1.2177,1.1831,-2.7570,-2.7380,-2.7485,-2.7468] rad`，各轴range不超过`0.0001 rad`。该目标仅用于Stage2 second-stop prone interpolation，不替换main A2默认controlled-down。Evidence：`deploy/a2_piper_stage2/.stage2_sessions/20260824_173406/evidence/pre-enable-stop-lifecycle/20260824_214754`。
 
 ## Entries
 

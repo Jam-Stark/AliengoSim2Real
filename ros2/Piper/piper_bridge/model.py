@@ -73,11 +73,13 @@ def order_joint_values(
 
 
 def normalize_joint_command(
-    names: Sequence[str], positions: Sequence[float]
+    names: Sequence[str],
+    positions: Sequence[float],
+    limits_rad: Sequence[tuple[float, float]] = JOINT_LIMITS_RAD,
 ) -> tuple[float, ...]:
     ordered = order_joint_values(names, positions, "position")
     for index, (position, limits) in enumerate(
-        zip(ordered, JOINT_LIMITS_RAD), start=1
+        zip(ordered, limits_rad), start=1
     ):
         lower, upper = limits
         if not lower <= position <= upper:

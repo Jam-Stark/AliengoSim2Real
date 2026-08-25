@@ -2,6 +2,10 @@
 
 PC2 是 PiPER CAN 的唯一拥有者。Policy host 只收发 semantic ROS messages，不打开 USB device、SocketCAN 或 raw CAN。
 
+2026-08-24实机只读盘点及随后获批的bootstrap/CAN/bridge结果见[PC2_READONLY_20260824.md](../../../ros2/Piper/docs/PC2_READONLY_20260824.md)。当前`can_piper`为1 Mbit/s UP/ERROR-ACTIVE，command-gate-closed bridge运行，实时joint state 50 Hz且ros-readonly Gate PASS；尚未执行任何motion service或command。
+
+PC2没有default route。后续依赖与image应在m45准备后经`.123.162`传入；不要为了安装方便临时改变PC2 route。
+
 ## Repository interface contract
 
 | Interface | Type | Semantics |
@@ -24,7 +28,7 @@ joint order:       arm_j1..arm_j6
 gripper:           absent
 ```
 
-这些是 interface/code facts；hardware status 仍是 pending。
+这些是 interface/code facts；hardware feedback仍未建立。
 
 ## Site evidence to collect first
 
@@ -54,7 +58,7 @@ ros2 topic echo --once /piper/diagnostics
 ros2 service list -t | grep '^/piper/'
 ```
 
-如果现场 interface 不是 `can_piper` 或 bitrate 不是预期值，只记录差异并停止。不得由 AI 自行改名、执行 link setup script 或改变 bitrate。
+本次现场实际是`can0 DOWN/STOPPED`且没有bitrate；已按本条停止。如果现场 interface 不是 `can_piper` 或 bitrate 不是预期值，只记录差异并停止。不得由 AI 自行改名、执行 link setup script 或改变 bitrate。
 
 ## CAN ownership
 

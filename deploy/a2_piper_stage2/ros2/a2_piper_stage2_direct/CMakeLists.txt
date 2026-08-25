@@ -12,6 +12,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(a2_lowlevel REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -46,6 +47,7 @@ target_link_libraries(a2_piper_stage2_direct
 )
 ament_target_dependencies(a2_piper_stage2_direct
   a2_lowlevel
+  diagnostic_msgs
   rclcpp
   sensor_msgs
   std_msgs

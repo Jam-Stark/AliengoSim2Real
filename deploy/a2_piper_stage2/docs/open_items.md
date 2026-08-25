@@ -11,7 +11,8 @@
 
 ## PiPER / PC2 hardware
 
-- 采集 PC2 OS、ROS、PiPER SDK revision、USB-CAN枚举、`can_piper` bitrate/interface、firmware/API status与真实 launch command。
+- PC2 OS/ROS/resources/network与USB-CAN枚举已经采集；当前`can0 DOWN/STOPPED`、无`can_piper`/Docker/SDK/bridge。下一步install与CAN activation需要明确写操作许可。
+- 获得许可后再采集选定PiPER SDK source、`can_piper` 1 Mbit/s feedback、firmware/API status与真实launch command。
 - 在 PC2 上完成 `/piper/joint_states` rate/jitter与 diagnostics只读检查，再验证 enable -> fresh command -> stop -> explicit resume、command timeout和 feedback-loss paths。
 - 将 LMP URDF arm limits与 bridge/manufacturer/site limits取交集；确认 j1-j6方向、零位与实际 soft/hard limits。
 - 继续保持 gripper absent；只有独立接口、策略 contract与硬件验证都完成后才能扩展。
@@ -24,7 +25,7 @@
 
 ## Deployment host verification
 
-- 在最终 Ubuntu 22.04 / ROS 2 Humble container上安装 CPU Torch candidate并重新执行 bundle parity与 arm+dog benchmark。export host的 Python/Torch/CUDA版本不是目标 host pass。
-- 明确 ROS 2 Humble Python与policy Python的共存方式；不得只用模型可 `torch.jit.load()` 代替完整 parity。
+- m45 Ubuntu 24.04 host上的Ubuntu 22.04 / ROS 2 Humble CPU image、Torch 2.7 parity、benchmark和mock shadow已经PASS，详见`policy_host_m45.md`。这不替代任何hardware Gate。
+- Python Torch wheel与C++ LibTorch 2.7已经隔离：Python不继承外部LibTorch目录，C++ executable使用install RPATH。后续不得重新把两套library混回同一全局`LD_LIBRARY_PATH`。
 - 保留 action parity的 pre-limit语义：先核对 `default + 0.25 * raw` reference，再核对 LMP-limit、site-limit与rate-limit后的实际 named target。
 - Repository已提供可执行read-only、dry-run、process-stop、10分钟shadow和component live Gate；它们的site receipts尚未在真实硬件生成，因此仍不能标记为已完成。

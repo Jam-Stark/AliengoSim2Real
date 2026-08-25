@@ -27,7 +27,6 @@ class PiperSdkRos2Facade:
         self.speed_sample_wait_s = speed_sample_wait_s
         self.connected = False
         self.enabled = False
-        self.requested_speed_percent = 0
         self._last_speed_state_monotonic_s: float | None = None
         self._enabled_monotonic_s: float | None = None
 
@@ -54,19 +53,16 @@ class PiperSdkRos2Facade:
     def MotionCtrl_2(
         self, ctrl_mode: int, move_mode: int, speed_percent: int, mit_mode: int
     ) -> None:
-        if (int(ctrl_mode), int(move_mode), int(mit_mode)) != (0x01, 0x01, 0x00):
+        if (
+            int(ctrl_mode),
+            int(move_mode),
+            int(speed_percent),
+            int(mit_mode),
+        ) != (0x01, 0x01, 0, 0xAD):
             raise RuntimeError(
-                "remote facade supports only CAN control, MOVE J, position-speed mode"
+                "remote facade supports only CAN control, MOVE J, "
+                "MIT/high-follow mode (MotionCtrl_2(1, 1, 0, 0xAD))"
             )
-        self.requested_speed_percent = int(speed_percent)
-        diagnostics = self.client.latest_diagnostics
-        if diagnostics is not None:
-            configured = int(diagnostics.values.get("speed_percent", speed_percent))
-            if configured != self.requested_speed_percent:
-                raise RuntimeError(
-                    f"bridge speed_percent={configured} does not match "
-                    f"task request={self.requested_speed_percent}"
-                )
 
     def JointCtrl(self, *target_millidegrees: int) -> None:
         if len(target_millidegrees) != 6:

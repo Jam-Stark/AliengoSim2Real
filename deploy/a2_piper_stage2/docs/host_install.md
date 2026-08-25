@@ -5,7 +5,7 @@
 ## 基线
 
 ```text
-host: Ubuntu 22.04 x86_64
+host: Ubuntu 22.04/24.04 LTS x86_64
 container: ROS 2 Humble + Cyclone DDS + host networking
 offline Python: CPU Torch 2.7.0
 direct C++: official cxx11 ABI CPU LibTorch 2.7.0
@@ -19,7 +19,7 @@ direct C++: official cxx11 ABI CPU LibTorch 2.7.0
 ./scripts/bootstrap_policy_host_ubuntu.sh
 ```
 
-该脚本仅接受 Ubuntu 22.04 amd64，使用Docker官方apt repository安装Engine与Compose v2。它会先列出并移除Docker官方文档指定的冲突package，但不删除`/var/lib/docker`中的image/container/volume；最后用`sudo docker run hello-world`核实。首次PASS后logout/login，再运行：
+该脚本接受 Ubuntu 22.04 或 24.04 LTS amd64，使用Docker官方apt repository安装Engine与Compose v2。Docker官方当前把 Jammy 22.04 与 Noble 24.04 都列为支持版本。脚本会先列出并移除Docker官方文档指定的冲突package，但不删除`/var/lib/docker`中的image/container/volume；最后用`sudo docker run hello-world`核实。首次PASS后logout/login，再运行：
 
 ```bash
 ./scripts/bootstrap_policy_host_ubuntu.sh --verify-only
@@ -37,7 +37,7 @@ direct C++: official cxx11 ABI CPU LibTorch 2.7.0
 
 ```bash
 ./scripts/configure_policy_host.sh \
-  --iface enp131s0 \
+  --iface enp130s0 \
   --host-ip 192.168.123.222/24 \
   --domain-id 0 \
   --site "$PWD/config/site.mock.yaml"
@@ -61,8 +61,10 @@ direct C++: official cxx11 ABI CPU LibTorch 2.7.0
 [PASS] shadow sequence completed; evidence: ...
 ```
 
-Image内同时构建`a2_lowlevel`与`a2_piper_stage2_direct`。Python Torch只执行offline parity；C++ actor使用独立official cxx11 ABI LibTorch，不能把Python ABI当成C++ build依据。
+Image内同时构建`a2_lowlevel`与`a2_piper_stage2_direct`。Jammy apt自带pip 22不能正确生成本项目PEP 621 metadata，因此image固定使用m45验证通过的pip 25.1.1。Python Torch只执行offline parity；C++ actor使用独立official cxx11 ABI LibTorch，不能把Python ABI当成C++ build依据。C++ executable通过install RPATH解析`/opt/libtorch-stage2/lib`，该目录不得放回Python进程的全局`LD_LIBRARY_PATH`。
 Compose 将 `OMP_NUM_THREADS=1` 与 `MKL_NUM_THREADS=1` 固定为 export benchmark 使用的单线程 CPU 条件；目标 host 仍必须以实测 p50/p95/p99/max 判定 deadline margin。
+
+m45的完整实测版本、benchmark与evidence见[policy_host_m45.md](policy_host_m45.md)。
 
 ## Connected检查
 
@@ -71,7 +73,7 @@ Compose 将 `OMP_NUM_THREADS=1` 与 `MKL_NUM_THREADS=1` 固定为 export benchma
 ```bash
 cp config/site.template.yaml config/site.yaml
 ./scripts/configure_policy_host.sh \
-  --iface enp131s0 \
+  --iface enp130s0 \
   --host-ip 192.168.123.222/24 \
   --domain-id 0 \
   --site "$PWD/config/site.yaml" \
