@@ -1,8 +1,15 @@
 # Project Memory
 
-Updated: 2026-08-22 HKT
+Updated: 2026-08-24 HKT
 
 本文件是 AliengoSim2Real 的顶层 file-based memory 入口。开始实现、调试、review 或文档更新前，先从这里判断应读取哪个 subsystem memory；不要一次性读取全部 memory。
+
+## AI Workflow
+
+- `AGENTS.md`：Jam Coding Role v1.3.0 的项目级 lazy route entrypoint。
+- `.ai/PROJECT.md`：当前 repository 的真实路径、protected paths、validation map 与 resource boundaries。
+- `.ai/ROLE.md`、`.ai/WORKFLOW.md`：managed universal core；按 `AGENTS.md` 的 trigger 读取其余 `.ai/*` 文档。
+- `.codex/AGENTS.md`、`.codex/TEAM.md`：Codex runtime adapter；当前未启用 persistent coordination state 或 hooks。
 
 ## Global Memory
 
@@ -26,6 +33,7 @@ Updated: 2026-08-22 HKT
   - 处理 `/piper/*` interface、PC2 container、SocketCAN、PiPER watchdog、remote manipulation adapter 时读取。
 - `deploy/a2_piper_stage2/MEMORY.md`
   - A2 + PiPER LMP Stage2 dual-policy direct runtime、真实 bundle contract、offline parity/shadow、Docker 与现场 Gate。
+  - 当前正式 policy host 是 m45；主机档案、Docker/offline进度和接线前停止点也记录在该 subsystem。
   - 处理 `deploy/a2_piper_stage2/**`、dog/arm history、arm-first preview、Stage2 action mapping 或现场 manifest/site 填写时读取。
 
 ## Read Order
