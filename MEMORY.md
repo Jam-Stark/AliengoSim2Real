@@ -11,6 +11,12 @@ Updated: 2026-08-24 HKT
 - `.ai/ROLE.md`、`.ai/WORKFLOW.md`：managed universal core；按 `AGENTS.md` 的 trigger 读取其余 `.ai/*` 文档。
 - `.codex/AGENTS.md`、`.codex/TEAM.md`：Codex runtime adapter；当前未启用 persistent coordination state 或 hooks。
 
+## Deployment Branch Retention
+
+- 每个独立实机部署任务使用单独的长期分支，在该分支内完成设备适配、现场验证、evidence、Runbook、memory、commit与push。
+- 部署分支即使随后合入`main`也永久保留，不删除远端分支；后续复部署或现场追溯优先按原分支名恢复对应代码与文档。
+- `main`用于汇总已接受的通用能力；部署分支保留具体机器、session、镜像tag与现场操作历史。
+
 ## Global Memory
 
 - `memory/MEMORY.md`

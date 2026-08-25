@@ -7,6 +7,8 @@
 - Domain: robot policy deployment、MuJoCo simulation、ROS1/ROS2、A2 + PiPER dual-policy runtime
 - Source-truth order: actual source/config/runtime artifact > matching subsystem memory > README/runbook > plans
 
+独立实机部署使用专用长期分支。分支内保留该部署的机器配置、session evidence索引、Runbook与恢复路径；合入`main`后也不删除远端部署分支，后续复部署按原分支恢复。
+
 ## Real paths
 
 ```text
